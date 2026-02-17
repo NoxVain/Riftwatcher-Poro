@@ -18,6 +18,10 @@ deploy_to_railway:
       echo "RAILWAY_ENVIRONMENT_ID set: ${RAILWAY_ENVIRONMENT_ID:+yes}"
       test -n "${RAILWAY_TOKEN:-}" || { echo "Missing RAILWAY_TOKEN"; exit 1; }
       test -n "${RAILWAY_SERVICE_ID:-}${RAILWAY_PROJECT_ID:-}" || { echo "Set RAILWAY_SERVICE_ID or RAILWAY_PROJECT_ID"; exit 1; }
+      if [ -n "${RAILWAY_PROJECT_ID:-}" ] && [ -z "${RAILWAY_ENVIRONMENT_ID:-}" ]; then
+        RAILWAY_ENVIRONMENT_ID=production
+        echo "RAILWAY_ENVIRONMENT_ID not set; defaulting to: $RAILWAY_ENVIRONMENT_ID"
+      fi
       railway --version
       RAILWAY_ARGS=""
       if [ -n "${RAILWAY_SERVICE_ID:-}" ]; then RAILWAY_ARGS="$RAILWAY_ARGS --service $RAILWAY_SERVICE_ID"; fi

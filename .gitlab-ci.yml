@@ -28,4 +28,14 @@ deploy_to_railway:
       if [ -n "${RAILWAY_ENVIRONMENT_ID:-}" ]; then RAILWAY_ARGS="$RAILWAY_ARGS --environment $RAILWAY_ENVIRONMENT_ID"; fi
       if [ -n "${RAILWAY_PROJECT_ID:-}" ]; then RAILWAY_ARGS="$RAILWAY_ARGS --project $RAILWAY_PROJECT_ID"; fi
       echo "Running: railway up --ci$RAILWAY_ARGS"
-      eval "railway up --ci $RAILWAY_ARGS"
+      ATTEMPT=1
+      MAX_ATTEMPTS=3
+      until eval "railway up --ci $RAILWAY_ARGS"; do
+        if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
+          echo "Railway deploy failed after $ATTEMPT attempts."
+          exit 1
+        fi
+        echo "Railway deploy attempt $ATTEMPT failed. Retrying in 15s..."
+        ATTEMPT=$((ATTEMPT + 1))
+        sleep 15
+      done

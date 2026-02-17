@@ -68,6 +68,7 @@ Optional environment variables:
 - `PLAYERS_FILE` (path to persisted tracked players file, default: `tracked_players.txt`)
 - `REPORT_TIMEZONE` (IANA timezone for daily cutoff, default: `UTC`, example: `Europe/Oslo`)
 - `DATABASE_URL` (Postgres connection string; when set, players + puuids persist in Postgres)
+- `DAILY_REFRESH_SECONDS` (background refresh interval when DB is enabled, default: `300`)
 
 ## Player Persistence
 
@@ -75,6 +76,8 @@ Optional environment variables:
   - `!Add` persists `riot_id` in Postgres.
   - `puuid` is also stored in Postgres and reused across restarts/redeploys.
   - Startup loads tracked players from Postgres.
+  - Background updater continuously refreshes today's per-player stats in Postgres.
+  - `!Mood` reads those stored daily stats first for faster responses and fewer Riot requests.
 - Fallback (when `DATABASE_URL` is not set): file-based `tracked_players.txt` via `PLAYERS_FILE`.
 - `tracked_players.txt` is ignored by git.
 - On Railway, file-based storage is ephemeral, so use Postgres for persistent state.

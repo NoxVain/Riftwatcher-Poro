@@ -65,6 +65,7 @@ Optional environment variables:
 
 - `RIOT_FRIENDS` (comma-separated Riot IDs, for example `PlayerOne#EUW,PlayerTwo#NA1`)
 - `PLAYERS_FILE` (path to persisted tracked players file, default: `tracked_players.txt`)
+- `REPORT_TIMEZONE` (IANA timezone for daily cutoff, default: `UTC`, example: `Europe/Oslo`)
 
 ## Player Persistence
 

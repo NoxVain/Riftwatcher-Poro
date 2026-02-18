@@ -49,7 +49,6 @@ MATCH_CACHE_RETENTION_DAYS = cfg.MATCH_CACHE_RETENTION_DAYS
 DB_ENABLED = dbm.DB_ENABLED
 
 normalize_riot_id = cfg.normalize_riot_id
-get_default_friends = cfg.get_default_friends
 
 db_cleanup_old_match_cache = dbm.db_cleanup_old_match_cache
 db_get_last_report_message = dbm.db_get_last_report_message
@@ -76,13 +75,7 @@ RIOT_ALERT_LOCK = asyncio.Lock()
 
 
 def load_tracked_players():
-    players = db_load_tracked_players()
-    if players:
-        return players
-    defaults = get_default_friends()
-    for riot_id in defaults:
-        db_upsert_player(riot_id, None)
-    return defaults
+    return db_load_tracked_players()
 
 
 def save_tracked_players(players):
@@ -359,6 +352,9 @@ async def on_message(message):
         return
 
     if content == RIOT_TEST_COMMAND:
+        if not FRIENDS:
+            await message.channel.send("Riot API test skipped: no tracked players in database. Add one with `!Add Name#Tag`.")
+            return
         try:
             riot_id, puuid, match_count = await riot_client.run_riot_connectivity_test(FRIENDS[0])
             await message.channel.send(

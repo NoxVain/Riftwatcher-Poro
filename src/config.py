@@ -9,13 +9,6 @@ def require_env(name):
     return value
 
 
-def parse_riot_friends(raw_value):
-    friends = [entry.strip() for entry in raw_value.split(",") if entry.strip()]
-    if not friends:
-        raise RuntimeError("RIOT_FRIENDS cannot be empty.")
-    return friends
-
-
 def normalize_riot_id(raw_riot_id):
     riot_id = raw_riot_id.strip()
     if riot_id.count("#") != 1:
@@ -54,21 +47,3 @@ DAILY_REFRESH_SECONDS = int(os.getenv("DAILY_REFRESH_SECONDS", "300"))
 MATCH_CACHE_RETENTION_DAYS = int(os.getenv("MATCH_CACHE_RETENTION_DAYS", "31"))
 DATABASE_URL = require_env("DATABASE_URL")
 DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
-
-
-def get_default_friends():
-    return parse_riot_friends(
-        os.getenv(
-            "RIOT_FRIENDS",
-            (
-                "NoxVain#EUW,"
-                "Tamarin#EUW,"
-                "Follow The King#EUW,"
-                "Reodor Felgen#EUW,"
-                "Not a snake#EUW,"
-                "\u00C7\u00DB\u039C\u00CC\u0143\u039C\u00DD\u00C4\u0160\u0160#\u00C3\u00CE\u00D0\u015A,"
-                "xXsnakemanXx#EUW,"
-                "JonastCvuHU#UNC"
-            ),
-        )
-    )

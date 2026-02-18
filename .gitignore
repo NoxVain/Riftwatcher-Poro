@@ -1,5 +1,7 @@
 __pycache__/
 .vs/
 .venv/
+.pytest_cache/
+pytest-cache-files-*/
 bot.env
 AGENTS.md

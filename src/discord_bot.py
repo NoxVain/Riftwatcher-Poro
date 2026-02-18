@@ -386,6 +386,14 @@ async def background_match_recap_notifier():
                         message = message[:1950] + "\n..."
                     await channel.send(message)
                     log(f"[recap] Posted new match recap for {match_id} in channel {MATCH_RECAP_CHANNEL_ID}.")
+
+                if DB_ENABLED:
+                    try:
+                        await mood_service.refresh_recent_matches_snapshot(recent_count=20)
+                        await edit_last_report_message(bypass_cache=True)
+                        log("[recap] Synced daily report after posting new match recap(s).")
+                    except Exception as exc:
+                        log(f"[recap] Failed to sync daily report after recap: {exc}")
         except Exception as exc:
             log(f"[recap] Unexpected error: {exc}")
         finally:

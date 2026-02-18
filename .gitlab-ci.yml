@@ -15,7 +15,15 @@ deploy_to_railway:
   needs:
     - test
   rules:
+    - if: '$FORCE_DEPLOY == "1"'
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - src/**/*
+        - requirements.txt
+        - Procfile
+        - railway.json
+        - .gitlab-ci.yml
+    - when: never
   before_script:
     - npm install -g @railway/cli
   script:

@@ -325,7 +325,7 @@ def format_recap_player_line(riot_id, participant, match_duration_seconds):
     objective_damage = int(participant.get("damageDealtToObjectives", 0) or 0)
     vision_score = int(participant.get("visionScore", 0) or 0)
     return (
-        f"{result_emoji} **{lol_name}** | \U0001F9ED `{role_name}` • **{champion}** ({result_label})\n"
+        f"{result_emoji} **{lol_name}** | `{role_name}` • **{champion}** ({result_label})\n"
         f"   \u2694\uFE0F `K/D/A {kills}/{deaths}/{assists}`  \U0001F33E `CS/min {cs_per_min:.1f}`\n"
         f"   \U0001F4A5 `Damage {player_damage:,}`  \U0001F3F0 `Objectives {objective_damage:,}`  \U0001F441\uFE0F `Vision {vision_score}`"
     )

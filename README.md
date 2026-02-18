@@ -57,7 +57,6 @@ Optional:
 - `DAILY_REFRESH_SECONDS` (default: `300`)
 - `DB_POOL_SIZE` (default: `5`)
 - `MATCH_CACHE_RETENTION_DAYS` (default: `31`)
-- `RIOT_KEY_ALERT_COOLDOWN_SECONDS` (default: `3600`)
 
 ## Tests
 

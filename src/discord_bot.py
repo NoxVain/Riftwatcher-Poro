@@ -95,7 +95,6 @@ REPORT_CACHE_SECONDS = int(os.getenv("REPORT_CACHE_SECONDS", "120"))
 MAX_TODAY_MATCH_DETAILS = int(os.getenv("MAX_TODAY_MATCH_DETAILS", "20"))
 DAILY_REFRESH_SECONDS = int(os.getenv("DAILY_REFRESH_SECONDS", "300"))
 MATCH_CACHE_RETENTION_DAYS = int(os.getenv("MATCH_CACHE_RETENTION_DAYS", "31"))
-RIOT_KEY_ALERT_COOLDOWN_SECONDS = int(os.getenv("RIOT_KEY_ALERT_COOLDOWN_SECONDS", "3600"))
 DATABASE_URL = require_env("DATABASE_URL")
 if psycopg is None:
     raise RuntimeError("DATABASE_URL is set but psycopg is not installed. Add psycopg[binary] to dependencies.")
@@ -107,7 +106,7 @@ DB_POOL_TOTAL = 0
 REQUEST_ID_CONTEXT = contextvars.ContextVar("request_id", default=None)
 START_MONOTONIC = time.monotonic()
 LAST_CACHE_CLEANUP_AT = 0.0
-LAST_RIOT_401_ALERT_AT = 0.0
+RIOT_401_ALERT_SENT = False
 RIOT_ALERT_LOCK = threading.Lock()
 
 
@@ -120,20 +119,35 @@ async def send_riot_key_expired_alert():
     if channel is None:
         return
     await channel.send(
-        "\u26A0\uFE0F Riot API returned 401 Unauthorized. "
+        "@NoxVain \u26A0\uFE0F Riot API returned 401 Unauthorized. "
         "Your RIOT_API_KEY is likely expired or invalid. "
         "Update the Railway variable `RIOT_API_KEY`."
     )
     log("[riot] Sent RIOT_API_KEY expiry alert.")
 
 
+def riot_401_alert_already_sent():
+    global RIOT_401_ALERT_SENT
+    if RIOT_401_ALERT_SENT:
+        return True
+    persisted = db_get_state("riot_401_alert_sent")
+    if persisted == "1":
+        RIOT_401_ALERT_SENT = True
+        return True
+    return False
+
+
+def mark_riot_401_alert_sent():
+    global RIOT_401_ALERT_SENT
+    RIOT_401_ALERT_SENT = True
+    db_set_state("riot_401_alert_sent", "1")
+
+
 def trigger_riot_key_alert():
-    global LAST_RIOT_401_ALERT_AT
-    now = time.monotonic()
     with RIOT_ALERT_LOCK:
-        if (now - LAST_RIOT_401_ALERT_AT) < max(60, RIOT_KEY_ALERT_COOLDOWN_SECONDS):
+        if riot_401_alert_already_sent():
             return
-        LAST_RIOT_401_ALERT_AT = now
+        mark_riot_401_alert_sent()
     try:
         loop = client.loop
         asyncio.run_coroutine_threadsafe(send_riot_key_expired_alert(), loop)

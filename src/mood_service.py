@@ -133,13 +133,13 @@ class MoodService:
         return leaders
 
     def format_report_from_results(self, ranked_results, error_results, report_start):
-        report_lines = ["âœ¨------ **LEAGUE MOOD (DAILY)** ------âœ¨", ""]
+        report_lines = ["\u2728------ **LEAGUE MOOD (DAILY)** ------\u2728", ""]
         updated_at = datetime.now(tz=self.report_timezone).strftime("%d.%m.%Y %H:%M")
         if not ranked_results and not error_results:
             report_lines.append("Looks like everyone has a life today.")
             report_lines.append("We will keep you up to date if anyone crawls back into the hole.")
             report_lines.append("")
-            report_lines.append("âœ¨--------------------------------------------âœ¨")
+            report_lines.append("\u2728--------------------------------------------\u2728")
             report_lines.append(f"_Last updated: {updated_at}_")
             total_elapsed_ms = int((time.perf_counter() - report_start) * 1000)
             self.log(
@@ -154,23 +154,23 @@ class MoodService:
             wilson_score = wilson_lower_bound(wins, losses)
             gamer_score = wilson_score * 100
             if wins + losses > 0 and wilson_score <= 0:
-                mood_emoji = "ðŸ’€"
+                mood_emoji = "\U0001F480"
             elif wilson_score >= 0.75:
-                mood_emoji = "ðŸ˜"
+                mood_emoji = "\U0001F601"
             elif wilson_score >= 0.60:
-                mood_emoji = "ðŸ˜Š"
+                mood_emoji = "\U0001F60A"
             elif wilson_score >= 0.50:
-                mood_emoji = "ðŸ™‚"
+                mood_emoji = "\U0001F642"
             elif wilson_score >= 0.40:
-                mood_emoji = "ðŸ˜"
+                mood_emoji = "\U0001F610"
             elif wilson_score >= 0.30:
-                mood_emoji = "ðŸ˜•"
+                mood_emoji = "\U0001F615"
             elif wilson_score >= 0.20:
-                mood_emoji = "ðŸ˜ž"
+                mood_emoji = "\U0001F61E"
             else:
-                mood_emoji = "ðŸ˜­"
+                mood_emoji = "\U0001F62D"
 
-            display_emoji = "â­" if index == 0 else mood_emoji
+            display_emoji = "\u2B50" if index == 0 else mood_emoji
             badges = "".join(badges_by_player.get(lol_name, []))
             badges_suffix = f"  {badges}" if badges else ""
             report_lines.append(
@@ -192,11 +192,11 @@ class MoodService:
             report_lines.append("")
 
         for lol_name, error_text in sorted(error_results, key=lambda row: row[0].lower()):
-            report_lines.append(f"âš«  **{lol_name}**")
+            report_lines.append(f"\u26AB  **{lol_name}**")
             report_lines.append(f"   Riot error: `{error_text}`")
             report_lines.append("")
 
-        report_lines.append("âœ¨--------------------------------------------âœ¨")
+        report_lines.append("\u2728--------------------------------------------\u2728")
         report_lines.append(f"_Last updated: {updated_at}_")
         total_elapsed_ms = int((time.perf_counter() - report_start) * 1000)
         self.log(
@@ -208,9 +208,9 @@ class MoodService:
         if len(report_text) <= 2000:
             return report_text
 
-        compact_lines = ["âœ¨------ **LEAGUE MOOD (DAILY)** ------âœ¨", ""]
+        compact_lines = ["\u2728------ **LEAGUE MOOD (DAILY)** ------\u2728", ""]
         for index, (lol_name, _mode_records, wins, losses, win_rate, _performance) in enumerate(ranked_results):
-            display_emoji = "â­" if index == 0 else "ðŸ™‚"
+            display_emoji = "\u2B50" if index == 0 else "\U0001F642"
             badges = "".join(badges_by_player.get(lol_name, []))
             badges_suffix = f" {badges}" if badges else ""
             compact_lines.append(
@@ -221,10 +221,10 @@ class MoodService:
             compact_lines.append("")
             error_names = ", ".join(name for name, _ in error_results[:6])
             more = "" if len(error_results) <= 6 else f" (+{len(error_results) - 6} more)"
-            compact_lines.append(f"âš« Riot errors for {len(error_results)} players: {error_names}{more}")
+            compact_lines.append(f"\u26AB Riot errors for {len(error_results)} players: {error_names}{more}")
 
         compact_lines.append("")
-        compact_lines.append("âœ¨--------------------------------------------âœ¨")
+        compact_lines.append("\u2728--------------------------------------------\u2728")
         compact_lines.append(f"_Last updated: {updated_at}_")
         compact_text = "\n".join(compact_lines)
         if len(compact_text) > 2000:

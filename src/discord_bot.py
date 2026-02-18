@@ -214,7 +214,7 @@ async def get_or_create_report_message(channel, initial_content):
     return message
 
 
-async def edit_last_report_message():
+async def edit_last_report_message(prefer_snapshot=False, bypass_cache=False):
     channel_id = LAST_REPORT_MESSAGE["channel_id"]
     message_id = LAST_REPORT_MESSAGE["message_id"]
     if not channel_id or not message_id:
@@ -225,7 +225,10 @@ async def edit_last_report_message():
         return
 
     try:
-        report_text = await mood_service.build_today_win_rate_report()
+        report_text = await mood_service.build_today_win_rate_report(
+            prefer_snapshot=prefer_snapshot,
+            bypass_cache=bypass_cache,
+        )
         message = await channel.fetch_message(message_id)
         if message.content == report_text:
             log(f"[refresh] No report change; skipped editing message {message_id}.")
@@ -259,8 +262,60 @@ async def background_daily_refresher():
     while not client.is_closed():
         token = REQUEST_ID_CONTEXT.set(create_request_id("bg"))
         try:
-            await mood_service.refresh_daily_stats_once()
-            await edit_last_report_message()
+            last_snapshot_push_at = 0.0
+            last_snapshot_text = None
+            snapshot_push_interval = 120.0
+
+            async def push_snapshot_update(force=False):
+                nonlocal last_snapshot_push_at, last_snapshot_text
+                now_mono = time.monotonic()
+
+                channel_id = LAST_REPORT_MESSAGE["channel_id"]
+                message_id = LAST_REPORT_MESSAGE["message_id"]
+                if not channel_id or not message_id:
+                    return
+
+                channel = await resolve_channel(channel_id)
+                if channel is None:
+                    return
+
+                try:
+                    snapshot_text = await mood_service.build_today_win_rate_report(
+                        prefer_snapshot=True,
+                        bypass_cache=True,
+                    )
+                    interval_elapsed = (now_mono - last_snapshot_push_at) >= snapshot_push_interval
+                    changed = snapshot_text != last_snapshot_text
+                    should_push = force or changed or interval_elapsed
+                    if not should_push:
+                        return
+
+                    message = await channel.fetch_message(message_id)
+                    if message.content != snapshot_text:
+                        await message.edit(content=snapshot_text)
+                        log(
+                            f"[refresh] Updated last report message {message_id} in channel {channel_id} "
+                            f"(force={force})."
+                        )
+                    else:
+                        log(f"[refresh] Snapshot unchanged in Discord for message {message_id}.")
+
+                    last_snapshot_text = snapshot_text
+                    last_snapshot_push_at = now_mono
+                except (discord.NotFound, discord.Forbidden) as exc:
+                    log(f"[refresh] Could not edit last report message {message_id}: {exc}")
+                    LAST_REPORT_MESSAGE["channel_id"] = None
+                    LAST_REPORT_MESSAGE["message_id"] = None
+                    if DB_ENABLED:
+                        await asyncio.to_thread(db_set_last_report_message, 0, 0)
+                except discord.HTTPException as exc:
+                    log(f"[refresh] Discord API error while editing last report message: {exc}")
+
+            async def on_player_refreshed(_processed, _total, _riot_id):
+                await push_snapshot_update(force=False)
+
+            await mood_service.refresh_daily_stats_once(progress_callback=on_player_refreshed)
+            await push_snapshot_update(force=True)
             now_mono = time.monotonic()
             if (now_mono - LAST_CACHE_CLEANUP_AT) >= max(3600, DAILY_REFRESH_SECONDS):
                 deleted = await asyncio.to_thread(db_cleanup_old_match_cache, MATCH_CACHE_RETENTION_DAYS)

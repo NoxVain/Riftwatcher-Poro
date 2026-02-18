@@ -159,10 +159,12 @@ class MoodService:
             compact_text = compact_text[:1950] + "\n..."
         return compact_text
 
-    async def build_today_win_rate_report(self, progress_callback=None):
+    async def build_today_win_rate_report(self, progress_callback=None, prefer_snapshot=False, bypass_cache=False):
         today_key = datetime.now(tz=self.report_timezone).date().isoformat()
         now_monotonic = time.monotonic()
         if (
+            not bypass_cache
+            and
             self.report_cache["text"] is not None
             and self.report_cache["day"] == today_key
             and now_monotonic < self.report_cache["expires_at"]
@@ -177,24 +179,25 @@ class MoodService:
         if self.db_enabled:
             stored_rows = await asyncio.to_thread(self.db_load_latest_stats, today_key)
             if stored_rows:
-                latest_updated_at = None
-                for row in stored_rows:
-                    row_updated_at = row[9]
-                    if row_updated_at is None:
-                        continue
-                    if latest_updated_at is None or row_updated_at > latest_updated_at:
-                        latest_updated_at = row_updated_at
+                if not prefer_snapshot:
+                    latest_updated_at = None
+                    for row in stored_rows:
+                        row_updated_at = row[9]
+                        if row_updated_at is None:
+                            continue
+                        if latest_updated_at is None or row_updated_at > latest_updated_at:
+                            latest_updated_at = row_updated_at
 
-                snapshot_max_age_seconds = max(600, self.daily_refresh_seconds * 2)
-                snapshot_stale = True
-                if latest_updated_at is not None:
-                    latest_updated_utc = latest_updated_at.astimezone(timezone.utc)
-                    snapshot_age = datetime.now(tz=timezone.utc) - latest_updated_utc
-                    snapshot_stale = snapshot_age > timedelta(seconds=snapshot_max_age_seconds)
+                    snapshot_max_age_seconds = max(600, self.daily_refresh_seconds * 2)
+                    snapshot_stale = True
+                    if latest_updated_at is not None:
+                        latest_updated_utc = latest_updated_at.astimezone(timezone.utc)
+                        snapshot_age = datetime.now(tz=timezone.utc) - latest_updated_utc
+                        snapshot_stale = snapshot_age > timedelta(seconds=snapshot_max_age_seconds)
 
-                if snapshot_stale:
-                    self.log("[mood] Snapshot data is stale; falling back to live rebuild.")
-                    stored_rows = []
+                    if snapshot_stale:
+                        self.log("[mood] Snapshot data is stale; falling back to live rebuild.")
+                        stored_rows = []
 
             if stored_rows:
                 for row in stored_rows:
@@ -215,16 +218,24 @@ class MoodService:
                     ranked_results.append((get_lol_name(riot_id), mode_records, wins, losses, win_rate))
 
                 ranked_results.sort(key=rank_sort_key)
-                if ranked_results:
-                    if len(ranked_results) == 1 and len(self.friends) > 1:
+                if ranked_results or prefer_snapshot:
+                    if not prefer_snapshot and len(ranked_results) == 1 and len(self.friends) > 1:
                         self.log("[mood] Snapshot looked sparse (1 ranked player); falling back to live rebuild.")
                     else:
                         self.log("[mood] Returning report from postgres daily stats.")
                         report_text = self.format_report_from_results(ranked_results, error_results, report_start)
-                        self.report_cache["text"] = report_text
-                        self.report_cache["day"] = today_key
-                        self.report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
+                        if not bypass_cache:
+                            self.report_cache["text"] = report_text
+                            self.report_cache["day"] = today_key
+                            self.report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
                         return report_text
+            elif prefer_snapshot:
+                report_text = self.format_report_from_results(ranked_results, error_results, report_start)
+                if not bypass_cache:
+                    self.report_cache["text"] = report_text
+                    self.report_cache["day"] = today_key
+                    self.report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
+                return report_text
 
         self.riot_client.clear_match_cache()
         total_players = len(self.friends)
@@ -266,11 +277,13 @@ class MoodService:
         self.report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
         return report_text
 
-    async def refresh_daily_stats_once(self):
+    async def refresh_daily_stats_once(self, progress_callback=None):
         if not self.db_enabled:
             return
         self.log("[refresh] Starting daily stats refresh.")
         self.riot_client.clear_match_cache()
+        total_players = len(self.friends)
+        processed_players = 0
         for riot_id in self.friends:
             try:
                 mode_records = await self.riot_client.get_today_mode_records(riot_id)
@@ -278,6 +291,10 @@ class MoodService:
                 await asyncio.to_thread(self.db_upsert_daily_stats, today_key, riot_id, mode_records)
             except requests.RequestException as exc:
                 self.log(f"[refresh] Failed for {riot_id}: {exc}")
+            finally:
+                processed_players += 1
+                if progress_callback is not None:
+                    await progress_callback(processed_players, total_players, riot_id)
         self.invalidate_report_cache()
         self.log("[refresh] Daily stats refresh complete.")
 

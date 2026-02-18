@@ -97,7 +97,7 @@ class MoodService:
         updated_at = datetime.now(tz=self.report_timezone).strftime("%d.%m.%Y %H:%M")
         if not ranked_results and not error_results:
             report_lines.append("Looks like everyone has a life today.")
-            report_lines.append("We will keep you up to date of anyone crawls back into the hole.")
+            report_lines.append("We will keep you up to date if anyone crawls back into the hole.")
             report_lines.append("")
             report_lines.append("✨--------------------------------------------✨")
             report_lines.append(f"_Last updated: {updated_at}_")

@@ -332,3 +332,20 @@ def db_load_latest_stats(day_date):
         fetch=True,
     )
     return rows or []
+
+
+def db_get_daily_stats_for_player(day_date, riot_id):
+    row = db_execute(
+        """
+        SELECT
+            solo_wins, solo_losses,
+            flex_wins, flex_losses,
+            arcade_wins, arcade_losses
+        FROM player_daily_stats
+        WHERE day_date = %s AND lower(riot_id) = lower(%s)
+        LIMIT 1;
+        """,
+        (day_date, riot_id),
+        fetchone=True,
+    )
+    return row

@@ -62,6 +62,7 @@ db_get_last_seen_match_id = dbm.db_get_last_seen_match_id
 db_get_match_info = dbm.db_get_match_info
 db_get_puuid = dbm.db_get_puuid
 db_health_stats = dbm.db_health_stats
+db_get_daily_stats_for_player = dbm.db_get_daily_stats_for_player
 db_load_latest_stats = dbm.db_load_latest_stats
 db_load_tracked_players = dbm.db_load_tracked_players
 db_set_last_report_message = dbm.db_set_last_report_message
@@ -167,7 +168,9 @@ mood_service = MoodService(
     db_enabled=DB_ENABLED,
     db_load_latest_stats=db_load_latest_stats,
     db_upsert_daily_stats=db_upsert_daily_stats,
+    db_get_daily_stats_for_player=db_get_daily_stats_for_player,
     db_get_last_seen_match_id=db_get_last_seen_match_id,
+    db_set_last_seen_match_id=db_set_last_seen_match_id,
     db_health_stats=db_health_stats,
 )
 
@@ -475,7 +478,7 @@ async def on_message(message):
                         remember_report_message(status_message)
                         log(f"[mood] Sent stored snapshot report in channel {CHANNEL_ID}.")
 
-                        await mood_service.refresh_recent_matches_snapshot(recent_count=1)
+                        await mood_service.refresh_recent_matches_snapshot(recent_count=20)
                         refreshed_text = await mood_service.build_today_win_rate_report()
                         if refreshed_text != displayed_text:
                             await status_message.edit(content=refreshed_text)

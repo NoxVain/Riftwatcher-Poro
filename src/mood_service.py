@@ -7,7 +7,9 @@ import requests
 from src.report_logic import (
     create_mode_records,
     format_mode_line,
+    get_mode_bucket,
     get_mode_totals,
+    is_match_in_last_24h,
     rank_sort_key,
     wilson_lower_bound,
 )
@@ -27,7 +29,9 @@ class MoodService:
         db_enabled,
         db_load_latest_stats,
         db_upsert_daily_stats,
+        db_get_daily_stats_for_player,
         db_get_last_seen_match_id,
+        db_set_last_seen_match_id,
         db_health_stats,
     ):
         self.log = log
@@ -39,7 +43,9 @@ class MoodService:
         self.db_enabled = db_enabled
         self.db_load_latest_stats = db_load_latest_stats
         self.db_upsert_daily_stats = db_upsert_daily_stats
+        self.db_get_daily_stats_for_player = db_get_daily_stats_for_player
         self.db_get_last_seen_match_id = db_get_last_seen_match_id
+        self.db_set_last_seen_match_id = db_set_last_seen_match_id
         self.db_health_stats = db_health_stats
         self.report_cache = {"text": None, "expires_at": 0.0, "day": None}
 
@@ -62,6 +68,20 @@ class MoodService:
         if len(text) > 140:
             return text[:137] + "..."
         return text
+
+    @staticmethod
+    def get_new_match_ids(recent_ids, last_seen_match_id):
+        if not recent_ids:
+            return []
+        if not last_seen_match_id:
+            return list(recent_ids)
+
+        new_ids = []
+        for match_id in recent_ids:
+            if match_id == last_seen_match_id:
+                break
+            new_ids.append(match_id)
+        return new_ids
 
     def format_report_from_results(self, ranked_results, error_results, report_start):
         report_lines = ["✨------ **LEAGUE MOOD (LAST 24 HOURS)** ------✨", ""]
@@ -298,10 +318,13 @@ class MoodService:
         self.invalidate_report_cache()
         self.log("[refresh] Daily stats refresh complete.")
 
-    async def refresh_recent_matches_snapshot(self, recent_count=1):
+    async def refresh_recent_matches_snapshot(self, recent_count=20):
         if not self.db_enabled:
             return
         self.log(f"[refresh] Running on-demand recent refresh (count={recent_count})")
+        changed_any = False
+        candidates = []
+
         for riot_id in self.friends:
             try:
                 puuid = await self.riot_client.fetch_puuid(riot_id)
@@ -309,17 +332,58 @@ class MoodService:
                 if not recent_ids:
                     continue
 
-                latest_match_id = recent_ids[0]
                 last_seen_match_id = await asyncio.to_thread(self.db_get_last_seen_match_id, riot_id)
-                if last_seen_match_id == latest_match_id:
+                new_match_ids = self.get_new_match_ids(recent_ids, last_seen_match_id)
+                if not new_match_ids:
                     continue
-
-                mode_records = await self.riot_client.get_today_mode_records(riot_id)
-                today_key = datetime.now(tz=self.report_timezone).date().isoformat()
-                await asyncio.to_thread(self.db_upsert_daily_stats, today_key, riot_id, mode_records)
+                candidates.append((riot_id, puuid, recent_ids[0], new_match_ids))
             except requests.RequestException as exc:
                 self.log(f"[refresh] On-demand refresh failed for {riot_id}: {exc}")
-        self.invalidate_report_cache()
+
+        for riot_id, puuid, latest_match_id, new_match_ids in candidates:
+            try:
+                today_key = datetime.now(tz=self.report_timezone).date().isoformat()
+                row = await asyncio.to_thread(self.db_get_daily_stats_for_player, today_key, riot_id)
+                if row is None:
+                    self.log(
+                        f"[refresh] No baseline daily stats for {riot_id}; "
+                        "running full player refresh fallback."
+                    )
+                    mode_records = await self.riot_client.get_today_mode_records(riot_id)
+                    await asyncio.to_thread(self.db_upsert_daily_stats, today_key, riot_id, mode_records)
+                    await asyncio.to_thread(self.db_set_last_seen_match_id, riot_id, latest_match_id)
+                    changed_any = True
+                    continue
+
+                mode_records = {
+                    "solo_duo": {"wins": int(row[0]), "losses": int(row[1])},
+                    "flex": {"wins": int(row[2]), "losses": int(row[3])},
+                    "arcade": {"wins": int(row[4]), "losses": int(row[5])},
+                }
+                player_changed = False
+                for match_id in reversed(new_match_ids):
+                    match_info = await self.riot_client.fetch_match_info(match_id)
+                    if not is_match_in_last_24h(match_info):
+                        continue
+                    queue_id = match_info["info"].get("queueId", -1)
+                    bucket_name = get_mode_bucket(queue_id)
+                    result = self.riot_client.get_participant_win(match_info, puuid)
+                    if result is True:
+                        mode_records[bucket_name]["wins"] += 1
+                        player_changed = True
+                    elif result is False:
+                        mode_records[bucket_name]["losses"] += 1
+                        player_changed = True
+
+                if player_changed:
+                    await asyncio.to_thread(self.db_upsert_daily_stats, today_key, riot_id, mode_records)
+                    changed_any = True
+
+                await asyncio.to_thread(self.db_set_last_seen_match_id, riot_id, latest_match_id)
+            except requests.RequestException as exc:
+                self.log(f"[refresh] On-demand refresh failed for {riot_id}: {exc}")
+        if changed_any:
+            self.invalidate_report_cache()
 
     async def run_health_check(self, start_monotonic):
         uptime_seconds = int(time.monotonic() - start_monotonic)

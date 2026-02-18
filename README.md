@@ -1,108 +1,78 @@
 # MoodBot
 
-MoodBot is a Discord bot that tracks your group's League of Legends performance for today and posts a clean mood board in Discord.
+MoodBot is a Discord bot that tracks League match mood for a tracked player list and posts a live scoreboard in one Discord channel.
 
-It pulls live data from Riot's APIs, calculates each player's daily record, ranks everyone by win rate, and keeps no-match players at the bottom.
+## Current Structure
 
-## What It Does
+- `Bot.py` - compatibility launcher (calls `src.app.main()`)
+- `src/app.py` - module entrypoint used in Railway and local runs
+- `src/discord_bot.py` - main bot runtime (Discord handlers, Riot calls, refresh logic)
+- `src/constants.py` - command constants
+- `README.md` - project docs
 
-- Connects to Discord and listens in one configured channel.
-- Fetches player account and match data from Riot API.
-- Builds a "today only" report:
-  - Separate win rates for `Ranked Solo/Duo`, `Ranked Flex`, and `Arcade`
-  - Total win rate across all modes
-  - Mood emoji scale (with skull at 0%)
-- Sorts players from best to worst total win rate.
-- Shows a `⭐` for the top-ranked player.
-- Shows players with no matches today at the end.
-- Responds to `!Mood` with:
-  - A quick "working..." message
-  - Then edits that message into the final formatted report
-- Also posts a scheduled daily report at 20:00 local time.
+## Features
+
+- `!Mood` posts/updates a single scoreboard message.
+- Rolling **last 24 hours** window (not calendar day).
+- Per-player breakdown:
+  - Total
+  - Ranked Solo/Duo
+  - Ranked Flex
+  - Arcade
+- Ranking based on Wilson lower bound.
+- Displays `Gamer Score` (Wilson score x 100) per player.
+- Background refresh stores/reuses data in Postgres.
+- Persistent match cache and scoreboard message ID in Postgres.
+- `!Add Name#Tag` adds players at runtime and persists to Postgres.
+- `!DebugPlayer Name#Tag` prints queue/category mapping for recent games.
 
 ## Commands
 
-- `!Mood` - Generate and post today's ranked mood report.
-- `!Add Name#Tag` - Validate and add a new tracked player at runtime.
-- `!test` - Simple Discord send test.
-- `!riottest` - Basic Riot connectivity test.
+- `!Mood`
+- `!Add Name#Tag`
+- `!DebugPlayer Name#Tag`
+- `!test`
+- `!riottest`
 
-## Tech Stack
-
-- Python 3.11+
-- `discord.py`
-- `requests`
-
-## Run Locally
+## Local Run
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-set DISCORD_TOKEN=your_token
-set RIOT_API_KEY=your_riot_key
-set DISCORD_CHANNEL_ID=your_channel_id
 python -m src.app
 ```
 
-## How The Report Is Calculated
+## Environment Variables
 
-1. Resolve each Riot ID (`gameName#tagLine`) to `puuid`.
-2. Pull today's matches from Match-V5 (`startTime` filter + timezone-aware day cutoff).
-3. Bucket each match into `Ranked Solo/Duo` (420), `Ranked Flex` (440), or `Arcade` (all other queues).
-4. Count wins and losses per bucket and in total.
-5. Compute total win rate and sort descending.
-6. Append no-match players at the bottom.
-
-## Configuration
-
-Required environment variables:
+Required:
 
 - `DISCORD_TOKEN`
 - `RIOT_API_KEY`
 - `DISCORD_CHANNEL_ID`
+- `DATABASE_URL`
 
-Optional environment variables:
+Optional:
 
-- `RIOT_FRIENDS` (comma-separated Riot IDs, for example `PlayerOne#EUW,PlayerTwo#NA1`)
-- `PLAYERS_FILE` (path to persisted tracked players file, default: `tracked_players.txt`)
-- `REPORT_TIMEZONE` (IANA timezone for daily cutoff, default: `UTC`, example: `Europe/Oslo`)
-- `DATABASE_URL` (Postgres connection string; when set, players + puuids persist in Postgres)
-- `DAILY_REFRESH_SECONDS` (background refresh interval when DB is enabled, default: `300`)
+- `RIOT_FRIENDS` (seed list when DB has no players)
+- `REPORT_TIMEZONE` (default: `UTC`, example: `Europe/Oslo`)
+- `LOG_RIOT_REQUESTS` (default: `false`)
+- `MAX_MATCHES_PER_PLAYER` (default: `25`)
+- `MAX_TODAY_MATCH_DETAILS` (default: `20`)
+- `REPORT_CACHE_SECONDS` (default: `120`)
+- `DAILY_REFRESH_SECONDS` (default: `300`)
+- `DB_POOL_SIZE` (default: `5`)
 
-## Player Persistence
+## Railway
 
-- Preferred: set `DATABASE_URL` (Railway Postgres).  
-  - `!Add` persists `riot_id` in Postgres.
-  - `puuid` is also stored in Postgres and reused across restarts/redeploys.
-  - Startup loads tracked players from Postgres.
-  - Background updater continuously refreshes today's per-player stats in Postgres.
-  - `!Mood` reads those stored daily stats first for faster responses and fewer Riot requests.
-- Fallback (when `DATABASE_URL` is not set): file-based `tracked_players.txt` via `PLAYERS_FILE`.
-- `tracked_players.txt` is ignored by git.
-- On Railway, file-based storage is ephemeral, so use Postgres for persistent state.
+- `Procfile`: `worker: python -m src.app`
+- `railway.json` start command: `python -m src.app`
+- GitLab CI deploy uses Railway CLI from `.gitlab-ci.yml`
 
-## Railway Deployment (GitLab CI)
-
-This repository includes:
-
-- `.gitlab-ci.yml` - deploy job for Railway on pushes to your default branch.
-- `railway.json` - Railway start command and restart policy.
-- `Procfile` - worker process declaration (`python -m src.app`).
-
-Set these CI/CD variables in GitLab (`Settings -> CI/CD -> Variables`):
-
-- `RAILWAY_TOKEN` (Railway token)
-- `RAILWAY_SERVICE_ID` (target Railway service ID) or `RAILWAY_PROJECT_ID`
-- `RAILWAY_ENVIRONMENT_ID` (optional, deploy target environment)
-
-Set these runtime variables in Railway service settings:
+Runtime variables to set in Railway:
 
 - `DISCORD_TOKEN`
 - `RIOT_API_KEY`
 - `DISCORD_CHANNEL_ID`
-- `RIOT_FRIENDS` (optional)
-- `PLAYERS_FILE` (optional)
-- `REPORT_TIMEZONE` (optional)
-- `DATABASE_URL` (recommended for persistence across redeploys)
-
+- `DATABASE_URL`
+- Optional tuning variables from above

@@ -56,6 +56,6 @@ def test_get_leader_badges_by_player_marks_category_leads():
     assert "🌾" in badges["Alpha"]  # tied CS/min lead
     assert "🏰" in badges["Alpha"]
     assert "🗡️" in badges["Alpha"]
-    assert "⚔️" in badges["Bravo"]
+    assert "💥" in badges["Bravo"]
     assert "☠️" in badges["Bravo"]  # most deaths
     assert "👁️" in badges["Bravo"]

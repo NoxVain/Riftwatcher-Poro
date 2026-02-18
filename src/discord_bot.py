@@ -783,7 +783,7 @@ def format_report_from_results(ranked_results, error_results, report_start):
             mode_records["arcade"]["wins"],
             mode_records["arcade"]["losses"],
         )
-        report_lines.append(f"   Total: `{wins}W-{losses}L` - {win_rate:.1f}%")
+        report_lines.append(f"   Total: `{wins}W-{losses}L` - **{win_rate:.1f}%**")
         report_lines.append("")
 
     for lol_name, error_text in sorted(error_results, key=lambda row: row[0].lower()):

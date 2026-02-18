@@ -19,6 +19,18 @@ def create_mode_records():
     }
 
 
+def create_performance_totals():
+    return {
+        "cs_total": 0,
+        "minutes_total": 0.0,
+        "objective_damage": 0,
+        "player_damage": 0,
+        "kills": 0,
+        "deaths": 0,
+        "vision_score": 0,
+    }
+
+
 def get_mode_totals(mode_records):
     wins = mode_records["solo_duo"]["wins"] + mode_records["flex"]["wins"]
     losses = mode_records["solo_duo"]["losses"] + mode_records["flex"]["losses"]

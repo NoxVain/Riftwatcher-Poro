@@ -8,6 +8,7 @@ import requests
 
 from src.report_logic import (
     create_mode_records,
+    create_performance_totals,
     get_match_end_unix_seconds,
     get_mode_bucket,
     get_mode_totals,
@@ -189,6 +190,13 @@ class RiotApiClient:
                 return participant["win"]
         return None
 
+    @staticmethod
+    def get_participant(match_info, puuid):
+        for participant in match_info["info"]["participants"]:
+            if participant["puuid"] == puuid:
+                return participant
+        return None
+
     async def get_today_mode_records(self, riot_id):
         player_start = time.perf_counter()
         puuid = await self.fetch_puuid(riot_id)
@@ -201,6 +209,7 @@ class RiotApiClient:
             await asyncio.to_thread(self.db_set_last_seen_match_id, riot_id, match_ids[0])
 
         mode_records = create_mode_records()
+        performance_totals = create_performance_totals()
         today_details_processed = 0
         for match_id in match_ids:
             match_info = await self.fetch_match_info(match_id)
@@ -222,11 +231,26 @@ class RiotApiClient:
             bucket_name = get_mode_bucket(queue_id)
             if bucket_name is None:
                 continue
-            result = self.get_participant_win(match_info, puuid)
+            participant = self.get_participant(match_info, puuid)
+            if participant is None:
+                continue
+            result = participant.get("win")
             if result is True:
                 mode_records[bucket_name]["wins"] += 1
             elif result is False:
                 mode_records[bucket_name]["losses"] += 1
+
+            duration_seconds = int(match_info["info"].get("gameDuration", 0) or 0)
+            if duration_seconds > 10_000:
+                duration_seconds = int(duration_seconds / 1000)
+            performance_totals["minutes_total"] += max(0.0, duration_seconds / 60.0)
+            performance_totals["cs_total"] += int(participant.get("totalMinionsKilled", 0) or 0)
+            performance_totals["cs_total"] += int(participant.get("neutralMinionsKilled", 0) or 0)
+            performance_totals["objective_damage"] += int(participant.get("damageDealtToObjectives", 0) or 0)
+            performance_totals["player_damage"] += int(participant.get("totalDamageDealtToChampions", 0) or 0)
+            performance_totals["kills"] += int(participant.get("kills", 0) or 0)
+            performance_totals["deaths"] += int(participant.get("deaths", 0) or 0)
+            performance_totals["vision_score"] += int(participant.get("visionScore", 0) or 0)
             today_details_processed += 1
 
         wins, losses = get_mode_totals(mode_records)
@@ -237,7 +261,7 @@ class RiotApiClient:
             f"flex={mode_records['flex']['wins']}W-{mode_records['flex']['losses']}L "
             f"elapsed={elapsed_ms}ms"
         )
-        return mode_records
+        return mode_records, performance_totals
 
     async def run_riot_connectivity_test(self, riot_id):
         puuid = await self.fetch_puuid(riot_id)

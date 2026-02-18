@@ -118,11 +118,25 @@ def init_db():
             arcade_losses INTEGER NOT NULL DEFAULT 0,
             total_wins INTEGER NOT NULL DEFAULT 0,
             total_losses INTEGER NOT NULL DEFAULT 0,
+            cs_total INTEGER NOT NULL DEFAULT 0,
+            minutes_total DOUBLE PRECISION NOT NULL DEFAULT 0,
+            objective_damage BIGINT NOT NULL DEFAULT 0,
+            player_damage BIGINT NOT NULL DEFAULT 0,
+            kills INTEGER NOT NULL DEFAULT 0,
+            deaths INTEGER NOT NULL DEFAULT 0,
+            vision_score INTEGER NOT NULL DEFAULT 0,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             PRIMARY KEY (day_date, riot_id)
         );
         """
     )
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS cs_total INTEGER NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS minutes_total DOUBLE PRECISION NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS objective_damage BIGINT NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS player_damage BIGINT NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS kills INTEGER NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS deaths INTEGER NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS vision_score INTEGER NOT NULL DEFAULT 0;")
     db_execute(
         """
         CREATE TABLE IF NOT EXISTS match_info_cache (
@@ -271,7 +285,7 @@ def db_load_tracked_players():
     return [row[0] for row in rows]
 
 
-def db_upsert_daily_stats(day_date, riot_id, mode_records):
+def db_upsert_daily_stats(day_date, riot_id, mode_records, performance_totals=None):
     solo_wins = mode_records["solo_duo"]["wins"]
     solo_losses = mode_records["solo_duo"]["losses"]
     flex_wins = mode_records["flex"]["wins"]
@@ -280,6 +294,14 @@ def db_upsert_daily_stats(day_date, riot_id, mode_records):
     arcade_losses = mode_records["arcade"]["losses"]
     total_wins = solo_wins + flex_wins
     total_losses = solo_losses + flex_losses
+    stats = performance_totals or {}
+    cs_total = int(stats.get("cs_total", 0) or 0)
+    minutes_total = float(stats.get("minutes_total", 0.0) or 0.0)
+    objective_damage = int(stats.get("objective_damage", 0) or 0)
+    player_damage = int(stats.get("player_damage", 0) or 0)
+    kills = int(stats.get("kills", 0) or 0)
+    deaths = int(stats.get("deaths", 0) or 0)
+    vision_score = int(stats.get("vision_score", 0) or 0)
     db_execute(
         """
         INSERT INTO player_daily_stats (
@@ -288,9 +310,15 @@ def db_upsert_daily_stats(day_date, riot_id, mode_records):
             flex_wins, flex_losses,
             arcade_wins, arcade_losses,
             total_wins, total_losses,
+            cs_total, minutes_total,
+            objective_damage, player_damage,
+            kills, deaths, vision_score,
             updated_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, NOW()
+        )
         ON CONFLICT (day_date, riot_id)
         DO UPDATE SET
             solo_wins = EXCLUDED.solo_wins,
@@ -301,6 +329,13 @@ def db_upsert_daily_stats(day_date, riot_id, mode_records):
             arcade_losses = EXCLUDED.arcade_losses,
             total_wins = EXCLUDED.total_wins,
             total_losses = EXCLUDED.total_losses,
+            cs_total = EXCLUDED.cs_total,
+            minutes_total = EXCLUDED.minutes_total,
+            objective_damage = EXCLUDED.objective_damage,
+            player_damage = EXCLUDED.player_damage,
+            kills = EXCLUDED.kills,
+            deaths = EXCLUDED.deaths,
+            vision_score = EXCLUDED.vision_score,
             updated_at = NOW();
         """,
         (
@@ -314,6 +349,13 @@ def db_upsert_daily_stats(day_date, riot_id, mode_records):
             arcade_losses,
             total_wins,
             total_losses,
+            cs_total,
+            minutes_total,
+            objective_damage,
+            player_damage,
+            kills,
+            deaths,
+            vision_score,
         ),
     )
 
@@ -323,7 +365,8 @@ def db_load_latest_stats(day_date):
         """
         SELECT DISTINCT ON (lower(riot_id))
             riot_id, solo_wins, solo_losses, flex_wins, flex_losses,
-            arcade_wins, arcade_losses, total_wins, total_losses, updated_at
+            arcade_wins, arcade_losses, total_wins, total_losses, updated_at,
+            cs_total, minutes_total, objective_damage, player_damage, kills, deaths, vision_score
         FROM player_daily_stats
         WHERE day_date = %s
         ORDER BY lower(riot_id), updated_at DESC;
@@ -340,7 +383,14 @@ def db_get_daily_stats_for_player(day_date, riot_id):
         SELECT
             solo_wins, solo_losses,
             flex_wins, flex_losses,
-            arcade_wins, arcade_losses
+            arcade_wins, arcade_losses,
+            cs_total,
+            minutes_total,
+            objective_damage,
+            player_damage,
+            kills,
+            deaths,
+            vision_score
         FROM player_daily_stats
         WHERE day_date = %s AND lower(riot_id) = lower(%s)
         LIMIT 1;

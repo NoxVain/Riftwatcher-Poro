@@ -15,7 +15,7 @@
   - `c25ebe3` `feat(recap): improve match recap layout and readability`
 
 ## Runtime Behavior (Current)
-- Scoreboard is a single persisted message in `DISCORD_CHANNEL_ID`.
+- Scoreboard is a single persisted message in `DAILY_REPORT_CHANNEL_ID`.
 - Report window is daily cycle-based, starting at `REPORT_DAY_START_HOUR` in `REPORT_TIMEZONE` (default `06:00`).
 - Scoring/reporting is ranked-only (`420` solo/duo and `440` flex).
 - `!Mood` flow:
@@ -57,7 +57,9 @@
 - Required:
   - `DISCORD_TOKEN`
   - `RIOT_API_KEY`
-  - `DISCORD_CHANNEL_ID`
+  - `DAILY_REPORT_CHANNEL_ID`
+  - `MATCH_RECAP_CHANNEL_ID`
+  - `EVENTS_CHANNEL_ID`
   - `DATABASE_URL`
 - Core tuning:
   - `REPORT_TIMEZONE`
@@ -67,8 +69,9 @@
   - `MAX_IN_MEMORY_MATCH_CACHE` (default `200`)
   - `REPORT_CACHE_SECONDS` (default `120`)
   - `DAILY_REFRESH_SECONDS` (default `300`)
+  - `EVENTS_CHANNEL_ID` (rank/news channel)
   - `MATCH_CACHE_RETENTION_DAYS` (default `730`; `0` means no DB cache cleanup)
-  - `MATCH_RECAP_CHANNEL_ID` (optional)
+  - `MATCH_RECAP_CHANNEL_ID` (recap channel)
   - `MATCH_RECAP_POLL_SECONDS` (default `90`)
 
 ## Quick Resume Checklist
@@ -119,6 +122,6 @@
 ## New Runtime Behavior (2026-02-19)
 - Rank change monitoring now runs during background refresh cycles.
 - Rank state is persisted per player/queue in `player_ranked_state`.
-- On rank up/down, bot posts a message in `DISCORD_CHANNEL_ID`.
+- On rank up/down, bot posts in `EVENTS_CHANNEL_ID` when set (fallback: recap channel, then daily report channel).
 - Platform host for league/summoner APIs is configurable via:
   - `RIOT_PLATFORM_ROUTING` (default `euw1`)

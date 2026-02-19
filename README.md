@@ -72,7 +72,9 @@ Required:
 
 - `DISCORD_TOKEN`
 - `RIOT_API_KEY`
-- `DISCORD_CHANNEL_ID`
+- `DAILY_REPORT_CHANNEL_ID`
+- `MATCH_RECAP_CHANNEL_ID`
+- `EVENTS_CHANNEL_ID`
 - `DATABASE_URL`
 
 Optional:
@@ -86,11 +88,13 @@ Optional:
 - `MAX_IN_MEMORY_MATCH_CACHE` (default: `200`)
 - `REPORT_CACHE_SECONDS` (default: `120`)
 - `DAILY_REFRESH_SECONDS` (default: `300`)
-- `MATCH_RECAP_CHANNEL_ID` (optional, enables recap posts)
+- `EVENTS_CHANNEL_ID` (rank/news channel)
+- `MATCH_RECAP_CHANNEL_ID` (recap channel)
 - `MATCH_RECAP_POLL_SECONDS` (default: `90`)
 - `DB_POOL_SIZE` (default: `5`)
 - `MATCH_CACHE_RETENTION_DAYS` (default: `730`; set `0` for no DB cache cleanup)
 - `RIOT_PLATFORM_ROUTING` (default: `euw1`)
+
 
 ## Tests
 

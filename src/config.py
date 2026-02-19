@@ -32,7 +32,8 @@ def get_env_bool(name, default=False):
 TOKEN = require_env("DISCORD_TOKEN")
 RIOT_API_KEY = require_env("RIOT_API_KEY")
 RIOT_PLATFORM_ROUTING = os.getenv("RIOT_PLATFORM_ROUTING", "euw1").strip().lower() or "euw1"
-CHANNEL_ID = int(require_env("DISCORD_CHANNEL_ID"))
+DAILY_REPORT_CHANNEL_ID = int(require_env("DAILY_REPORT_CHANNEL_ID"))
+EVENTS_CHANNEL_ID = int(require_env("EVENTS_CHANNEL_ID"))
 REPORT_TIMEZONE_NAME = os.getenv("REPORT_TIMEZONE", "UTC")
 try:
     REPORT_TIMEZONE = ZoneInfo(REPORT_TIMEZONE_NAME)
@@ -50,8 +51,7 @@ if REPORT_DAY_START_HOUR < 0 or REPORT_DAY_START_HOUR > 23:
     raise RuntimeError("REPORT_DAY_START_HOUR must be between 0 and 23.")
 DAILY_REFRESH_SECONDS = int(os.getenv("DAILY_REFRESH_SECONDS", "300"))
 MATCH_CACHE_RETENTION_DAYS = int(os.getenv("MATCH_CACHE_RETENTION_DAYS", "730"))
-raw_match_recap_channel_id = os.getenv("MATCH_RECAP_CHANNEL_ID", "").strip()
-MATCH_RECAP_CHANNEL_ID = int(raw_match_recap_channel_id) if raw_match_recap_channel_id else None
+MATCH_RECAP_CHANNEL_ID = int(require_env("MATCH_RECAP_CHANNEL_ID"))
 MATCH_RECAP_POLL_SECONDS = int(os.getenv("MATCH_RECAP_POLL_SECONDS", "90"))
 DATABASE_URL = require_env("DATABASE_URL")
 DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))

@@ -39,7 +39,8 @@ def log(message):
 TOKEN = cfg.TOKEN
 RIOT_API_KEY = cfg.RIOT_API_KEY
 RIOT_PLATFORM_ROUTING = cfg.RIOT_PLATFORM_ROUTING
-CHANNEL_ID = cfg.CHANNEL_ID
+DAILY_REPORT_CHANNEL_ID = cfg.DAILY_REPORT_CHANNEL_ID
+EVENTS_CHANNEL_ID = cfg.EVENTS_CHANNEL_ID
 REPORT_TIMEZONE_NAME = cfg.REPORT_TIMEZONE_NAME
 REPORT_TIMEZONE = cfg.REPORT_TIMEZONE
 LOG_RIOT_REQUESTS = cfg.LOG_RIOT_REQUESTS
@@ -105,7 +106,7 @@ BACKGROUND_RANK_TASK = None
 
 
 async def send_riot_key_expired_alert():
-    channel = await resolve_channel(CHANNEL_ID)
+    channel = await resolve_channel(EVENTS_CHANNEL_ID)
     if channel is None:
         return
     await channel.send(
@@ -277,8 +278,7 @@ async def daily_report(channel):
 
 
 async def evaluate_rank_changes_and_notify():
-    rank_channel_id = MATCH_RECAP_CHANNEL_ID if MATCH_RECAP_CHANNEL_ID else CHANNEL_ID
-    channel = await resolve_channel(rank_channel_id)
+    channel = await resolve_channel(EVENTS_CHANNEL_ID)
     if channel is None:
         return
     await process_rank_cycle(
@@ -307,9 +307,6 @@ async def background_rank_notifier():
 
 
 async def background_match_recap_notifier():
-    if MATCH_RECAP_CHANNEL_ID is None:
-        return
-
     while not client.is_closed():
         token = REQUEST_ID_CONTEXT.set(create_request_id("recap"))
         try:
@@ -422,15 +419,15 @@ async def background_daily_refresher():
 async def on_ready():
     global BACKGROUND_REFRESH_TASK, BACKGROUND_RECAP_TASK, BACKGROUND_RANK_TASK, STARTUP_SCOREBOARD_INIT_DONE
     log(f"[startup] Logged in as {client.user} (id={client.user.id})")
-    log(f"[startup] Use {TEST_COMMAND} in channel {CHANNEL_ID} to test sending.")
-    log(f"[startup] Use {RIOT_TEST_COMMAND} in channel {CHANNEL_ID} to test Riot API access.")
+    log(f"[startup] Use {TEST_COMMAND} in channel {DAILY_REPORT_CHANNEL_ID} to test sending.")
+    log(f"[startup] Use {RIOT_TEST_COMMAND} in channel {DAILY_REPORT_CHANNEL_ID} to test Riot API access.")
     log(
-        f"[startup] Use {MOOD_COMMAND} in channel {CHANNEL_ID} for results "
+        f"[startup] Use {MOOD_COMMAND} in channel {DAILY_REPORT_CHANNEL_ID} for results "
         f"since {REPORT_DAY_START_HOUR:02d}:00."
     )
     log(f"[startup] Use {ADD_COMMAND} <Name#Tag> to add a player at runtime.")
     log(f"[startup] Use {DEBUG_PLAYER_COMMAND} <Name#Tag> to inspect queue bucket mapping.")
-    log(f"[startup] Use {HEALTH_COMMAND} in channel {CHANNEL_ID} for health status.")
+    log(f"[startup] Use {HEALTH_COMMAND} in channel {DAILY_REPORT_CHANNEL_ID} for health status.")
     log(f"[startup] Loaded {len(FRIENDS)} tracked players from postgres.")
     log("[startup] Player store: postgres")
     log(f"[startup] Report timezone: {REPORT_TIMEZONE_NAME}")
@@ -443,28 +440,26 @@ async def on_ready():
     log(f"[startup] MAX_IN_MEMORY_MATCH_CACHE={MAX_IN_MEMORY_MATCH_CACHE}")
     log(f"[startup] REPORT_CACHE_SECONDS={REPORT_CACHE_SECONDS}")
     log(f"[startup] MATCH_CACHE_RETENTION_DAYS={MATCH_CACHE_RETENTION_DAYS}")
-    log(f"[startup] MATCH_RECAP_CHANNEL_ID={MATCH_RECAP_CHANNEL_ID if MATCH_RECAP_CHANNEL_ID else 'disabled'}")
-    log(
-        f"[startup] RANK_ALERT_CHANNEL_ID="
-        f"{MATCH_RECAP_CHANNEL_ID if MATCH_RECAP_CHANNEL_ID else CHANNEL_ID}"
-    )
+    log(f"[startup] EVENTS_CHANNEL_ID={EVENTS_CHANNEL_ID}")
+    log(f"[startup] MATCH_RECAP_CHANNEL_ID={MATCH_RECAP_CHANNEL_ID}")
+    log(f"[startup] RANK_ALERT_CHANNEL_ID={EVENTS_CHANNEL_ID}")
     log(f"[startup] MATCH_RECAP_POLL_SECONDS={MATCH_RECAP_POLL_SECONDS}")
-    if MATCH_RECAP_CHANNEL_ID and MATCH_RECAP_CHANNEL_ID == CHANNEL_ID:
-        log("[startup] Warning: MATCH_RECAP_CHANNEL_ID equals DISCORD_CHANNEL_ID.")
+    if MATCH_RECAP_CHANNEL_ID and MATCH_RECAP_CHANNEL_ID == DAILY_REPORT_CHANNEL_ID:
+        log("[startup] Warning: MATCH_RECAP_CHANNEL_ID equals DAILY_REPORT_CHANNEL_ID.")
     if DB_ENABLED:
         log(f"[startup] DAILY_REFRESH_SECONDS={DAILY_REFRESH_SECONDS}")
         if BACKGROUND_REFRESH_TASK is None or BACKGROUND_REFRESH_TASK.done():
             BACKGROUND_REFRESH_TASK = client.loop.create_task(background_daily_refresher())
         if BACKGROUND_RANK_TASK is None or BACKGROUND_RANK_TASK.done():
             BACKGROUND_RANK_TASK = client.loop.create_task(background_rank_notifier())
-        if MATCH_RECAP_CHANNEL_ID and (BACKGROUND_RECAP_TASK is None or BACKGROUND_RECAP_TASK.done()):
+        if BACKGROUND_RECAP_TASK is None or BACKGROUND_RECAP_TASK.done():
             BACKGROUND_RECAP_TASK = client.loop.create_task(background_match_recap_notifier())
     if not STARTUP_SCOREBOARD_INIT_DONE:
-        channel = await resolve_channel(CHANNEL_ID)
+        channel = await resolve_channel(DAILY_REPORT_CHANNEL_ID)
         if channel is not None:
             try:
                 await daily_report(channel)
-                log(f"[startup] Initialized scoreboard in channel {CHANNEL_ID}.")
+                log(f"[startup] Initialized scoreboard in channel {DAILY_REPORT_CHANNEL_ID}.")
             except Exception as exc:
                 log(f"[startup] Failed to initialize scoreboard: {exc}")
         STARTUP_SCOREBOARD_INIT_DONE = True
@@ -472,11 +467,11 @@ async def on_ready():
 async def on_message(message):
     if message.author.bot:
         return
-    if message.channel.id != CHANNEL_ID:
+    if message.channel.id != DAILY_REPORT_CHANNEL_ID:
         return
     await handle_incoming_message(
         message=message,
-        channel_id=CHANNEL_ID,
+        channel_id=DAILY_REPORT_CHANNEL_ID,
         friends=FRIENDS,
         riot_client=riot_client,
         mood_service=mood_service,

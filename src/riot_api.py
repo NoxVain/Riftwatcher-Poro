@@ -52,7 +52,7 @@ class RiotApiClient:
         self.report_timezone = report_timezone
         self.report_day_start_hour = max(0, min(23, int(report_day_start_hour)))
         self.max_today_match_details = max_today_match_details
-        self.max_match_ids_scan = max(1, max_match_ids_scan)
+        self.max_match_ids_scan = int(max_match_ids_scan)
         self.max_in_memory_match_cache = max(0, max_in_memory_match_cache)
         self.db_get_puuid = db_get_puuid
         self.db_upsert_player = db_upsert_player
@@ -145,7 +145,7 @@ class RiotApiClient:
                 break
 
             all_match_ids.extend(page_match_ids)
-            if len(all_match_ids) >= self.max_match_ids_scan:
+            if self.max_match_ids_scan > 0 and len(all_match_ids) >= self.max_match_ids_scan:
                 all_match_ids = all_match_ids[: self.max_match_ids_scan]
                 self.log(
                     f"[riot] Reached MAX_MATCH_IDS_SCAN={self.max_match_ids_scan}; "

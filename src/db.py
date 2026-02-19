@@ -240,13 +240,15 @@ def db_upsert_match_info(match_id, match_info):
 
 
 def db_cleanup_old_match_cache(retention_days):
+    if int(retention_days) <= 0:
+        return 0
     row = db_execute(
         """
         DELETE FROM match_info_cache
         WHERE updated_at < NOW() - (%s * INTERVAL '1 day')
         RETURNING match_id;
         """,
-        (max(1, retention_days),),
+        (int(retention_days),),
         fetch=True,
     ) or []
     return len(row)

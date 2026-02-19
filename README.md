@@ -79,14 +79,14 @@ Optional:
 - `LOG_JSON` (default: `false`)
 - `MAX_TODAY_MATCH_DETAILS` (default: `20`)
 - `REPORT_DAY_START_HOUR` (default: `6`)
-- `MAX_MATCH_IDS_SCAN` (default: `300`)
+- `MAX_MATCH_IDS_SCAN` (default: `0`, where `0` means no cap)
 - `MAX_IN_MEMORY_MATCH_CACHE` (default: `200`)
 - `REPORT_CACHE_SECONDS` (default: `120`)
 - `DAILY_REFRESH_SECONDS` (default: `300`)
 - `MATCH_RECAP_CHANNEL_ID` (optional, enables recap posts)
 - `MATCH_RECAP_POLL_SECONDS` (default: `90`)
 - `DB_POOL_SIZE` (default: `5`)
-- `MATCH_CACHE_RETENTION_DAYS` (default: `31`)
+- `MATCH_CACHE_RETENTION_DAYS` (default: `0`, where `0` means no DB cache cleanup)
 
 ## Tests
 

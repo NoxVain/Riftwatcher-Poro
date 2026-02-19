@@ -15,6 +15,7 @@ from src.discord_text import (
     create_request_id,
     report_signature,
 )
+from src.rank_logic import format_rank_change_message, normalize_queue_type
 from src.constants import ADD_COMMAND, DEBUG_PLAYER_COMMAND, HEALTH_COMMAND, MOOD_COMMAND, RIOT_TEST_COMMAND, TEST_COMMAND
 from src.mood_service import MoodService
 from src.riot_api import RiotApiClient
@@ -37,6 +38,7 @@ def log(message):
 
 TOKEN = cfg.TOKEN
 RIOT_API_KEY = cfg.RIOT_API_KEY
+RIOT_PLATFORM_ROUTING = cfg.RIOT_PLATFORM_ROUTING
 CHANNEL_ID = cfg.CHANNEL_ID
 REPORT_TIMEZONE_NAME = cfg.REPORT_TIMEZONE_NAME
 REPORT_TIMEZONE = cfg.REPORT_TIMEZONE
@@ -63,7 +65,9 @@ db_get_puuid = dbm.db_get_puuid
 db_health_stats = dbm.db_health_stats
 db_get_daily_stats_for_player = dbm.db_get_daily_stats_for_player
 db_load_latest_stats = dbm.db_load_latest_stats
+db_load_ranked_state = dbm.db_load_ranked_state
 db_load_tracked_players = dbm.db_load_tracked_players
+db_delete_ranked_state_queue = dbm.db_delete_ranked_state_queue
 db_set_last_report_message = dbm.db_set_last_report_message
 db_set_last_seen_match_id = dbm.db_set_last_seen_match_id
 db_set_state = dbm.db_set_state
@@ -71,6 +75,7 @@ db_get_state = dbm.db_get_state
 db_upsert_daily_stats = dbm.db_upsert_daily_stats
 db_upsert_match_info = dbm.db_upsert_match_info
 db_upsert_player = dbm.db_upsert_player
+db_upsert_ranked_state = dbm.db_upsert_ranked_state
 init_db = dbm.init_db
 
 REQUEST_ID_CONTEXT = contextvars.ContextVar("request_id", default=None)
@@ -144,6 +149,7 @@ def trigger_riot_key_alert():
 
 riot_client = RiotApiClient(
     riot_api_key=RIOT_API_KEY,
+    riot_platform_routing=RIOT_PLATFORM_ROUTING,
     log=log,
     log_riot_requests=LOG_RIOT_REQUESTS,
     report_timezone=REPORT_TIMEZONE,
@@ -269,6 +275,63 @@ async def daily_report(channel):
         log(f"[scheduler] No scoreboard change; skipped update for {report_message.id}.")
 
 
+def db_ranked_row_to_entry(row):
+    return {
+        "tier": row[1],
+        "rank_division": row[2],
+        "league_points": int(row[3] or 0),
+        "wins": int(row[4] or 0),
+        "losses": int(row[5] or 0),
+        "hot_streak": bool(row[6]),
+        "veteran": bool(row[7]),
+        "fresh_blood": bool(row[8]),
+        "inactive": bool(row[9]),
+    }
+
+
+async def evaluate_rank_changes_and_notify():
+    channel = await resolve_channel(CHANNEL_ID)
+    if channel is None:
+        return
+
+    for riot_id in FRIENDS:
+        try:
+            previous_rows = await asyncio.to_thread(db_load_ranked_state, riot_id)
+            previous_by_queue = {row[0]: db_ranked_row_to_entry(row) for row in previous_rows}
+
+            current_entries_raw = await riot_client.fetch_ranked_entries(riot_id)
+            current_by_queue = {}
+            for entry in current_entries_raw:
+                queue_type = normalize_queue_type(entry.get("queueType"))
+                if queue_type is None:
+                    continue
+                current_by_queue[queue_type] = entry
+
+            # First observation for this player: persist baseline without notifications.
+            if not previous_by_queue:
+                for queue_type, entry in current_by_queue.items():
+                    await asyncio.to_thread(db_upsert_ranked_state, riot_id, queue_type, entry)
+                continue
+
+            for queue_type in sorted(set(previous_by_queue.keys()) | set(current_by_queue.keys())):
+                previous_entry = previous_by_queue.get(queue_type)
+                current_entry = current_by_queue.get(queue_type)
+                message = format_rank_change_message(riot_id, queue_type, previous_entry, current_entry)
+                if message:
+                    await channel.send(message)
+                    log(f"[rank] Rank change posted for {riot_id} ({queue_type}).")
+
+            for queue_type, entry in current_by_queue.items():
+                await asyncio.to_thread(db_upsert_ranked_state, riot_id, queue_type, entry)
+            for queue_type in previous_by_queue.keys():
+                if queue_type not in current_by_queue:
+                    await asyncio.to_thread(db_delete_ranked_state_queue, riot_id, queue_type)
+        except requests.RequestException as exc:
+            log(f"[rank] Failed rank-check for {riot_id}: {exc}")
+        except Exception as exc:
+            log(f"[rank] Unexpected rank-check error for {riot_id}: {exc}")
+
+
 async def background_match_recap_notifier():
     if MATCH_RECAP_CHANNEL_ID is None:
         return
@@ -365,6 +428,7 @@ async def background_daily_refresher():
                 await push_snapshot_update(force=False)
 
             await mood_service.refresh_daily_stats_once(progress_callback=on_player_refreshed)
+            await evaluate_rank_changes_and_notify()
             await push_snapshot_update(force=True)
             now_mono = time.monotonic()
             if (now_mono - LAST_CACHE_CLEANUP_AT) >= max(3600, DAILY_REFRESH_SECONDS):
@@ -399,6 +463,7 @@ async def on_ready():
     log(f"[startup] Report timezone: {REPORT_TIMEZONE_NAME}")
     log(f"[startup] LOG_RIOT_REQUESTS={LOG_RIOT_REQUESTS}")
     log(f"[startup] LOG_JSON={LOG_JSON}")
+    log(f"[startup] RIOT_PLATFORM_ROUTING={RIOT_PLATFORM_ROUTING}")
     log(f"[startup] MAX_TODAY_MATCH_DETAILS={MAX_TODAY_MATCH_DETAILS}")
     log(f"[startup] REPORT_DAY_START_HOUR={REPORT_DAY_START_HOUR}")
     log(f"[startup] MAX_MATCH_IDS_SCAN={MAX_MATCH_IDS_SCAN}")

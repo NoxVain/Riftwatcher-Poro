@@ -32,6 +32,7 @@ class RiotApiClient:
         self,
         *,
         riot_api_key,
+        riot_platform_routing,
         log,
         log_riot_requests,
         report_timezone,
@@ -47,6 +48,7 @@ class RiotApiClient:
         on_unauthorized=None,
     ):
         self.riot_api_key = riot_api_key
+        self.riot_platform_routing = riot_platform_routing.strip().lower()
         self.log = log
         self.log_riot_requests = log_riot_requests
         self.report_timezone = report_timezone
@@ -61,6 +63,7 @@ class RiotApiClient:
         self.db_set_last_seen_match_id = db_set_last_seen_match_id
         self.on_unauthorized = on_unauthorized
         self.puuid_cache = {}
+        self.summoner_id_cache = {}
         self.match_info_cache = OrderedDict()
 
     def clear_match_cache(self):
@@ -182,6 +185,27 @@ class RiotApiClient:
         self.cache_match_info(match_id, match_info)
         await asyncio.to_thread(self.db_upsert_match_info, match_id, match_info)
         return match_info
+
+    async def fetch_summoner_id(self, puuid):
+        if puuid in self.summoner_id_cache:
+            return self.summoner_id_cache[puuid]
+        url = (
+            f"https://{self.riot_platform_routing}.api.riotgames.com"
+            f"/lol/summoner/v4/summoners/by-puuid/{puuid}"
+        )
+        data = await self.riot_get_json_async(url)
+        summoner_id = data["id"]
+        self.summoner_id_cache[puuid] = summoner_id
+        return summoner_id
+
+    async def fetch_ranked_entries(self, riot_id):
+        puuid = await self.fetch_puuid(riot_id)
+        summoner_id = await self.fetch_summoner_id(puuid)
+        url = (
+            f"https://{self.riot_platform_routing}.api.riotgames.com"
+            f"/lol/league/v4/entries/by-summoner/{summoner_id}"
+        )
+        return await self.riot_get_json_async(url)
 
     @staticmethod
     def get_participant_win(match_info, puuid):

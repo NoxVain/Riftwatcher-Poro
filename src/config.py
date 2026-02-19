@@ -31,6 +31,7 @@ def get_env_bool(name, default=False):
 
 TOKEN = require_env("DISCORD_TOKEN")
 RIOT_API_KEY = require_env("RIOT_API_KEY")
+RIOT_PLATFORM_ROUTING = os.getenv("RIOT_PLATFORM_ROUTING", "euw1").strip().lower() or "euw1"
 CHANNEL_ID = int(require_env("DISCORD_CHANNEL_ID"))
 REPORT_TIMEZONE_NAME = os.getenv("REPORT_TIMEZONE", "UTC")
 try:

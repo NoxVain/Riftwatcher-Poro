@@ -29,6 +29,9 @@ MoodBot is a Discord bot that tracks League match mood for a tracked player list
   - Role, champion, W/L, K/D/A
   - CS/min, player damage, objective damage
   - Damage taken, healing, vision
+- Ranked change alerts in the report channel:
+  - Congratulates rank ups
+  - Calls out rank downs
 - Adds per-player daily leader badges (ranked games only):
   - `🌾` best CS/min
   - `🏰` best objective damage
@@ -87,6 +90,7 @@ Optional:
 - `MATCH_RECAP_POLL_SECONDS` (default: `90`)
 - `DB_POOL_SIZE` (default: `5`)
 - `MATCH_CACHE_RETENTION_DAYS` (default: `0`, where `0` means no DB cache cleanup)
+- `RIOT_PLATFORM_ROUTING` (default: `euw1`)
 
 ## Tests
 

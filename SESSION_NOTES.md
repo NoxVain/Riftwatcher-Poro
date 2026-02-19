@@ -115,3 +115,10 @@
   - `C:\Users\gardf\AppData\Local\Python\bin\python.exe -m pytest -q`
 - Expected baseline remains:
   - `14 passed`
+
+## New Runtime Behavior (2026-02-19)
+- Rank change monitoring now runs during background refresh cycles.
+- Rank state is persisted per player/queue in `player_ranked_state`.
+- On rank up/down, bot posts a message in `DISCORD_CHANNEL_ID`.
+- Platform host for league/summoner APIs is configurable via:
+  - `RIOT_PLATFORM_ROUTING` (default `euw1`)

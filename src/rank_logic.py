@@ -62,11 +62,10 @@ def format_rank(entry):
     tier = str(entry.get("tier", "")).strip().upper()
     if not tier:
         return "Unranked"
-    lp = int(entry.get("league_points", entry.get("leaguePoints", 0)) or 0)
     if tier in APEX_TIERS:
-        return f"{tier.title()} ({lp} LP)"
+        return f"{tier.title()}"
     division = str(entry.get("rank_division", entry.get("rank", ""))).strip().upper() or "IV"
-    return f"{tier.title()} {division} ({lp} LP)"
+    return f"{tier.title()} {division}"
 
 
 def format_rank_change_message(riot_id, queue_type, previous_entry, current_entry):

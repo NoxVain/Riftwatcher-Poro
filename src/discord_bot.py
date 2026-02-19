@@ -340,14 +340,13 @@ async def background_daily_refresher():
     global LAST_CACHE_CLEANUP_AT
     if not DB_ENABLED:
         return
+    last_snapshot_push_at = 0.0
+    last_snapshot_signature = None
+    snapshot_push_interval = 120.0
+    changed_push_min_interval = 30.0
     while not client.is_closed():
         token = REQUEST_ID_CONTEXT.set(create_request_id("bg"))
         try:
-            last_snapshot_push_at = 0.0
-            last_snapshot_signature = None
-            snapshot_push_interval = 120.0
-            changed_push_min_interval = 30.0
-
             async def push_snapshot_update(force=False):
                 nonlocal last_snapshot_push_at, last_snapshot_signature
                 now_mono = time.monotonic()

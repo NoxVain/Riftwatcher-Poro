@@ -9,6 +9,7 @@ import requests
 
 from src import config as cfg
 from src import db as dbm
+from src.discord_backfill_worker import process_backfill_cycle
 from src.discord_command_handlers import handle_incoming_message
 from src.discord_rank_worker import process_rank_cycle
 from src.discord_recap_worker import process_recap_cycle
@@ -103,6 +104,7 @@ STARTUP_SCOREBOARD_INIT_DONE = False
 BACKGROUND_REFRESH_TASK = None
 BACKGROUND_RECAP_TASK = None
 BACKGROUND_RANK_TASK = None
+BACKGROUND_BACKFILL_TASK = None
 
 
 async def send_riot_key_expired_alert():
@@ -336,6 +338,36 @@ async def background_match_recap_notifier():
         await asyncio.sleep(max(30, MATCH_RECAP_POLL_SECONDS))
 
 
+async def background_match_cache_backfiller():
+    if not DB_ENABLED:
+        return
+
+    backfill_recent_ids_count = 100
+    backfill_per_player_limit = 3
+    backfill_interval_seconds = max(120, DAILY_REFRESH_SECONDS * 2)
+
+    while not client.is_closed():
+        token = REQUEST_ID_CONTEXT.set(create_request_id("backfill"))
+        try:
+            total_backfilled = await process_backfill_cycle(
+                friends=FRIENDS,
+                riot_client=riot_client,
+                mood_service=mood_service,
+                db_get_last_seen_match_id=db_get_last_seen_match_id,
+                db_get_match_info=db_get_match_info,
+                recent_ids_count=backfill_recent_ids_count,
+                per_player_limit=backfill_per_player_limit,
+                log=log,
+            )
+            if total_backfilled > 0:
+                log(f"[backfill] Cycle complete: cached={total_backfilled}.")
+        except Exception as exc:
+            log(f"[backfill] Unexpected background error: {exc}")
+        finally:
+            REQUEST_ID_CONTEXT.reset(token)
+        await asyncio.sleep(backfill_interval_seconds)
+
+
 async def background_daily_refresher():
     global LAST_CACHE_CLEANUP_AT
     if not DB_ENABLED:
@@ -416,7 +448,7 @@ async def background_daily_refresher():
 
 @client.event
 async def on_ready():
-    global BACKGROUND_REFRESH_TASK, BACKGROUND_RECAP_TASK, BACKGROUND_RANK_TASK, STARTUP_SCOREBOARD_INIT_DONE
+    global BACKGROUND_REFRESH_TASK, BACKGROUND_RECAP_TASK, BACKGROUND_RANK_TASK, BACKGROUND_BACKFILL_TASK, STARTUP_SCOREBOARD_INIT_DONE
     log(f"[startup] Logged in as {client.user} (id={client.user.id})")
     log(f"[startup] Use {TEST_COMMAND} in channel {DAILY_REPORT_CHANNEL_ID} to test sending.")
     log(f"[startup] Use {RIOT_TEST_COMMAND} in channel {DAILY_REPORT_CHANNEL_ID} to test Riot API access.")
@@ -453,6 +485,8 @@ async def on_ready():
             BACKGROUND_RANK_TASK = client.loop.create_task(background_rank_notifier())
         if BACKGROUND_RECAP_TASK is None or BACKGROUND_RECAP_TASK.done():
             BACKGROUND_RECAP_TASK = client.loop.create_task(background_match_recap_notifier())
+        if BACKGROUND_BACKFILL_TASK is None or BACKGROUND_BACKFILL_TASK.done():
+            BACKGROUND_BACKFILL_TASK = client.loop.create_task(background_match_cache_backfiller())
     if not STARTUP_SCOREBOARD_INIT_DONE:
         channel = await resolve_channel(DAILY_REPORT_CHANNEL_ID)
         if channel is not None:

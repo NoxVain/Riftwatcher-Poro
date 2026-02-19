@@ -201,20 +201,23 @@ class RiotApiClient:
         )
         return await self.riot_get_json_async(url)
 
-    async def fetch_match_info(self, match_id):
-        cached = self.match_info_cache.get(match_id)
-        if cached is not None:
-            self.match_info_cache.move_to_end(match_id)
-            return cached
+    async def fetch_match_info(self, match_id, *, cache_in_memory=True):
+        if cache_in_memory:
+            cached = self.match_info_cache.get(match_id)
+            if cached is not None:
+                self.match_info_cache.move_to_end(match_id)
+                return cached
 
         persisted = await asyncio.to_thread(self.db_get_match_info, match_id)
         if persisted is not None:
-            self.cache_match_info(match_id, persisted)
+            if cache_in_memory:
+                self.cache_match_info(match_id, persisted)
             return persisted
 
         url = f"https://europe.api.riotgames.com/lol/match/v5/matches/{match_id}"
         match_info = await self.riot_get_json_async(url)
-        self.cache_match_info(match_id, match_info)
+        if cache_in_memory:
+            self.cache_match_info(match_id, match_info)
         await asyncio.to_thread(self.db_upsert_match_info, match_id, match_info)
         return match_info
 
@@ -282,22 +285,24 @@ class RiotApiClient:
 
         mode_records = create_mode_records()
         performance_totals = create_performance_totals()
-        today_details_processed = 0
+        detail_fetch_limit = max(1, self.max_today_match_details)
+        today_details_fetched = 0
         for match_id in match_ids:
+            if today_details_fetched >= detail_fetch_limit:
+                self.log(
+                    f"[mood] {riot_id}: reached MAX_TODAY_MATCH_DETAILS={self.max_today_match_details}, "
+                    "stopping further today match processing."
+                )
+                break
+
             match_info = await self.fetch_match_info(match_id)
+            today_details_fetched += 1
             if not is_match_in_report_cycle(
                 match_info,
                 self.report_timezone,
                 day_start_hour=self.report_day_start_hour,
             ):
                 continue
-
-            if today_details_processed >= max(1, self.max_today_match_details):
-                self.log(
-                    f"[mood] {riot_id}: reached MAX_TODAY_MATCH_DETAILS={self.max_today_match_details}, "
-                    "stopping further today match processing."
-                )
-                break
 
             queue_id = match_info["info"].get("queueId", -1)
             bucket_name = get_mode_bucket(queue_id)
@@ -325,7 +330,6 @@ class RiotApiClient:
             performance_totals["kills"] += int(participant.get("kills", 0) or 0)
             performance_totals["deaths"] += int(participant.get("deaths", 0) or 0)
             performance_totals["vision_score"] += int(participant.get("visionScore", 0) or 0)
-            today_details_processed += 1
 
         wins, losses = get_mode_totals(mode_records)
         elapsed_ms = int((time.perf_counter() - player_start) * 1000)

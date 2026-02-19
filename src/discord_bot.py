@@ -101,6 +101,7 @@ LAST_REPORT_MESSAGE = {"channel_id": None, "message_id": None}
 STARTUP_SCOREBOARD_INIT_DONE = False
 BACKGROUND_REFRESH_TASK = None
 BACKGROUND_RECAP_TASK = None
+BACKGROUND_RANK_TASK = None
 
 
 async def send_riot_key_expired_alert():
@@ -332,6 +333,20 @@ async def evaluate_rank_changes_and_notify():
             log(f"[rank] Unexpected rank-check error for {riot_id}: {exc}")
 
 
+async def background_rank_notifier():
+    if not DB_ENABLED:
+        return
+    while not client.is_closed():
+        token = REQUEST_ID_CONTEXT.set(create_request_id("rank"))
+        try:
+            await evaluate_rank_changes_and_notify()
+        except Exception as exc:
+            log(f"[rank] Unexpected background error: {exc}")
+        finally:
+            REQUEST_ID_CONTEXT.reset(token)
+        await asyncio.sleep(max(30, DAILY_REFRESH_SECONDS))
+
+
 async def background_match_recap_notifier():
     if MATCH_RECAP_CHANNEL_ID is None:
         return
@@ -428,7 +443,6 @@ async def background_daily_refresher():
                 await push_snapshot_update(force=False)
 
             await mood_service.refresh_daily_stats_once(progress_callback=on_player_refreshed)
-            await evaluate_rank_changes_and_notify()
             await push_snapshot_update(force=True)
             now_mono = time.monotonic()
             if (now_mono - LAST_CACHE_CLEANUP_AT) >= max(3600, DAILY_REFRESH_SECONDS):
@@ -447,7 +461,7 @@ async def background_daily_refresher():
 
 @client.event
 async def on_ready():
-    global BACKGROUND_REFRESH_TASK, BACKGROUND_RECAP_TASK, STARTUP_SCOREBOARD_INIT_DONE
+    global BACKGROUND_REFRESH_TASK, BACKGROUND_RECAP_TASK, BACKGROUND_RANK_TASK, STARTUP_SCOREBOARD_INIT_DONE
     log(f"[startup] Logged in as {client.user} (id={client.user.id})")
     log(f"[startup] Use {TEST_COMMAND} in channel {CHANNEL_ID} to test sending.")
     log(f"[startup] Use {RIOT_TEST_COMMAND} in channel {CHANNEL_ID} to test Riot API access.")
@@ -478,6 +492,8 @@ async def on_ready():
         log(f"[startup] DAILY_REFRESH_SECONDS={DAILY_REFRESH_SECONDS}")
         if BACKGROUND_REFRESH_TASK is None or BACKGROUND_REFRESH_TASK.done():
             BACKGROUND_REFRESH_TASK = client.loop.create_task(background_daily_refresher())
+        if BACKGROUND_RANK_TASK is None or BACKGROUND_RANK_TASK.done():
+            BACKGROUND_RANK_TASK = client.loop.create_task(background_rank_notifier())
         if MATCH_RECAP_CHANNEL_ID and (BACKGROUND_RECAP_TASK is None or BACKGROUND_RECAP_TASK.done()):
             BACKGROUND_RECAP_TASK = client.loop.create_task(background_match_recap_notifier())
     if not STARTUP_SCOREBOARD_INIT_DONE:

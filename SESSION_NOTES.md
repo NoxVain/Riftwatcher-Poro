@@ -86,3 +86,32 @@
 ## Known Environment Quirks
 - Sandbox git pushes can fail on GitLab port 443; retry with escalated network permissions.
 - CRLF normalization warnings appear in git on this Windows setup (non-blocking).
+# Session Notes (2026-02-19)
+
+## Current Status
+- Branch: `main`
+- Refactor status: `src/discord_bot.py` split to reduce runtime-file coupling and size
+  - New module: `src/discord_command_handlers.py`
+  - New module: `src/discord_text.py`
+- Docs status:
+  - Added `ARCHITECTURE.md` with runtime/data-flow map
+  - Updated this notes file with latest structure summary
+
+## Structural Changes (No Intended Behavior Change)
+- Moved message-command handling from `src/discord_bot.py` into:
+  - `handle_incoming_message(...)` in `src/discord_command_handlers.py`
+- Moved pure text/helper functions into `src/discord_text.py`:
+  - request id generation
+  - report signature normalization
+  - recap state key and recap formatting helpers
+- `src/discord_bot.py` now focuses on:
+  - dependency setup
+  - Discord event registration
+  - background workers
+  - persisted scoreboard message lifecycle
+
+## Validation
+- Unit tests:
+  - `C:\Users\gardf\AppData\Local\Python\bin\python.exe -m pytest -q`
+- Expected baseline remains:
+  - `14 passed`

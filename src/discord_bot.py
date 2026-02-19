@@ -1,15 +1,22 @@
-﻿import asyncio
+import asyncio
 import contextvars
 import json
 import time
-import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import discord
 import requests
 
 from src import config as cfg
 from src import db as dbm
+from src.discord_command_handlers import handle_incoming_message
+from src.discord_text import (
+    create_request_id,
+    format_recap_player_line,
+    format_recap_queue_name,
+    match_recap_state_key,
+    report_signature,
+)
 from src.constants import ADD_COMMAND, DEBUG_PLAYER_COMMAND, HEALTH_COMMAND, MOOD_COMMAND, RIOT_TEST_COMMAND, TEST_COMMAND
 from src.mood_service import MoodService
 from src.riot_api import RiotApiClient
@@ -29,15 +36,6 @@ def log(message):
         print(f"[{timestamp}] [{request_id}] {message}")
         return
     print(f"[{timestamp}] {message}")
-
-
-def create_request_id(prefix):
-    return f"{prefix}-{uuid.uuid4().hex[:8]}"
-
-
-def report_signature(text):
-    lines = [line for line in text.splitlines() if not line.startswith("_Last updated:")]
-    return "\n".join(lines)
 
 
 TOKEN = cfg.TOKEN
@@ -272,66 +270,6 @@ async def daily_report(channel):
         log(f"[scheduler] Updated scoreboard message {report_message.id}.")
     else:
         log(f"[scheduler] No scoreboard change; skipped update for {report_message.id}.")
-
-
-def match_recap_state_key(riot_id):
-    return f"last_announced_match_id::{riot_id.casefold()}"
-
-
-def format_recap_queue_name(queue_id):
-    if queue_id == 420:
-        return "\U0001F3C6 Ranked Solo/Duo"
-    if queue_id == 440:
-        return "\U0001F3C6 Ranked Flex"
-    return f"\U0001F3AF Queue {queue_id}"
-
-
-def format_recap_role(participant):
-    role_value = (
-        participant.get("teamPosition")
-        or participant.get("individualPosition")
-        or participant.get("lane")
-        or participant.get("role")
-        or ""
-    )
-    role_key = str(role_value).strip().upper()
-    role_labels = {
-        "TOP": "Top",
-        "JUNGLE": "Jungle",
-        "MIDDLE": "Mid",
-        "MID": "Mid",
-        "BOTTOM": "Bot",
-        "BOT": "Bot",
-        "UTILITY": "Support",
-        "SUPPORT": "Support",
-    }
-    return role_labels.get(role_key, "Unknown Role")
-
-
-def format_recap_player_line(riot_id, participant, match_duration_seconds):
-    lol_name = riot_id.split("#", 1)[0]
-    won = bool(participant.get("win"))
-    result_label = "Win" if won else "Loss"
-    result_emoji = "\u2705" if won else "\u274C"
-    champion = participant.get("championName", "Unknown")
-    role_name = format_recap_role(participant)
-    kills = int(participant.get("kills", 0) or 0)
-    deaths = int(participant.get("deaths", 0) or 0)
-    assists = int(participant.get("assists", 0) or 0)
-    cs = int(participant.get("totalMinionsKilled", 0) or 0) + int(participant.get("neutralMinionsKilled", 0) or 0)
-    minutes = max(1.0, float(match_duration_seconds) / 60.0)
-    cs_per_min = cs / minutes
-    player_damage = int(participant.get("totalDamageDealtToChampions", 0) or 0)
-    objective_damage = int(participant.get("damageDealtToObjectives", 0) or 0)
-    healing = int(participant.get("totalHeal", 0) or 0)
-    damage_taken = int(participant.get("totalDamageTaken", 0) or 0)
-    vision_score = int(participant.get("visionScore", 0) or 0)
-    return (
-        f"{result_emoji} **{lol_name}** | `{role_name}` • **{champion}** ({result_label})\n"
-        f"   \u2694\uFE0F `K/D/A {kills}/{deaths}/{assists}`  \U0001F33E `CS/min {cs_per_min:.1f}`\n"
-        f"   \U0001F4A5 `Damage {player_damage:,}`  \U0001F3F0 `Objectives {objective_damage:,}`  \U0001F6E1\uFE0F `Taken {damage_taken:,}`\n"
-        f"   \u2764\uFE0F `Healing {healing:,}`  \U0001F441\uFE0F `Vision {vision_score}`"
-    )
 
 
 async def background_match_recap_notifier():
@@ -574,172 +512,25 @@ async def on_message(message):
         return
     if message.channel.id != CHANNEL_ID:
         return
-
-    content = message.content.strip()
-    content_lower = content.casefold()
-
-    if content == TEST_COMMAND:
-        await message.channel.send("API test: MoodBot is online and can send messages.")
-        log(f"[test] Sent API test message in channel {CHANNEL_ID}.")
-        return
-
-    if content == RIOT_TEST_COMMAND:
-        if not FRIENDS:
-            await message.channel.send("Riot API test skipped: no tracked players in database. Add one with `!Add Name#Tag`.")
-            return
-        try:
-            riot_id, puuid, match_count = await riot_client.run_riot_connectivity_test(FRIENDS[0])
-            await message.channel.send(
-                f"Riot API test OK for `{riot_id}`. Retrieved puuid and {match_count} matches."
-            )
-            log(f"[test] Riot API test succeeded for {riot_id} ({puuid[:8]}...).")
-        except (KeyError, requests.RequestException) as exc:
-            await message.channel.send(f"Riot API test failed: {exc}")
-            log(f"[test] Riot API test failed: {exc}")
-        return
-
-    if content_lower == HEALTH_COMMAND.casefold():
-        stats = await mood_service.run_health_check(START_MONOTONIC)
-        uptime = str(timedelta(seconds=stats["uptime_seconds"]))
-        await message.channel.send(
-            (
-                f"Health OK\n"
-                f"- Uptime: `{uptime}`\n"
-                f"- Tracked players: `{stats['tracked_players']}`\n"
-                f"- DB: `{'ok' if stats['db_ok'] else 'down'}`\n"
-                f"- Match cache entries: `{stats['match_cache_entries']}`\n"
-                f"- Report cache active: `{'yes' if stats['request_cache_active'] else 'no'}`"
-            )
-        )
-        log("[health] Sent health status message.")
-        return
-
-    if content_lower == DEBUG_PLAYER_COMMAND.casefold():
-        await message.channel.send("Usage: `!DebugPlayer Name#Tag`")
-        return
-
-    if content_lower.startswith(f"{DEBUG_PLAYER_COMMAND.casefold()} "):
-        raw_riot_id = content[len(DEBUG_PLAYER_COMMAND):].strip()
-        status_message = await message.channel.send(f"\u23F3 Building debug report for `{raw_riot_id}`...")
-        try:
-            report_text = await riot_client.build_debug_player_report(
-                raw_riot_id,
-                report_timezone_name=REPORT_TIMEZONE_NAME,
-                normalize_riot_id=normalize_riot_id,
-            )
-            if len(report_text) > 1900:
-                report_text = report_text[:1900] + "\n...truncated..."
-            await status_message.edit(content=f"```text\n{report_text}\n```")
-        except ValueError as exc:
-            await status_message.edit(content=f"Debug report failed: {exc}")
-        except (KeyError, requests.RequestException) as exc:
-            await status_message.edit(content=f"Debug report failed: {exc}")
-            log(f"[debug] Debug report failed: {exc}")
-        return
-
-    if content_lower == MOOD_COMMAND.casefold():
-        request_id = create_request_id("mood")
-        token = REQUEST_ID_CONTEXT.set(request_id)
-        try:
-            await message.delete()
-        except (discord.Forbidden, discord.NotFound, discord.HTTPException) as exc:
-            log(f"[mood] Could not delete command message {message.id}: {exc}")
-
-        try:
-            if MOOD_REQUEST_LOCK.locked():
-                await message.channel.send("\u23F3 A mood report is already in progress. Please wait for it to finish.")
-                return
-
-            async with MOOD_REQUEST_LOCK:
-                loading_text = (
-                    f"\u23F3 Gathering match results since {REPORT_DAY_START_HOUR:02d}:00 from Riot..."
-                )
-                status_message = await get_or_create_report_message(message.channel, loading_text)
-                if status_message.content != loading_text:
-                    await status_message.edit(content=loading_text)
-                try:
-                    if DB_ENABLED:
-                        snapshot_text = await mood_service.build_today_win_rate_report()
-                        refresh_note = "_Refreshing latest matches..._"
-                        snapshot_with_note = f"{snapshot_text}\n\n{refresh_note}"
-                        if len(snapshot_with_note) > 2000:
-                            snapshot_with_note = snapshot_text
-                        await status_message.edit(content=snapshot_with_note)
-                        displayed_text = snapshot_with_note
-                        remember_report_message(status_message)
-                        log(f"[mood] Sent stored snapshot report in channel {CHANNEL_ID}.")
-
-                        await mood_service.refresh_recent_matches_snapshot(recent_count=20)
-                        refreshed_text = await mood_service.build_today_win_rate_report()
-                        if refreshed_text != displayed_text:
-                            await status_message.edit(content=refreshed_text)
-                            log(f"[mood] Updated report after quick refresh in channel {CHANNEL_ID}.")
-                        else:
-                            log("[mood] Quick refresh produced no visible report change.")
-                    else:
-                        async def progress(done, total, last_name):
-                            await status_message.edit(
-                                content=(
-                                    f"\u23F3 Gathering match results since {REPORT_DAY_START_HOUR:02d}:00 "
-                                    f"from Riot... ({done}/{total}) `{last_name}`"
-                                )
-                            )
-
-                        report_text = await mood_service.build_today_win_rate_report(progress_callback=progress)
-                        await status_message.edit(content=report_text)
-                        remember_report_message(status_message)
-                        log(
-                            f"[mood] Sent cycle win rate report (since {REPORT_DAY_START_HOUR:02d}:00) "
-                            f"in channel {CHANNEL_ID}."
-                        )
-                except (KeyError, requests.RequestException) as exc:
-                    await status_message.edit(content=f"Mood report failed: {exc}")
-                    log(f"[mood] Mood report failed: {exc}")
-                except Exception as exc:
-                    await status_message.edit(content=f"Mood report failed unexpectedly: {exc}")
-                    log(f"[mood] Unexpected mood report failure: {exc}")
-        finally:
-            REQUEST_ID_CONTEXT.reset(token)
-        return
-
-    if content_lower == ADD_COMMAND.casefold():
-        await message.channel.send("Usage: `!Add Name#Tag`")
-        return
-
-    if content_lower.startswith(f"{ADD_COMMAND.casefold()} "):
-        raw_riot_id = content[len(ADD_COMMAND):].strip()
-        try:
-            riot_id = normalize_riot_id(raw_riot_id)
-        except ValueError as exc:
-            await message.channel.send(f"Add failed: {exc}")
-            return
-
-        if any(existing.casefold() == riot_id.casefold() for existing in FRIENDS):
-            await message.channel.send(f"`{riot_id}` is already tracked.")
-            return
-
-        status_message = await message.channel.send(f"\u23F3 Validating `{riot_id}` with Riot API...")
-        try:
-            await riot_client.fetch_puuid(riot_id)
-        except (KeyError, requests.RequestException) as exc:
-            await status_message.edit(content=f"Add failed for `{riot_id}`: {exc}")
-            return
-
-        FRIENDS.append(riot_id)
-        try:
-            db_upsert_player(riot_id, None)
-        except Exception as exc:
-            await status_message.edit(content=f"Added `{riot_id}`, but failed to persist to postgres: {exc}")
-            return
-
-        await status_message.edit(
-            content=(
-                f"\u2705 Added `{riot_id}` and saved to postgres. "
-                f"Total tracked players: {len(FRIENDS)}"
-            )
-        )
-        mood_service.invalidate_report_cache()
-        log(f"[add] Added player {riot_id}.")
+    await handle_incoming_message(
+        message=message,
+        channel_id=CHANNEL_ID,
+        friends=FRIENDS,
+        riot_client=riot_client,
+        mood_service=mood_service,
+        report_timezone_name=REPORT_TIMEZONE_NAME,
+        report_day_start_hour=REPORT_DAY_START_HOUR,
+        db_enabled=DB_ENABLED,
+        start_monotonic=START_MONOTONIC,
+        mood_request_lock=MOOD_REQUEST_LOCK,
+        request_id_context=REQUEST_ID_CONTEXT,
+        create_request_id=create_request_id,
+        get_or_create_report_message=get_or_create_report_message,
+        remember_report_message=remember_report_message,
+        normalize_riot_id=normalize_riot_id,
+        db_upsert_player=db_upsert_player,
+        log=log,
+    )
 
 
 def main():
@@ -748,5 +539,10 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
 
 

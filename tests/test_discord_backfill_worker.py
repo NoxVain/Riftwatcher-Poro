@@ -10,15 +10,16 @@ class FakeRiotClient:
         self.match_info_by_id = {}
         self.fetched_match_ids = []
 
-    async def fetch_puuid(self, riot_id):
+    async def fetch_puuid(self, riot_id, *, request_tier="priority"):
+        _ = request_tier
         return self.puuid_by_riot_id[riot_id]
 
-    async def fetch_recent_match_ids(self, puuid, count=100):
-        _ = count
+    async def fetch_recent_match_ids(self, puuid, count=100, *, request_tier="priority"):
+        _ = count, request_tier
         return self.recent_ids_by_puuid.get(puuid, [])
 
-    async def fetch_match_info(self, match_id, *, cache_in_memory=True):
-        _ = cache_in_memory
+    async def fetch_match_info(self, match_id, *, cache_in_memory=True, request_tier="priority"):
+        _ = cache_in_memory, request_tier
         self.fetched_match_ids.append(match_id)
         return self.match_info_by_id.get(match_id, {"info": {}})
 

@@ -148,7 +148,8 @@ def test_fetch_match_info_can_skip_in_memory_cache(monkeypatch):
         db_set_last_seen_match_id=lambda _riot_id, _match_id: None,
     )
 
-    async def fake_riot_get_json_async(_url):
+    async def fake_riot_get_json_async(_url, *, request_tier="priority"):
+        _ = request_tier
         return {"info": {"queueId": 420, "participants": []}}
 
     monkeypatch.setattr(client, "riot_get_json_async", fake_riot_get_json_async)
@@ -157,3 +158,19 @@ def test_fetch_match_info_can_skip_in_memory_cache(monkeypatch):
     assert result is not None
     assert "m1" in db_store
     assert "m1" not in client.match_info_cache
+
+
+def test_wait_for_backfill_window_sleeps_when_pause_is_active(monkeypatch):
+    client = build_client()
+    slept = {"seconds": 0.0}
+
+    monkeypatch.setattr(client, "get_backfill_pause_remaining", lambda: 2.5)
+
+    async def fake_sleep(seconds):
+        slept["seconds"] = seconds
+
+    monkeypatch.setattr("src.riot_api.asyncio.sleep", fake_sleep)
+
+    asyncio.run(client.wait_for_backfill_window())
+
+    assert slept["seconds"] == 2.5

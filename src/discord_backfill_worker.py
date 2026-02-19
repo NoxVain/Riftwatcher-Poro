@@ -17,8 +17,12 @@ async def process_backfill_cycle(
     total_backfilled = 0
     for riot_id in friends:
         try:
-            puuid = await riot_client.fetch_puuid(riot_id)
-            recent_ids = await riot_client.fetch_recent_match_ids(puuid, count=max(1, recent_ids_count))
+            puuid = await riot_client.fetch_puuid(riot_id, request_tier="backfill")
+            recent_ids = await riot_client.fetch_recent_match_ids(
+                puuid,
+                count=max(1, recent_ids_count),
+                request_tier="backfill",
+            )
             if not recent_ids:
                 continue
 
@@ -32,7 +36,11 @@ async def process_backfill_cycle(
                 cached = await asyncio.to_thread(db_get_match_info, match_id)
                 if cached is not None:
                     continue
-                await riot_client.fetch_match_info(match_id, cache_in_memory=False)
+                await riot_client.fetch_match_info(
+                    match_id,
+                    cache_in_memory=False,
+                    request_tier="backfill",
+                )
                 backfilled_for_player += 1
                 total_backfilled += 1
                 if backfilled_for_player >= max(1, per_player_limit):

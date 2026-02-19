@@ -113,6 +113,12 @@ Optional (with defaults):
 python -m pytest -q
 ```
 
+On Windows, if `python` resolves to a WindowsApps alias, run tests with an explicit interpreter path:
+
+```powershell
+& 'C:\Users\gardf\AppData\Local\Python\bin\python.exe' -m pytest -q
+```
+
 ## Operations Notes
 
 - If `MAX_TODAY_MATCH_DETAILS` is high, refresh cycles can become long on heavy accounts.

@@ -1,5 +1,6 @@
 import asyncio
 import random
+import threading
 import time
 from collections import OrderedDict
 from datetime import datetime, timezone
@@ -30,6 +31,8 @@ def get_lol_name(riot_id):
 
 class RiotApiClient:
     TRANSIENT_HTTP_STATUSES = {408, 425, 429, 500, 502, 503, 504}
+    BACKFILL_MIN_PAUSE_SECONDS = 120.0
+    BACKFILL_PAUSE_MULTIPLIER = 3.0
 
     def __init__(
         self,
@@ -68,6 +71,8 @@ class RiotApiClient:
         self.puuid_cache = {}
         self.summoner_id_cache = {}
         self.match_info_cache = OrderedDict()
+        self._backfill_pause_until = 0.0
+        self._backfill_pause_lock = threading.Lock()
 
     def clear_match_cache(self):
         self.match_info_cache.clear()
@@ -80,7 +85,36 @@ class RiotApiClient:
         while len(self.match_info_cache) > self.max_in_memory_match_cache:
             self.match_info_cache.popitem(last=False)
 
-    def riot_get_json(self, url):
+    def schedule_backfill_pause(self, retry_after_seconds):
+        pause_seconds = max(
+            self.BACKFILL_MIN_PAUSE_SECONDS,
+            float(retry_after_seconds) * self.BACKFILL_PAUSE_MULTIPLIER,
+        )
+        now = time.monotonic()
+        pause_until = now + pause_seconds
+        updated = False
+        with self._backfill_pause_lock:
+            if pause_until > self._backfill_pause_until:
+                self._backfill_pause_until = pause_until
+                updated = True
+        if updated:
+            self.log(
+                f"[backfill] Rate-limit pressure detected; pausing backfill requests "
+                f"for {pause_seconds:.0f}s."
+            )
+
+    def get_backfill_pause_remaining(self):
+        with self._backfill_pause_lock:
+            return max(0.0, self._backfill_pause_until - time.monotonic())
+
+    async def wait_for_backfill_window(self):
+        remaining = self.get_backfill_pause_remaining()
+        if remaining <= 0:
+            return
+        self.log(f"[backfill] Throttled; waiting {remaining:.1f}s before next Riot request.")
+        await asyncio.sleep(remaining)
+
+    def riot_get_json(self, url, *, request_tier="priority"):
         headers = {"X-Riot-Token": self.riot_api_key}
         max_attempts = 5
 
@@ -111,6 +145,7 @@ class RiotApiClient:
                     retry_after = float(retry_after_header)
                 except ValueError:
                     retry_after = 1.0
+                self.schedule_backfill_pause(retry_after)
 
                 if attempt == max_attempts:
                     response.raise_for_status()
@@ -139,10 +174,12 @@ class RiotApiClient:
         jitter = random.uniform(0.0, 0.25)
         return base + jitter
 
-    async def riot_get_json_async(self, url):
-        return await asyncio.to_thread(self.riot_get_json, url)
+    async def riot_get_json_async(self, url, *, request_tier="priority"):
+        if request_tier == "backfill":
+            await self.wait_for_backfill_window()
+        return await asyncio.to_thread(self.riot_get_json, url, request_tier=request_tier)
 
-    async def fetch_puuid(self, riot_id):
+    async def fetch_puuid(self, riot_id, *, request_tier="priority"):
         cache_key = riot_id.casefold()
         if cache_key in self.puuid_cache:
             return self.puuid_cache[cache_key]
@@ -159,13 +196,13 @@ class RiotApiClient:
             "https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/"
             f"{encoded_name}/{encoded_tag}"
         )
-        data = await self.riot_get_json_async(url)
+        data = await self.riot_get_json_async(url, request_tier=request_tier)
         puuid = data["puuid"]
         self.puuid_cache[cache_key] = puuid
         await asyncio.to_thread(self.db_upsert_player, riot_id, puuid)
         return puuid
 
-    async def fetch_match_ids(self, puuid, start_time_unix):
+    async def fetch_match_ids(self, puuid, start_time_unix, *, request_tier="priority"):
         page_size = 100
         start = 0
         all_match_ids = []
@@ -175,7 +212,7 @@ class RiotApiClient:
                 "https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/"
                 f"{puuid}/ids?startTime={start_time_unix}&start={start}&count={page_size}"
             )
-            page_match_ids = await self.riot_get_json_async(url)
+            page_match_ids = await self.riot_get_json_async(url, request_tier=request_tier)
             if not page_match_ids:
                 break
 
@@ -193,15 +230,15 @@ class RiotApiClient:
 
         return all_match_ids
 
-    async def fetch_recent_match_ids(self, puuid, count=20):
+    async def fetch_recent_match_ids(self, puuid, count=20, *, request_tier="priority"):
         safe_count = max(1, min(count, 100))
         url = (
             "https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/"
             f"{puuid}/ids?count={safe_count}"
         )
-        return await self.riot_get_json_async(url)
+        return await self.riot_get_json_async(url, request_tier=request_tier)
 
-    async def fetch_match_info(self, match_id, *, cache_in_memory=True):
+    async def fetch_match_info(self, match_id, *, cache_in_memory=True, request_tier="priority"):
         if cache_in_memory:
             cached = self.match_info_cache.get(match_id)
             if cached is not None:
@@ -215,7 +252,7 @@ class RiotApiClient:
             return persisted
 
         url = f"https://europe.api.riotgames.com/lol/match/v5/matches/{match_id}"
-        match_info = await self.riot_get_json_async(url)
+        match_info = await self.riot_get_json_async(url, request_tier=request_tier)
         if cache_in_memory:
             self.cache_match_info(match_id, match_info)
         await asyncio.to_thread(self.db_upsert_match_info, match_id, match_info)

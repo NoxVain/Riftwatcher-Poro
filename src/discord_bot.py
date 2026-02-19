@@ -1,6 +1,7 @@
 import asyncio
 import contextvars
 import json
+import random
 import time
 from datetime import datetime
 
@@ -297,7 +298,13 @@ async def evaluate_rank_changes_and_notify():
 async def background_rank_notifier():
     if not DB_ENABLED:
         return
+    sleep_seconds = max(30, DAILY_REFRESH_SECONDS)
+    initial_jitter = random.uniform(0.0, min(30.0, sleep_seconds / 2))
+    if initial_jitter > 0:
+        log(f"[rank] Startup jitter sleep={initial_jitter:.1f}s")
+        await asyncio.sleep(initial_jitter)
     while not client.is_closed():
+        cycle_start = time.monotonic()
         token = REQUEST_ID_CONTEXT.set(create_request_id("rank"))
         try:
             await evaluate_rank_changes_and_notify()
@@ -305,11 +312,19 @@ async def background_rank_notifier():
             log(f"[rank] Unexpected background error: {exc}")
         finally:
             REQUEST_ID_CONTEXT.reset(token)
-        await asyncio.sleep(max(30, DAILY_REFRESH_SECONDS))
+        elapsed = int((time.monotonic() - cycle_start) * 1000)
+        log(f"[rank] Cycle complete elapsed={elapsed}ms next_sleep={sleep_seconds}s")
+        await asyncio.sleep(sleep_seconds)
 
 
 async def background_match_recap_notifier():
+    sleep_seconds = max(30, MATCH_RECAP_POLL_SECONDS)
+    initial_jitter = random.uniform(0.0, min(30.0, sleep_seconds / 2))
+    if initial_jitter > 0:
+        log(f"[recap] Startup jitter sleep={initial_jitter:.1f}s")
+        await asyncio.sleep(initial_jitter)
     while not client.is_closed():
+        cycle_start = time.monotonic()
         token = REQUEST_ID_CONTEXT.set(create_request_id("recap"))
         try:
             channel = await resolve_channel(MATCH_RECAP_CHANNEL_ID)
@@ -335,7 +350,9 @@ async def background_match_recap_notifier():
             log(f"[recap] Unexpected error: {exc}")
         finally:
             REQUEST_ID_CONTEXT.reset(token)
-        await asyncio.sleep(max(30, MATCH_RECAP_POLL_SECONDS))
+        elapsed = int((time.monotonic() - cycle_start) * 1000)
+        log(f"[recap] Cycle complete elapsed={elapsed}ms next_sleep={sleep_seconds}s")
+        await asyncio.sleep(sleep_seconds)
 
 
 async def background_match_cache_backfiller():
@@ -345,8 +362,13 @@ async def background_match_cache_backfiller():
     backfill_recent_ids_count = 100
     backfill_per_player_limit = 3
     backfill_interval_seconds = max(120, DAILY_REFRESH_SECONDS * 2)
+    initial_jitter = random.uniform(0.0, min(60.0, backfill_interval_seconds / 2))
+    if initial_jitter > 0:
+        log(f"[backfill] Startup jitter sleep={initial_jitter:.1f}s")
+        await asyncio.sleep(initial_jitter)
 
     while not client.is_closed():
+        cycle_start = time.monotonic()
         token = REQUEST_ID_CONTEXT.set(create_request_id("backfill"))
         try:
             total_backfilled = await process_backfill_cycle(
@@ -365,6 +387,8 @@ async def background_match_cache_backfiller():
             log(f"[backfill] Unexpected background error: {exc}")
         finally:
             REQUEST_ID_CONTEXT.reset(token)
+        elapsed = int((time.monotonic() - cycle_start) * 1000)
+        log(f"[backfill] Cycle complete elapsed={elapsed}ms next_sleep={backfill_interval_seconds}s")
         await asyncio.sleep(backfill_interval_seconds)
 
 
@@ -372,11 +396,17 @@ async def background_daily_refresher():
     global LAST_CACHE_CLEANUP_AT
     if not DB_ENABLED:
         return
+    sleep_seconds = max(30, DAILY_REFRESH_SECONDS)
+    initial_jitter = random.uniform(0.0, min(30.0, sleep_seconds / 2))
+    if initial_jitter > 0:
+        log(f"[refresh] Startup jitter sleep={initial_jitter:.1f}s")
+        await asyncio.sleep(initial_jitter)
     last_snapshot_push_at = 0.0
     last_snapshot_signature = None
     snapshot_push_interval = 120.0
     changed_push_min_interval = 30.0
     while not client.is_closed():
+        cycle_start = time.monotonic()
         token = REQUEST_ID_CONTEXT.set(create_request_id("bg"))
         try:
             async def push_snapshot_update(force=False):
@@ -443,7 +473,9 @@ async def background_daily_refresher():
             log(f"[refresh] Unexpected error: {exc}")
         finally:
             REQUEST_ID_CONTEXT.reset(token)
-        await asyncio.sleep(max(30, DAILY_REFRESH_SECONDS))
+        elapsed = int((time.monotonic() - cycle_start) * 1000)
+        log(f"[refresh] Cycle complete elapsed={elapsed}ms next_sleep={sleep_seconds}s")
+        await asyncio.sleep(sleep_seconds)
 
 
 @client.event

@@ -105,6 +105,7 @@ def init_db():
         );
         """
     )
+    db_execute("CREATE INDEX IF NOT EXISTS idx_tracked_players_riot_id_lower ON tracked_players (lower(riot_id));")
     db_execute(
         """
         CREATE TABLE IF NOT EXISTS player_daily_stats (
@@ -130,6 +131,12 @@ def init_db():
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             PRIMARY KEY (day_date, riot_id)
         );
+        """
+    )
+    db_execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_player_daily_stats_day_riot_lower_updated
+        ON player_daily_stats (day_date, lower(riot_id), updated_at DESC);
         """
     )
     db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS cs_total INTEGER NOT NULL DEFAULT 0;")
@@ -176,6 +183,12 @@ def init_db():
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             PRIMARY KEY (riot_id, queue_type)
         );
+        """
+    )
+    db_execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_player_ranked_state_riot_lower_queue
+        ON player_ranked_state (lower(riot_id), queue_type);
         """
     )
 

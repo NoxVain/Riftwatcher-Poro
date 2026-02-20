@@ -68,6 +68,21 @@ All workers include startup jitter and per-cycle heartbeat logs:
 - Add per-worker success/error counters to health output.
 - Add log sampling/structured metrics export for cycle latency trends.
 
+## Scoring V2 Draft (Recovered)
+
+Historical draft recovered from earlier README notes (`d8d0edc`):
+
+- Add Bayesian smoothing for win rate to reduce low-game volatility.
+  - Example: `p_bayes = (wins + a) / (games + a + b)`, with `a=b=3`.
+- Keep an uncertainty penalty, but smoother for small samples.
+  - Example: `conf = sqrt(games / (games + k))`, with `k=8`.
+- Add role-aware performance component using tracked metrics:
+  - CS/min, player damage, objective damage, vision, deaths.
+  - Normalize by role/day baselines to reduce role bias.
+- Add recency weighting so recent games matter more.
+- Candidate composite:
+  - `GamerScore = 100 * (0.65 * p_bayes * conf + 0.25 * perf_norm + 0.10 * recency_norm)`
+
 ## Future Fun Features Backlog
 
 - Daily MVP + "Clutch/Int" awards:

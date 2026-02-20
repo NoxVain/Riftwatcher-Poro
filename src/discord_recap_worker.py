@@ -11,7 +11,7 @@ from src.discord_text import (
     match_recap_state_key,
     streak_callout_state_key,
 )
-from src.report_logic import get_match_end_unix_seconds, get_mode_bucket
+from src.report_logic import get_match_duration_seconds, get_match_end_unix_seconds, get_mode_bucket, is_remake_match
 
 
 async def get_ranked_streak_info(riot_client, puuid, recent_ids, max_matches=8):
@@ -19,6 +19,8 @@ async def get_ranked_streak_info(riot_client, puuid, recent_ids, max_matches=8):
     streak_count = 0
     for match_id in recent_ids[:max(1, max_matches)]:
         match_info = await riot_client.fetch_match_info(match_id)
+        if is_remake_match(match_info):
+            continue
         queue_id = int(match_info.get("info", {}).get("queueId", -1))
         if get_mode_bucket(queue_id) is None:
             continue
@@ -103,9 +105,9 @@ async def process_recap_cycle(
 
         end_ts = get_match_end_unix_seconds(match_info)
         queue_id = int(match_info.get("info", {}).get("queueId", -1))
-        duration_seconds = int(match_info.get("info", {}).get("gameDuration", 0) or 0)
-        if duration_seconds > 10_000:
-            duration_seconds = int(duration_seconds / 1000)
+        if is_remake_match(match_info):
+            continue
+        duration_seconds = get_match_duration_seconds(match_info)
         match_entries.append((end_ts, match_id, queue_id, duration_seconds, tracked_participants))
 
     match_entries.sort(key=lambda row: row[0])
@@ -130,6 +132,8 @@ async def process_recap_cycle(
     for _end_ts, _match_id, _queue_id, _duration_seconds, tracked_participants in match_entries:
         for riot_id, _participant in tracked_participants:
             affected_riot_ids.add(riot_id)
+    if not affected_riot_ids:
+        return
 
     for riot_id in sorted(affected_riot_ids, key=str.casefold):
         puuid = puuid_by_riot_id.get(riot_id)

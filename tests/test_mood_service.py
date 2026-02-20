@@ -308,6 +308,47 @@ def test_refresh_recent_matches_snapshot_updates_baseline_stats():
     assert service.report_cache["text"] is None
 
 
+def test_refresh_recent_matches_snapshot_ignores_remakes():
+    riot = FakeRiotClient()
+    riot.puuid_by_riot_id["Alpha#NA1"] = "puuid-alpha"
+    riot.recent_ids_by_puuid["puuid-alpha"] = ["m3", "m2", "m1"]
+    riot.match_info_by_id["m3"] = {
+        "info": {
+            "queueId": 420,
+            "gameDuration": 240,
+            "gameEndTimestamp": int(datetime.now(tz=timezone.utc).timestamp() * 1000),
+            "participants": [{"puuid": "puuid-alpha", "win": True}],
+        }
+    }
+    riot.match_info_by_id["m2"] = {
+        "info": {
+            "queueId": 420,
+            "gameDuration": 1800,
+            "gameEndTimestamp": int(datetime.now(tz=timezone.utc).timestamp() * 1000),
+            "participants": [{"puuid": "puuid-alpha", "win": False}],
+        }
+    }
+
+    upserts = []
+    service = _create_service(
+        friends=["Alpha#NA1"],
+        riot_client=riot,
+        db_get_last_seen_match_id=lambda _riot_id: "m1",
+        db_get_daily_stats_for_player=lambda _cycle_key, _riot_id: (0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0, 0, 0, 0, 0, 0),
+        db_upsert_daily_stats=lambda cycle_key, riot_id, mode_records, performance_totals: upserts.append(
+            (cycle_key, riot_id, mode_records, performance_totals)
+        ),
+    )
+
+    asyncio.run(service.refresh_recent_matches_snapshot(recent_count=20))
+
+    assert len(upserts) == 1
+    _cycle_key, _riot_id, mode_records, performance_totals = upserts[0]
+    assert mode_records["solo_duo"]["wins"] == 0
+    assert mode_records["solo_duo"]["losses"] == 1
+    assert performance_totals["minutes_total"] == 30.0
+
+
 def test_refresh_recent_matches_snapshot_falls_back_when_baseline_missing():
     riot = FakeRiotClient()
     riot.puuid_by_riot_id["Alpha#NA1"] = "puuid-alpha"

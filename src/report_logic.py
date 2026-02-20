@@ -75,6 +75,21 @@ def get_match_end_unix_seconds(match_info):
     return int(end_ms / 1000)
 
 
+def get_match_duration_seconds(match_info):
+    duration_seconds = int(match_info.get("info", {}).get("gameDuration", 0) or 0)
+    if duration_seconds > 10_000:
+        duration_seconds = int(duration_seconds / 1000)
+    return max(0, duration_seconds)
+
+
+def is_remake_match(match_info):
+    info = match_info.get("info", {})
+    participants = info.get("participants", []) or []
+    if any(bool(p.get("gameEndedInEarlySurrender")) for p in participants):
+        return True
+    return get_match_duration_seconds(match_info) < 300
+
+
 def get_report_cycle_start_unix_seconds(report_timezone, day_start_hour=6, now_utc=None):
     safe_day_start_hour = max(0, min(23, int(day_start_hour)))
     if now_utc is None:

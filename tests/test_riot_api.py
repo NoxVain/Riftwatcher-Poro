@@ -1,4 +1,5 @@
 import asyncio
+import time
 from datetime import timezone
 
 import requests
@@ -127,6 +128,61 @@ def test_get_today_mode_records_stops_detail_fetches_at_limit(monkeypatch):
     asyncio.run(client.get_today_mode_records("Alpha#EUW"))
 
     assert fetched_ids == ["m5", "m4"]
+
+
+def test_get_today_mode_records_ignores_remakes(monkeypatch):
+    client = RiotApiClient(
+        riot_api_key="test-key",
+        riot_platform_routing="euw1",
+        log=lambda _msg: None,
+        log_riot_requests=False,
+        report_timezone=timezone.utc,
+        report_day_start_hour=6,
+        max_today_match_details=5,
+        max_match_ids_scan=2000,
+        max_in_memory_match_cache=200,
+        db_get_puuid=lambda _riot_id: None,
+        db_upsert_player=lambda _riot_id, _puuid: None,
+        db_get_match_info=lambda _match_id: None,
+        db_upsert_match_info=lambda _match_id, _match_info: None,
+        db_set_last_seen_match_id=lambda _riot_id, _match_id: None,
+    )
+
+    async def fake_fetch_puuid(_riot_id):
+        return "puuid-alpha"
+
+    async def fake_fetch_match_ids(_puuid, _start_time_unix):
+        return ["m2", "m1"]
+
+    async def fake_fetch_match_info(match_id):
+        now_ms = int(time.time() * 1000)
+        if match_id == "m2":
+            return {
+                "info": {
+                    "queueId": 420,
+                    "gameDuration": 240,
+                    "gameEndTimestamp": now_ms,
+                    "participants": [{"puuid": "puuid-alpha", "win": True}],
+                }
+            }
+        return {
+            "info": {
+                "queueId": 420,
+                "gameDuration": 1800,
+                "gameEndTimestamp": now_ms,
+                "participants": [{"puuid": "puuid-alpha", "win": False}],
+            }
+        }
+
+    monkeypatch.setattr(client, "fetch_puuid", fake_fetch_puuid)
+    monkeypatch.setattr(client, "fetch_match_ids", fake_fetch_match_ids)
+    monkeypatch.setattr(client, "fetch_match_info", fake_fetch_match_info)
+
+    mode_records, performance = asyncio.run(client.get_today_mode_records("Alpha#EUW"))
+
+    assert mode_records["solo_duo"]["wins"] == 0
+    assert mode_records["solo_duo"]["losses"] == 1
+    assert performance["minutes_total"] == 30.0
 
 
 def test_fetch_match_info_can_skip_in_memory_cache(monkeypatch):

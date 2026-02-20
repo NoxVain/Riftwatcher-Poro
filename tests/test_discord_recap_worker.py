@@ -278,3 +278,58 @@ def test_process_recap_cycle_no_new_matches_skips_post_and_sync():
     assert upserts == []
     assert mood.invalidated is False
     assert edit_calls == []
+
+
+def test_process_recap_cycle_skips_remake_notifications_and_sync():
+    channel = FakeChannel()
+    riot = FakeRiotClient()
+    mood = FakeMoodService()
+    now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+
+    riot.puuid_by_riot_id = {"Alpha#NA1": "puuid-a"}
+    riot.recent_ids_by_puuid = {"puuid-a": ["EUW1_2", "EUW1_1"]}
+    riot.match_info_by_id = {
+        "EUW1_2": {
+            "info": {
+                "queueId": 420,
+                "gameDuration": 240,
+                "gameEndTimestamp": now_ms,
+                "participants": [_participant("puuid-a", win=True)],
+            }
+        }
+    }
+
+    state = {_state_key("Alpha#NA1"): "EUW1_1"}
+    upserts = []
+    edit_calls = []
+
+    def db_get_state(key):
+        return state.get(key)
+
+    def db_set_state(key, value):
+        state[key] = value
+
+    async def edit_last_report_message(**kwargs):
+        edit_calls.append(kwargs)
+
+    asyncio.run(
+        process_recap_cycle(
+            friends=["Alpha#NA1"],
+            riot_client=riot,
+            mood_service=mood,
+            report_timezone=timezone.utc,
+            match_recap_channel_id=123,
+            channel=channel,
+            db_enabled=True,
+            db_get_state=db_get_state,
+            db_set_state=db_set_state,
+            db_upsert_daily_stats=lambda *_args, **_kwargs: upserts.append(True),
+            edit_last_report_message=edit_last_report_message,
+            log=lambda _msg: None,
+        )
+    )
+
+    assert channel.messages == []
+    assert state[_state_key("Alpha#NA1")] == "EUW1_2"
+    assert upserts == []
+    assert edit_calls == []

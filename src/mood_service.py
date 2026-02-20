@@ -6,9 +6,11 @@ import requests
 
 from src.report_logic import (
     format_mode_line,
+    get_match_duration_seconds,
     get_mode_bucket,
     get_mode_totals,
     get_report_cycle_key,
+    is_remake_match,
     is_match_in_report_cycle,
     rank_sort_key,
     wilson_lower_bound,
@@ -487,6 +489,8 @@ class MoodService:
                         day_start_hour=self.report_day_start_hour,
                     ):
                         continue
+                    if is_remake_match(match_info):
+                        continue
                     queue_id = match_info["info"].get("queueId", -1)
                     bucket_name = get_mode_bucket(queue_id)
                     if bucket_name is None:
@@ -501,9 +505,7 @@ class MoodService:
                     elif result is False:
                         mode_records[bucket_name]["losses"] += 1
                         player_changed = True
-                    duration_seconds = int(match_info["info"].get("gameDuration", 0) or 0)
-                    if duration_seconds > 10_000:
-                        duration_seconds = int(duration_seconds / 1000)
+                    duration_seconds = get_match_duration_seconds(match_info)
                     performance_totals["minutes_total"] += max(0.0, duration_seconds / 60.0)
                     performance_totals["cs_total"] += int(participant.get("totalMinionsKilled", 0) or 0)
                     performance_totals["cs_total"] += int(participant.get("neutralMinionsKilled", 0) or 0)

@@ -3,11 +3,13 @@ from datetime import datetime, timezone
 from src.report_logic import (
     create_mode_records,
     format_mode_line,
+    get_match_duration_seconds,
     get_report_cycle_key,
     get_report_cycle_start_unix_seconds,
     get_match_end_unix_seconds,
     get_mode_bucket,
     get_mode_totals,
+    is_remake_match,
     is_match_in_report_cycle,
     is_match_in_last_24h,
     rank_sort_key,
@@ -88,3 +90,23 @@ def test_is_match_in_report_cycle_uses_cutoff_window():
     old = {"info": {"gameEndTimestamp": int(datetime(2026, 2, 18, 5, 59, tzinfo=timezone.utc).timestamp() * 1000)}}
     assert is_match_in_report_cycle(in_cycle, tz, day_start_hour=6, now_utc=now_utc)
     assert not is_match_in_report_cycle(old, tz, day_start_hour=6, now_utc=now_utc)
+
+
+def test_get_match_duration_seconds_normalizes_seconds_or_milliseconds():
+    assert get_match_duration_seconds({"info": {"gameDuration": 1800}}) == 1800
+    assert get_match_duration_seconds({"info": {"gameDuration": 1_800_000}}) == 1800
+
+
+def test_is_remake_match_detects_early_surrender_or_short_duration():
+    early_surrender = {
+        "info": {
+            "gameDuration": 1300,
+            "participants": [{"gameEndedInEarlySurrender": True}],
+        }
+    }
+    short_game = {"info": {"gameDuration": 240, "participants": [{}]}}
+    normal_game = {"info": {"gameDuration": 1800, "participants": [{}]}}
+
+    assert is_remake_match(early_surrender)
+    assert is_remake_match(short_game)
+    assert not is_remake_match(normal_game)

@@ -96,12 +96,16 @@ All workers include startup jitter and per-cycle heartbeat logs:
 - Branch: `main`
 - Working tree: clean
 - Latest pushed commits:
+  - `696f277` `feat(recap): include match duration in recap header`
   - `5865367` `feat(recap): add ranked streak callouts with banter and dedupe`
   - `8204f8d` `feat(rate-limit): enforce global Riot limits with backfill budget guard`
   - `f6908e2` `feat(rate-limit): throttle backfill on 429 and expand tests`
 
 ### Implemented This Session
 
+- Added match duration to recap header output:
+  - Format: `MM:SS` (example: `30:00`)
+  - Placement: recap header line beside queue and local end time.
 - Added backfill-only adaptive throttling after Riot `429` responses.
 - Added global Riot request limiting in `RiotApiClient`:
   - `20 requests / 1 second`
@@ -114,8 +118,9 @@ All workers include startup jitter and per-cycle heartbeat logs:
 
 ### Current Test Status
 
-- `42 passed` via:
-  - `& 'C:\Users\gardf\AppData\Local\Python\bin\python.exe' -m pytest -q`
+- Targeted validation passed for recap/text changes:
+  - `& 'C:\Users\gardf\AppData\Local\Python\bin\python.exe' -m pytest -q tests/test_discord_text.py tests/test_discord_recap_worker.py`
+  - Result: `6 passed`
 
 ### Current Operational Notes
 

@@ -62,7 +62,7 @@ All workers run continuously while connected, each with startup jitter and cycle
 - Recap worker
   - interval: `max(30, MATCH_RECAP_POLL_SECONDS)`
   - finds new matches using persisted per-player recap key
-  - posts recap messages in `MATCH_RECAP_CHANNEL_ID`
+  - posts recap messages in `MATCH_RECAP_CHANNEL_ID` (queue, local end time, duration, per-player line items)
   - refreshes affected players' daily stats and forces scoreboard update
 - Backfill worker
   - interval: `max(120, DAILY_REFRESH_SECONDS * 2)`

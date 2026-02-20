@@ -33,7 +33,7 @@ It maintains one daily scoreboard message, posts match recaps, and posts rank up
   - Flex (`440`)
 - Scoreboard rank ordering uses Wilson lower bound (displayed as `Gamer Score`).
 - Match recap posts in `MATCH_RECAP_CHANNEL_ID` with:
-  - queue + end time
+  - queue + end time + match duration
   - champion/role
   - W/L, K/D/A, CS/min
   - player/objective damage, damage taken, healing, vision

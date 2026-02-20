@@ -120,8 +120,11 @@ async def process_recap_cycle(
             f"`{queue_name}` - \U0001F552 `{end_local:%d.%m.%Y %H:%M}` - \u23F1\uFE0F `{duration_label}`",
             "",
         ]
-        for riot_id, participant in sorted(tracked_participants, key=lambda row: row[0].casefold()):
+        ordered_participants = sorted(tracked_participants, key=lambda row: row[0].casefold())
+        for index, (riot_id, participant) in enumerate(ordered_participants):
             lines.append(format_recap_player_line(riot_id, participant, duration_seconds))
+            if index < len(ordered_participants) - 1:
+                lines.append("")
         message = "\n".join(lines)
         if len(message) > 2000:
             message = message[:1950] + "\n..."

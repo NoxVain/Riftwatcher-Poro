@@ -155,6 +155,7 @@ def test_process_recap_cycle_posts_recap_and_syncs_affected_players():
     assert len(channel.messages) == 1
     assert "New Match Recap" in channel.messages[0]
     assert "`30:00`" in channel.messages[0]
+    assert "\n\n❌ **Bravo**" in channel.messages[0]
     assert state[_state_key("Alpha#NA1")] == "EUW1_2"
     assert state[_state_key("Bravo#NA1")] == "EUW1_2"
     assert [row[1] for row in upserts] == ["Alpha#NA1", "Bravo#NA1"]

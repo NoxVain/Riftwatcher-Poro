@@ -1,6 +1,7 @@
 TEST_COMMAND = "!test"
 RIOT_TEST_COMMAND = "!riottest"
 MOOD_COMMAND = "!Mood"
+WEEK_COMMAND = "!Week"
 ADD_COMMAND = "!Add"
 DEBUG_PLAYER_COMMAND = "!DebugPlayer"
 HEALTH_COMMAND = "!health"

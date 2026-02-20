@@ -1,7 +1,7 @@
 # MoodBot
 
 MoodBot is a Discord bot for tracking ranked League of Legends performance for a list of tracked Riot IDs.
-It maintains one daily scoreboard message, posts match recaps, and posts rank up/down alerts.
+It maintains daily and weekly scoreboard messages, posts match recaps, and posts rank up/down alerts.
 
 ## Runtime Entry
 
@@ -27,7 +27,9 @@ It maintains one daily scoreboard message, posts match recaps, and posts rank up
 ## Features
 
 - `!Mood` keeps a single scoreboard message updated in `DAILY_REPORT_CHANNEL_ID`.
+- `!Week` keeps a single weekly scoreboard message updated in `WEEKLY_REPORT_CHANNEL_ID`.
 - Daily window starts at `REPORT_DAY_START_HOUR` in `REPORT_TIMEZONE`.
+- Weekly window aggregates existing daily stats from Monday through Friday in `REPORT_TIMEZONE`.
 - Ranked queues tracked in report:
   - Solo/Duo (`420`)
   - Flex (`440`)
@@ -64,6 +66,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 ## Commands
 
 - `!Mood`
+- `!Week`
 - `!Add Name#Tag`
 - `!DebugPlayer Name#Tag`
 - `!health`
@@ -98,6 +101,7 @@ Optional (with defaults):
 - `LOG_RIOT_REQUESTS` (`false`)
 - `LOG_JSON` (`false`)
 - `RIOT_PLATFORM_ROUTING` (`euw1`)
+- `WEEKLY_REPORT_CHANNEL_ID` (`DAILY_REPORT_CHANNEL_ID` when unset)
 
 ## Data Tables
 

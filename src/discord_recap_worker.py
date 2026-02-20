@@ -54,6 +54,7 @@ async def process_recap_cycle(
     db_set_state,
     db_upsert_daily_stats,
     edit_last_report_message,
+    edit_last_weekly_report_message=None,
     log,
 ):
     puuid_by_riot_id = {}
@@ -180,6 +181,8 @@ async def process_recap_cycle(
 
         mood_service.invalidate_report_cache()
         await edit_last_report_message(bypass_cache=True)
+        if edit_last_weekly_report_message is not None:
+            await edit_last_weekly_report_message(bypass_cache=True)
         log(
             f"[recap] Synced daily report after posting new match recap(s). "
             f"affected_players={len(affected_riot_ids)}"

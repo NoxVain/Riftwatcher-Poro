@@ -4,7 +4,7 @@ from datetime import timedelta
 import discord
 import requests
 
-from src.constants import ADD_COMMAND, DEBUG_PLAYER_COMMAND, HEALTH_COMMAND, MOOD_COMMAND, RIOT_TEST_COMMAND, TEST_COMMAND
+from src.constants import ADD_COMMAND, DEBUG_PLAYER_COMMAND, HEALTH_COMMAND, MOOD_COMMAND, RIOT_TEST_COMMAND, TEST_COMMAND, WEEK_COMMAND
 
 
 async def handle_incoming_message(
@@ -26,6 +26,10 @@ async def handle_incoming_message(
     normalize_riot_id,
     db_upsert_player,
     log,
+    get_or_create_weekly_report_message=None,
+    remember_weekly_report_message=None,
+    weekly_report_channel_id=None,
+    resolve_channel=None,
 ):
     content = message.content.strip()
     content_lower = content.casefold()
@@ -150,6 +154,47 @@ async def handle_incoming_message(
                 except Exception as exc:
                     await status_message.edit(content=f"Mood report failed unexpectedly: {exc}")
                     log(f"[mood] Unexpected mood report failure: {exc}")
+        finally:
+            request_id_context.reset(token)
+        return
+
+    if content_lower == WEEK_COMMAND.casefold():
+        request_id = create_request_id("week")
+        token = request_id_context.set(request_id)
+        try:
+            await message.delete()
+        except (discord.Forbidden, discord.NotFound, discord.HTTPException) as exc:
+            log(f"[week] Could not delete command message {message.id}: {exc}")
+
+        try:
+            if mood_request_lock.locked():
+                await message.channel.send("\u23F3 A report is already in progress. Please wait for it to finish.")
+                return
+
+            async with mood_request_lock:
+                if get_or_create_weekly_report_message is None:
+                    await message.channel.send("Weekly report is not configured.")
+                    return
+                target_channel = message.channel
+                if weekly_report_channel_id is not None and resolve_channel is not None:
+                    resolved_channel = await resolve_channel(weekly_report_channel_id)
+                    if resolved_channel is None:
+                        await message.channel.send("Weekly report failed: could not access weekly report channel.")
+                        return
+                    target_channel = resolved_channel
+                loading_text = "\u23F3 Building Monday-Friday weekly report from stored stats..."
+                status_message = await get_or_create_weekly_report_message(target_channel, loading_text)
+                if status_message.content != loading_text:
+                    await status_message.edit(content=loading_text)
+                report_text = await mood_service.build_weekly_win_rate_report(bypass_cache=True)
+                await status_message.edit(content=report_text)
+                if remember_weekly_report_message is not None:
+                    remember_weekly_report_message(status_message)
+                target_channel_id = getattr(target_channel, "id", weekly_report_channel_id)
+                log(f"[week] Sent weekly report in channel {target_channel_id}.")
+        except Exception as exc:
+            await message.channel.send(f"Weekly report failed: {exc}")
+            log(f"[week] Weekly report failed: {exc}")
         finally:
             request_id_context.reset(token)
         return

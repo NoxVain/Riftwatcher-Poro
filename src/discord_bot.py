@@ -18,7 +18,7 @@ from src.discord_text import (
     create_request_id,
     report_signature,
 )
-from src.constants import ADD_COMMAND, DEBUG_PLAYER_COMMAND, HEALTH_COMMAND, MOOD_COMMAND, RIOT_TEST_COMMAND, TEST_COMMAND
+from src.constants import ADD_COMMAND, DEBUG_PLAYER_COMMAND, HEALTH_COMMAND, MOOD_COMMAND, RIOT_TEST_COMMAND, TEST_COMMAND, WEEK_COMMAND
 from src.mood_service import MoodService
 from src.riot_api import RiotApiClient
 
@@ -42,6 +42,7 @@ TOKEN = cfg.TOKEN
 RIOT_API_KEY = cfg.RIOT_API_KEY
 RIOT_PLATFORM_ROUTING = cfg.RIOT_PLATFORM_ROUTING
 DAILY_REPORT_CHANNEL_ID = cfg.DAILY_REPORT_CHANNEL_ID
+WEEKLY_REPORT_CHANNEL_ID = cfg.WEEKLY_REPORT_CHANNEL_ID
 EVENTS_CHANNEL_ID = cfg.EVENTS_CHANNEL_ID
 REPORT_TIMEZONE_NAME = cfg.REPORT_TIMEZONE_NAME
 REPORT_TIMEZONE = cfg.REPORT_TIMEZONE
@@ -62,16 +63,19 @@ normalize_riot_id = cfg.normalize_riot_id
 
 db_cleanup_old_match_cache = dbm.db_cleanup_old_match_cache
 db_get_last_report_message = dbm.db_get_last_report_message
+db_get_last_weekly_report_message = dbm.db_get_last_weekly_report_message
 db_get_last_seen_match_id = dbm.db_get_last_seen_match_id
 db_get_match_info = dbm.db_get_match_info
 db_get_puuid = dbm.db_get_puuid
 db_health_stats = dbm.db_health_stats
 db_get_daily_stats_for_player = dbm.db_get_daily_stats_for_player
 db_load_latest_stats = dbm.db_load_latest_stats
+db_load_weekly_stats = dbm.db_load_weekly_stats
 db_load_ranked_state = dbm.db_load_ranked_state
 db_load_tracked_players = dbm.db_load_tracked_players
 db_delete_ranked_state_queue = dbm.db_delete_ranked_state_queue
 db_set_last_report_message = dbm.db_set_last_report_message
+db_set_last_weekly_report_message = dbm.db_set_last_weekly_report_message
 db_set_last_seen_match_id = dbm.db_set_last_seen_match_id
 db_set_state = dbm.db_set_state
 db_get_state = dbm.db_get_state
@@ -101,6 +105,7 @@ client = discord.Client(intents=intents)
 MOOD_REQUEST_LOCK = asyncio.Lock()
 
 LAST_REPORT_MESSAGE = {"channel_id": None, "message_id": None}
+LAST_WEEKLY_REPORT_MESSAGE = {"channel_id": None, "message_id": None}
 STARTUP_SCOREBOARD_INIT_DONE = False
 BACKGROUND_REFRESH_TASK = None
 BACKGROUND_RECAP_TASK = None
@@ -180,6 +185,7 @@ mood_service = MoodService(
     daily_refresh_seconds=DAILY_REFRESH_SECONDS,
     db_enabled=DB_ENABLED,
     db_load_latest_stats=db_load_latest_stats,
+    db_load_weekly_stats=db_load_weekly_stats,
     db_upsert_daily_stats=db_upsert_daily_stats,
     db_get_daily_stats_for_player=db_get_daily_stats_for_player,
     db_get_last_seen_match_id=db_get_last_seen_match_id,
@@ -197,6 +203,17 @@ def remember_report_message(message):
             loop.create_task(asyncio.to_thread(db_set_last_report_message, message.channel.id, message.id))
         except RuntimeError:
             db_set_last_report_message(message.channel.id, message.id)
+
+
+def remember_weekly_report_message(message):
+    LAST_WEEKLY_REPORT_MESSAGE["channel_id"] = message.channel.id
+    LAST_WEEKLY_REPORT_MESSAGE["message_id"] = message.id
+    if DB_ENABLED:
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(asyncio.to_thread(db_set_last_weekly_report_message, message.channel.id, message.id))
+        except RuntimeError:
+            db_set_last_weekly_report_message(message.channel.id, message.id)
 
 
 async def resolve_channel(channel_id):
@@ -239,6 +256,32 @@ async def get_or_create_report_message(channel, initial_content):
     return message
 
 
+async def get_or_create_weekly_report_message(channel, initial_content):
+    channel_id = LAST_WEEKLY_REPORT_MESSAGE["channel_id"]
+    message_id = LAST_WEEKLY_REPORT_MESSAGE["message_id"]
+
+    if (not channel_id or not message_id) and DB_ENABLED:
+        persisted_channel_id, persisted_message_id = await asyncio.to_thread(db_get_last_weekly_report_message)
+        if persisted_channel_id and persisted_message_id:
+            LAST_WEEKLY_REPORT_MESSAGE["channel_id"] = persisted_channel_id
+            LAST_WEEKLY_REPORT_MESSAGE["message_id"] = persisted_message_id
+            channel_id = persisted_channel_id
+            message_id = persisted_message_id
+
+    if channel_id == channel.id and message_id:
+        try:
+            return await channel.fetch_message(message_id)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            LAST_WEEKLY_REPORT_MESSAGE["channel_id"] = None
+            LAST_WEEKLY_REPORT_MESSAGE["message_id"] = None
+            if DB_ENABLED:
+                await asyncio.to_thread(db_set_last_weekly_report_message, 0, 0)
+
+    message = await channel.send(initial_content)
+    remember_weekly_report_message(message)
+    return message
+
+
 async def edit_last_report_message(prefer_snapshot=False, bypass_cache=False):
     channel_id = LAST_REPORT_MESSAGE["channel_id"]
     message_id = LAST_REPORT_MESSAGE["message_id"]
@@ -270,6 +313,34 @@ async def edit_last_report_message(prefer_snapshot=False, bypass_cache=False):
         log(f"[refresh] Discord API error while editing last report message: {exc}")
 
 
+async def edit_last_weekly_report_message(bypass_cache=False):
+    channel_id = LAST_WEEKLY_REPORT_MESSAGE["channel_id"]
+    message_id = LAST_WEEKLY_REPORT_MESSAGE["message_id"]
+    if not channel_id or not message_id:
+        return
+
+    channel = await resolve_channel(channel_id)
+    if channel is None:
+        return
+
+    try:
+        report_text = await mood_service.build_weekly_win_rate_report(bypass_cache=bypass_cache)
+        message = await channel.fetch_message(message_id)
+        if message.content == report_text:
+            log(f"[refresh] No weekly report change; skipped editing message {message_id}.")
+            return
+        await message.edit(content=report_text)
+        log(f"[refresh] Updated weekly report message {message_id} in channel {channel_id}.")
+    except (discord.NotFound, discord.Forbidden) as exc:
+        log(f"[refresh] Could not edit weekly report message {message_id}: {exc}")
+        LAST_WEEKLY_REPORT_MESSAGE["channel_id"] = None
+        LAST_WEEKLY_REPORT_MESSAGE["message_id"] = None
+        if DB_ENABLED:
+            await asyncio.to_thread(db_set_last_weekly_report_message, 0, 0)
+    except discord.HTTPException as exc:
+        log(f"[refresh] Discord API error while editing weekly report message: {exc}")
+
+
 async def daily_report(channel):
     report_text = await mood_service.build_today_win_rate_report()
     report_message = await get_or_create_report_message(channel, report_text)
@@ -278,6 +349,16 @@ async def daily_report(channel):
         log(f"[scheduler] Updated scoreboard message {report_message.id}.")
     else:
         log(f"[scheduler] No scoreboard change; skipped update for {report_message.id}.")
+
+
+async def weekly_report(channel):
+    report_text = await mood_service.build_weekly_win_rate_report()
+    report_message = await get_or_create_weekly_report_message(channel, report_text)
+    if report_message.content != report_text:
+        await report_message.edit(content=report_text)
+        log(f"[scheduler] Updated weekly scoreboard message {report_message.id}.")
+    else:
+        log(f"[scheduler] No weekly scoreboard change; skipped update for {report_message.id}.")
 
 
 async def evaluate_rank_changes_and_notify():
@@ -344,6 +425,7 @@ async def background_match_recap_notifier():
                 db_set_state=db_set_state,
                 db_upsert_daily_stats=db_upsert_daily_stats,
                 edit_last_report_message=edit_last_report_message,
+                edit_last_weekly_report_message=edit_last_weekly_report_message,
                 log=log,
             )
         except Exception as exc:
@@ -461,6 +543,7 @@ async def background_daily_refresher():
 
             await mood_service.refresh_daily_stats_once(progress_callback=on_player_refreshed)
             await push_snapshot_update(force=True)
+            await edit_last_weekly_report_message(bypass_cache=True)
             now_mono = time.monotonic()
             if (now_mono - LAST_CACHE_CLEANUP_AT) >= max(3600, DAILY_REFRESH_SECONDS):
                 deleted = await asyncio.to_thread(db_cleanup_old_match_cache, MATCH_CACHE_RETENTION_DAYS)
@@ -488,6 +571,10 @@ async def on_ready():
         f"[startup] Use {MOOD_COMMAND} in channel {DAILY_REPORT_CHANNEL_ID} for results "
         f"since {REPORT_DAY_START_HOUR:02d}:00."
     )
+    log(
+        f"[startup] Use {WEEK_COMMAND} in channel {DAILY_REPORT_CHANNEL_ID}; "
+        f"it publishes in {WEEKLY_REPORT_CHANNEL_ID}."
+    )
     log(f"[startup] Use {ADD_COMMAND} <Name#Tag> to add a player at runtime.")
     log(f"[startup] Use {DEBUG_PLAYER_COMMAND} <Name#Tag> to inspect queue bucket mapping.")
     log(f"[startup] Use {HEALTH_COMMAND} in channel {DAILY_REPORT_CHANNEL_ID} for health status.")
@@ -504,11 +591,14 @@ async def on_ready():
     log(f"[startup] REPORT_CACHE_SECONDS={REPORT_CACHE_SECONDS}")
     log(f"[startup] MATCH_CACHE_RETENTION_DAYS={MATCH_CACHE_RETENTION_DAYS}")
     log(f"[startup] EVENTS_CHANNEL_ID={EVENTS_CHANNEL_ID}")
+    log(f"[startup] WEEKLY_REPORT_CHANNEL_ID={WEEKLY_REPORT_CHANNEL_ID}")
     log(f"[startup] MATCH_RECAP_CHANNEL_ID={MATCH_RECAP_CHANNEL_ID}")
     log(f"[startup] RANK_ALERT_CHANNEL_ID={EVENTS_CHANNEL_ID}")
     log(f"[startup] MATCH_RECAP_POLL_SECONDS={MATCH_RECAP_POLL_SECONDS}")
     if MATCH_RECAP_CHANNEL_ID and MATCH_RECAP_CHANNEL_ID == DAILY_REPORT_CHANNEL_ID:
         log("[startup] Warning: MATCH_RECAP_CHANNEL_ID equals DAILY_REPORT_CHANNEL_ID.")
+    if WEEKLY_REPORT_CHANNEL_ID and WEEKLY_REPORT_CHANNEL_ID == DAILY_REPORT_CHANNEL_ID:
+        log("[startup] Info: WEEKLY_REPORT_CHANNEL_ID equals DAILY_REPORT_CHANNEL_ID.")
     if DB_ENABLED:
         log(f"[startup] DAILY_REFRESH_SECONDS={DAILY_REFRESH_SECONDS}")
         if BACKGROUND_REFRESH_TASK is None or BACKGROUND_REFRESH_TASK.done():
@@ -520,13 +610,20 @@ async def on_ready():
         if BACKGROUND_BACKFILL_TASK is None or BACKGROUND_BACKFILL_TASK.done():
             BACKGROUND_BACKFILL_TASK = client.loop.create_task(background_match_cache_backfiller())
     if not STARTUP_SCOREBOARD_INIT_DONE:
-        channel = await resolve_channel(DAILY_REPORT_CHANNEL_ID)
-        if channel is not None:
+        daily_channel = await resolve_channel(DAILY_REPORT_CHANNEL_ID)
+        weekly_channel = await resolve_channel(WEEKLY_REPORT_CHANNEL_ID)
+        if daily_channel is not None:
             try:
-                await daily_report(channel)
-                log(f"[startup] Initialized scoreboard in channel {DAILY_REPORT_CHANNEL_ID}.")
+                await daily_report(daily_channel)
+                log(f"[startup] Initialized daily scoreboard in channel {DAILY_REPORT_CHANNEL_ID}.")
             except Exception as exc:
-                log(f"[startup] Failed to initialize scoreboard: {exc}")
+                log(f"[startup] Failed to initialize daily scoreboard: {exc}")
+        if weekly_channel is not None:
+            try:
+                await weekly_report(weekly_channel)
+                log(f"[startup] Initialized weekly scoreboard in channel {WEEKLY_REPORT_CHANNEL_ID}.")
+            except Exception as exc:
+                log(f"[startup] Failed to initialize weekly scoreboard: {exc}")
         STARTUP_SCOREBOARD_INIT_DONE = True
 @client.event
 async def on_message(message):
@@ -549,9 +646,13 @@ async def on_message(message):
         create_request_id=create_request_id,
         get_or_create_report_message=get_or_create_report_message,
         remember_report_message=remember_report_message,
+        get_or_create_weekly_report_message=get_or_create_weekly_report_message,
+        remember_weekly_report_message=remember_weekly_report_message,
         normalize_riot_id=normalize_riot_id,
         db_upsert_player=db_upsert_player,
         log=log,
+        weekly_report_channel_id=WEEKLY_REPORT_CHANNEL_ID,
+        resolve_channel=resolve_channel,
     )
 
 

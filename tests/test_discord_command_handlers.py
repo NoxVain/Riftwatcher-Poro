@@ -50,6 +50,10 @@ class FakeMoodService:
     async def build_today_win_rate_report(self):
         return self._build_outputs.pop(0)
 
+    async def build_weekly_win_rate_report(self, bypass_cache=False):
+        _ = bypass_cache
+        return "weekly report"
+
     async def refresh_recent_matches_snapshot(self, recent_count=20):
         self.refresh_recent_calls.append(recent_count)
 
@@ -156,3 +160,46 @@ def test_handle_add_command_happy_path_persists_and_invalidates_cache():
     assert mood_service.invalidated is True
     assert len(channel.sent_messages) == 1
     assert "Added `Alpha#NA1` and saved to postgres." in channel.sent_messages[0].content
+
+
+def test_handle_week_command_updates_weekly_scoreboard_message():
+    channel = FakeChannel(channel_id=777)
+    incoming = FakeIncomingMessage("!Week", channel)
+    status_message = FakeStatusMessage(content="old weekly")
+    mood_service = FakeMoodService(build_outputs=["unused"])
+    riot_client = FakeRiotClient()
+    remembered = []
+
+    async def get_or_create_weekly_report_message(_channel, _initial_content):
+        return status_message
+
+    def remember_weekly_report_message(message):
+        remembered.append(message)
+
+    asyncio.run(
+        handle_incoming_message(
+            message=incoming,
+            channel_id=777,
+            friends=["Alpha#NA1"],
+            riot_client=riot_client,
+            mood_service=mood_service,
+            report_timezone_name="UTC",
+            report_day_start_hour=6,
+            db_enabled=True,
+            start_monotonic=0.0,
+            mood_request_lock=asyncio.Lock(),
+            request_id_context=contextvars.ContextVar("request_id", default=None),
+            create_request_id=lambda _prefix: "week-1234",
+            get_or_create_report_message=lambda _channel, _initial_content: None,
+            remember_report_message=lambda _message: None,
+            normalize_riot_id=lambda riot_id: riot_id,
+            db_upsert_player=lambda _riot_id, _puuid: None,
+            log=lambda _msg: None,
+            get_or_create_weekly_report_message=get_or_create_weekly_report_message,
+            remember_weekly_report_message=remember_weekly_report_message,
+        )
+    )
+
+    assert incoming.deleted is True
+    assert remembered == [status_message]
+    assert status_message.content == "weekly report"

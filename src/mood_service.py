@@ -42,6 +42,7 @@ class MoodService:
         daily_refresh_seconds,
         db_enabled,
         db_load_latest_stats,
+        db_load_weekly_stats=None,
         db_upsert_daily_stats,
         db_get_daily_stats_for_player,
         db_get_last_seen_match_id,
@@ -57,17 +58,22 @@ class MoodService:
         self.daily_refresh_seconds = daily_refresh_seconds
         self.db_enabled = db_enabled
         self.db_load_latest_stats = db_load_latest_stats
+        self.db_load_weekly_stats = db_load_weekly_stats or (lambda _start, _end: [])
         self.db_upsert_daily_stats = db_upsert_daily_stats
         self.db_get_daily_stats_for_player = db_get_daily_stats_for_player
         self.db_get_last_seen_match_id = db_get_last_seen_match_id
         self.db_set_last_seen_match_id = db_set_last_seen_match_id
         self.db_health_stats = db_health_stats
         self.report_cache = {"text": None, "expires_at": 0.0, "day": None}
+        self.weekly_report_cache = {"text": None, "expires_at": 0.0, "window": None}
 
     def invalidate_report_cache(self):
         self.report_cache["text"] = None
         self.report_cache["day"] = None
         self.report_cache["expires_at"] = 0.0
+        self.weekly_report_cache["text"] = None
+        self.weekly_report_cache["window"] = None
+        self.weekly_report_cache["expires_at"] = 0.0
 
     @staticmethod
     def append_mode_line_if_games(report_lines, label, wins, losses):
@@ -103,6 +109,47 @@ class MoodService:
             self.report_timezone,
             day_start_hour=self.report_day_start_hour,
         )
+
+    def get_week_window(self, now_utc=None):
+        if now_utc is None:
+            now_utc = datetime.now(tz=timezone.utc)
+        now_local = now_utc.astimezone(self.report_timezone)
+        monday_local_date = (now_local - timedelta(days=now_local.weekday())).date()
+        friday_local_date = monday_local_date + timedelta(days=4)
+        return monday_local_date, friday_local_date
+
+    @staticmethod
+    def rows_to_ranked_results(rows, tracked_friends):
+        tracked_lookup = {friend.casefold() for friend in tracked_friends}
+        ranked_results = []
+        for row in rows:
+            riot_id = row[0]
+            if riot_id.casefold() not in tracked_lookup:
+                continue
+            mode_records = {
+                "solo_duo": {"wins": row[1], "losses": row[2]},
+                "flex": {"wins": row[3], "losses": row[4]},
+                "arcade": {"wins": row[5], "losses": row[6]},
+            }
+            performance_totals = {
+                "cs_total": int(row[10] or 0),
+                "minutes_total": float(row[11] or 0.0),
+                "objective_damage": int(row[12] or 0),
+                "player_damage": int(row[13] or 0),
+                "healing": int(row[14] or 0),
+                "damage_taken": int(row[15] or 0),
+                "kills": int(row[16] or 0),
+                "deaths": int(row[17] or 0),
+                "vision_score": int(row[18] or 0),
+            }
+            wins, losses = get_mode_totals(mode_records)
+            total = wins + losses
+            if total == 0:
+                continue
+            win_rate = (wins / total) * 100
+            ranked_results.append((get_lol_name(riot_id), mode_records, wins, losses, win_rate, performance_totals))
+        ranked_results.sort(key=rank_sort_key)
+        return ranked_results
 
     async def get_players_ordered_by_oldest_stats(self, cycle_key):
         players = list(self.friends)
@@ -161,12 +208,21 @@ class MoodService:
                     leaders[name].append(badge)
         return leaders
 
-    def format_report_from_results(self, ranked_results, error_results, report_start):
-        report_lines = ["\u2728------ **LEAGUE MOOD (DAILY)** ------\u2728", ""]
+    def format_report_from_results(
+        self,
+        ranked_results,
+        error_results,
+        report_start,
+        *,
+        header_title="DAILY",
+        empty_line_1="Looks like everyone has a life today.",
+        empty_line_2="We will keep you up to date if anyone crawls back into the hole.",
+    ):
+        report_lines = [f"\u2728------ **LEAGUE MOOD ({header_title})** ------\u2728", ""]
         updated_at = datetime.now(tz=self.report_timezone).strftime("%d.%m.%Y %H:%M")
         if not ranked_results and not error_results:
-            report_lines.append("Looks like everyone has a life today.")
-            report_lines.append("We will keep you up to date if anyone crawls back into the hole.")
+            report_lines.append(empty_line_1)
+            report_lines.append(empty_line_2)
             report_lines.append("")
             report_lines.append("\u2728--------------------------------------------\u2728")
             report_lines.append(f"_Last updated: {updated_at}_")
@@ -237,7 +293,7 @@ class MoodService:
         if len(report_text) <= 2000:
             return report_text
 
-        compact_lines = ["\u2728------ **LEAGUE MOOD (DAILY)** ------\u2728", ""]
+        compact_lines = [f"\u2728------ **LEAGUE MOOD ({header_title})** ------\u2728", ""]
         for index, (lol_name, _mode_records, wins, losses, win_rate, _performance) in enumerate(ranked_results):
             display_emoji = "\u2B50" if index == 0 else "\U0001F642"
             badges = "".join(badges_by_player.get(lol_name, []))
@@ -301,36 +357,7 @@ class MoodService:
                         stored_rows = []
 
             if stored_rows:
-                for row in stored_rows:
-                    riot_id = row[0]
-                    if not any(p.casefold() == riot_id.casefold() for p in self.friends):
-                        continue
-                    mode_records = {
-                        "solo_duo": {"wins": row[1], "losses": row[2]},
-                        "flex": {"wins": row[3], "losses": row[4]},
-                        "arcade": {"wins": row[5], "losses": row[6]},
-                    }
-                    performance_totals = {
-                        "cs_total": int(row[10] or 0),
-                        "minutes_total": float(row[11] or 0.0),
-                        "objective_damage": int(row[12] or 0),
-                        "player_damage": int(row[13] or 0),
-                        "healing": int(row[14] or 0),
-                        "damage_taken": int(row[15] or 0),
-                        "kills": int(row[16] or 0),
-                        "deaths": int(row[17] or 0),
-                        "vision_score": int(row[18] or 0),
-                    }
-                    wins, losses = get_mode_totals(mode_records)
-                    total = wins + losses
-                    if total == 0:
-                        continue
-                    win_rate = (wins / total) * 100
-                    ranked_results.append(
-                        (get_lol_name(riot_id), mode_records, wins, losses, win_rate, performance_totals)
-                    )
-
-                ranked_results.sort(key=rank_sort_key)
+                ranked_results = self.rows_to_ranked_results(stored_rows, self.friends)
                 if ranked_results or prefer_snapshot:
                     self.log("[mood] Returning report from postgres daily stats.")
                     report_text = self.format_report_from_results(ranked_results, error_results, report_start)
@@ -391,6 +418,42 @@ class MoodService:
         self.report_cache["text"] = report_text
         self.report_cache["day"] = cycle_key
         self.report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
+        return report_text
+
+    async def build_weekly_win_rate_report(self, bypass_cache=False):
+        if not self.db_enabled:
+            return "Weekly report requires database-backed daily stats."
+
+        week_start, week_end = self.get_week_window()
+        window_key = f"{week_start.isoformat()}::{week_end.isoformat()}"
+        now_monotonic = time.monotonic()
+        if (
+            not bypass_cache
+            and self.weekly_report_cache["text"] is not None
+            and self.weekly_report_cache["window"] == window_key
+            and now_monotonic < self.weekly_report_cache["expires_at"]
+        ):
+            self.log("[mood] Returning cached weekly report.")
+            return self.weekly_report_cache["text"]
+
+        report_start = time.perf_counter()
+        stored_rows = await asyncio.to_thread(
+            self.db_load_weekly_stats,
+            week_start.isoformat(),
+            week_end.isoformat(),
+        )
+        ranked_results = self.rows_to_ranked_results(stored_rows, self.friends)
+        report_text = self.format_report_from_results(
+            ranked_results,
+            [],
+            report_start,
+            header_title="WEEKLY",
+            empty_line_1=f"No ranked games yet for {week_start:%d.%m} to {week_end:%d.%m}.",
+            empty_line_2="Weekly report covers Monday through Friday.",
+        )
+        self.weekly_report_cache["text"] = report_text
+        self.weekly_report_cache["window"] = window_key
+        self.weekly_report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
         return report_text
 
     async def refresh_daily_stats_once(self, progress_callback=None):

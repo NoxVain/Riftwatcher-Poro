@@ -221,9 +221,25 @@ def db_set_last_report_message(channel_id, message_id):
     db_set_state("last_report_message_id", str(message_id))
 
 
+def db_set_last_weekly_report_message(channel_id, message_id):
+    db_set_state("last_weekly_report_channel_id", str(channel_id))
+    db_set_state("last_weekly_report_message_id", str(message_id))
+
+
 def db_get_last_report_message():
     channel_id = db_get_state("last_report_channel_id")
     message_id = db_get_state("last_report_message_id")
+    if not channel_id or not message_id:
+        return None, None
+    try:
+        return int(channel_id), int(message_id)
+    except ValueError:
+        return None, None
+
+
+def db_get_last_weekly_report_message():
+    channel_id = db_get_state("last_weekly_report_channel_id")
+    message_id = db_get_state("last_weekly_report_message_id")
     if not channel_id or not message_id:
         return None, None
     try:
@@ -485,6 +501,40 @@ def db_load_latest_stats(day_date):
         ORDER BY lower(riot_id), updated_at DESC;
         """,
         (day_date,),
+        fetch=True,
+    )
+    return rows or []
+
+
+def db_load_weekly_stats(start_day_date, end_day_date):
+    rows = db_execute(
+        """
+        SELECT
+            MIN(riot_id) AS riot_id,
+            COALESCE(SUM(solo_wins), 0) AS solo_wins,
+            COALESCE(SUM(solo_losses), 0) AS solo_losses,
+            COALESCE(SUM(flex_wins), 0) AS flex_wins,
+            COALESCE(SUM(flex_losses), 0) AS flex_losses,
+            COALESCE(SUM(arcade_wins), 0) AS arcade_wins,
+            COALESCE(SUM(arcade_losses), 0) AS arcade_losses,
+            COALESCE(SUM(total_wins), 0) AS total_wins,
+            COALESCE(SUM(total_losses), 0) AS total_losses,
+            MAX(updated_at) AS updated_at,
+            COALESCE(SUM(cs_total), 0) AS cs_total,
+            COALESCE(SUM(minutes_total), 0.0) AS minutes_total,
+            COALESCE(SUM(objective_damage), 0) AS objective_damage,
+            COALESCE(SUM(player_damage), 0) AS player_damage,
+            COALESCE(SUM(healing), 0) AS healing,
+            COALESCE(SUM(damage_taken), 0) AS damage_taken,
+            COALESCE(SUM(kills), 0) AS kills,
+            COALESCE(SUM(deaths), 0) AS deaths,
+            COALESCE(SUM(vision_score), 0) AS vision_score
+        FROM player_daily_stats
+        WHERE day_date BETWEEN %s AND %s
+        GROUP BY lower(riot_id)
+        ORDER BY lower(MIN(riot_id));
+        """,
+        (start_day_date, end_day_date),
         fetch=True,
     )
     return rows or []

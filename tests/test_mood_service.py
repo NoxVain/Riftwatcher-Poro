@@ -229,6 +229,44 @@ def test_build_report_uses_snapshot_when_only_one_player_has_ranked_games():
     assert riot.get_today_mode_records_calls == []
 
 
+def test_build_weekly_report_aggregates_monday_to_friday_rows():
+    riot = FakeRiotClient()
+    weekly_rows = [
+        (
+            "Alpha#NA1",
+            3,
+            1,
+            2,
+            0,
+            0,
+            0,
+            5,
+            1,
+            datetime.now(tz=timezone.utc),
+            500,
+            100.0,
+            1000,
+            2000,
+            300,
+            4000,
+            20,
+            10,
+            30,
+        )
+    ]
+    service = _create_service(
+        friends=["Alpha#NA1"],
+        riot_client=riot,
+    )
+    service.db_load_weekly_stats = lambda _start, _end: weekly_rows
+
+    report = asyncio.run(service.build_weekly_win_rate_report())
+
+    assert "LEAGUE MOOD (WEEKLY)" in report
+    assert "Alpha" in report
+    assert "`5W-1L`" in report
+
+
 def test_refresh_recent_matches_snapshot_updates_baseline_stats():
     riot = FakeRiotClient()
     riot.puuid_by_riot_id["Alpha#NA1"] = "puuid-alpha"

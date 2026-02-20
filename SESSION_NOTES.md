@@ -111,34 +111,64 @@ Historical draft recovered from earlier README notes (`d8d0edc`):
 - Branch: `main`
 - Working tree: clean
 - Latest pushed commits:
+  - `e8081ba` `feat(recap): batch close recaps and pace split posts`
+  - `28e6f2a` `docs(backlog): add unimplemented feature and improvement tracker`
+  - `f0cff5f` `docs(session): restore recovered scoring v2 draft notes`
+  - `b41f537` `chore(config): require weekly report channel id`
+  - `dd6d560` `fix(weekly): use monday cutoff-to-cutoff window`
+  - `4575a8f` `feat(weekly): add monday-friday report in dedicated channel`
+  - `5836fe4` `fix(remake): exclude remakes from scoring and recap notifications`
   - `696f277` `feat(recap): include match duration in recap header`
-  - `5865367` `feat(recap): add ranked streak callouts with banter and dedupe`
-  - `8204f8d` `feat(rate-limit): enforce global Riot limits with backfill budget guard`
-  - `f6908e2` `feat(rate-limit): throttle backfill on 429 and expand tests`
 
 ### Implemented This Session
 
-- Added match duration to recap header output:
-  - Format: `MM:SS` (example: `30:00`)
-  - Placement: recap header line beside queue and local end time.
-- Added backfill-only adaptive throttling after Riot `429` responses.
-- Added global Riot request limiting in `RiotApiClient`:
-  - `20 requests / 1 second`
-  - `100 requests / 120 seconds`
-- Added backfill budget guard so backfill yields early under long-window load.
-- Added ranked streak callouts (banter tone) in recap flow with DB dedupe state:
-  - State key: `last_announced_streak::<riot_id>`
-  - Triggers at streak `>= 3` for ranked queues (solo/flex).
-- Added/updated tests for command handlers, recap worker, text formatters, and limiter behavior.
+- Weekly report system:
+  - New command: `!Week`
+  - Dedicated channel: `WEEKLY_REPORT_CHANNEL_ID` (now required)
+  - Weekly window now uses cutoff semantics:
+    - Monday `REPORT_DAY_START_HOUR` -> next Monday `REPORT_DAY_START_HOUR` (exclusive)
+  - Weekly scoreboard persists message id and is auto-refreshed from DB aggregates.
+- Remakes are excluded from:
+  - recap notifications
+  - ranked streak logic
+  - daily/weekly scoring rollups
+- Recap UX improvements:
+  - Header includes match duration (`MM:SS`)
+  - Blank line between player sections
+  - Multiple close matches in one cycle are batched into one recap post (with separators)
+  - If batch must be split for Discord length, split posts are paced with a short delay.
+- Added `IMPROVEMENT_BACKLOG.md` to track unimplemented suggestions/features.
 
 ### Current Test Status
 
-- Targeted validation passed for recap/text changes:
-  - `& 'C:\Users\gardf\AppData\Local\Python\bin\python.exe' -m pytest -q tests/test_discord_text.py tests/test_discord_recap_worker.py`
-  - Result: `6 passed`
+- Full suite currently passes:
+  - `& 'C:\Users\gardf\AppData\Local\Python\bin\python.exe' -m pytest -q`
+  - Result: `52 passed`
 
 ### Current Operational Notes
 
 - Priority workers (`refresh`, `recap`, `rank`) remain high-priority.
 - Backfill is intentionally de-prioritized under rate-limit pressure.
 - Riot `429` can still occur during peak load, but backfill now yields and global limiter smooths burst pressure.
+- If logs show many Riot `401` responses across refresh/rank/recap workers, `RIOT_API_KEY` is expired/invalid and must be rotated.
+
+### Updated Resume Checklist
+
+1. Pull latest `main`.
+2. Verify required env vars:
+   - `DISCORD_TOKEN`
+   - `RIOT_API_KEY`
+   - `DATABASE_URL`
+   - `DAILY_REPORT_CHANNEL_ID`
+   - `WEEKLY_REPORT_CHANNEL_ID`
+   - `MATCH_RECAP_CHANNEL_ID`
+   - `EVENTS_CHANNEL_ID`
+3. Start bot and confirm startup logs include all worker jitter lines and weekly channel id.
+4. Discord smoke checks:
+   - `!health`
+   - `!Mood`
+   - `!Week`
+   - `!riottest`
+5. If recap feed feels slow/noisy:
+   - tune `MATCH_RECAP_POLL_SECONDS` (effective floor is 30s)
+   - recap batching/split pacing is now built-in.

@@ -83,6 +83,7 @@ Required:
 - `RIOT_API_KEY`
 - `DATABASE_URL`
 - `DAILY_REPORT_CHANNEL_ID`
+- `WEEKLY_REPORT_CHANNEL_ID`
 - `MATCH_RECAP_CHANNEL_ID`
 - `EVENTS_CHANNEL_ID`
 
@@ -101,7 +102,6 @@ Optional (with defaults):
 - `LOG_RIOT_REQUESTS` (`false`)
 - `LOG_JSON` (`false`)
 - `RIOT_PLATFORM_ROUTING` (`euw1`)
-- `WEEKLY_REPORT_CHANNEL_ID` (`DAILY_REPORT_CHANNEL_ID` when unset)
 
 ## Data Tables
 

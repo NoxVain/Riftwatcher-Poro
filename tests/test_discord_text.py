@@ -1,4 +1,4 @@
-from src.discord_text import format_recap_player_line, format_streak_callout
+from src.discord_text import format_match_duration, format_recap_player_line, format_streak_callout
 
 
 def test_format_recap_player_line_uses_bullet_separator():
@@ -31,3 +31,8 @@ def test_format_streak_callout_has_banter_tone():
     assert "Alpha" in win_text
     assert "wins in a row" in win_text
     assert "Tilt Watch" in loss_text
+
+
+def test_format_match_duration_renders_mm_ss():
+    assert format_match_duration(1800) == "30:00"
+    assert format_match_duration(1831) == "30:31"

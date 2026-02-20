@@ -4,6 +4,7 @@ from datetime import datetime
 import requests
 
 from src.discord_text import (
+    format_match_duration,
     format_recap_player_line,
     format_recap_queue_name,
     format_streak_callout,
@@ -111,9 +112,10 @@ async def process_recap_cycle(
     for end_ts, match_id, queue_id, duration_seconds, tracked_participants in match_entries:
         queue_name = format_recap_queue_name(queue_id)
         end_local = datetime.fromtimestamp(end_ts, tz=report_timezone)
+        duration_label = format_match_duration(duration_seconds)
         lines = [
             "\U0001F3AE **New Match Recap**",
-            f"`{queue_name}` - \U0001F552 `{end_local:%d.%m.%Y %H:%M}`",
+            f"`{queue_name}` - \U0001F552 `{end_local:%d.%m.%Y %H:%M}` - \u23F1\uFE0F `{duration_label}`",
             "",
         ]
         for riot_id, participant in sorted(tracked_participants, key=lambda row: row[0].casefold()):

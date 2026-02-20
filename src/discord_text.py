@@ -26,6 +26,12 @@ def format_recap_queue_name(queue_id):
     return f"\U0001F3AF Queue {queue_id}"
 
 
+def format_match_duration(match_duration_seconds):
+    total_seconds = max(0, int(match_duration_seconds or 0))
+    minutes, seconds = divmod(total_seconds, 60)
+    return f"{minutes}:{seconds:02d}"
+
+
 def format_recap_role(participant):
     role_value = (
         participant.get("teamPosition")

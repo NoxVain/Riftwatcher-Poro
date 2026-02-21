@@ -153,16 +153,6 @@ async def process_recap_cycle(
     if current_sections:
         recap_messages.append(recap_section_separator.join(current_sections))
 
-    for index, recap_message in enumerate(recap_messages):
-        await channel.send(recap_message)
-        if index < len(recap_messages) - 1:
-            await asyncio.sleep(recap_split_spacing_seconds)
-    if recap_messages:
-        log(
-            f"[recap] Posted recap batch in channel {match_recap_channel_id}: "
-            f"matches={len(recap_sections)} messages={len(recap_messages)}."
-        )
-
     for riot_id, latest_match_id in pending_latest_match_id_by_riot.items():
         failed_for_player = False
         for match_id in pending_new_match_ids_by_riot.get(riot_id, set()):
@@ -185,6 +175,8 @@ async def process_recap_cycle(
     if not affected_riot_ids:
         return
 
+    streak_sections = []
+    pending_streak_state_updates = []
     for riot_id in sorted(affected_riot_ids, key=str.casefold):
         puuid = puuid_by_riot_id.get(riot_id)
         recent_ids = recent_ids_by_riot_id.get(riot_id, [])
@@ -201,13 +193,44 @@ async def process_recap_cycle(
             last_token = await asyncio.to_thread(db_get_state, state_key)
             if last_token == streak_token:
                 continue
-            await channel.send(format_streak_callout(riot_id, streak_count, is_win_streak))
-            await asyncio.to_thread(db_set_state, state_key, streak_token)
-            log(f"[recap] Posted streak callout for {riot_id} ({streak_token}).")
+            streak_sections.append(format_streak_callout(riot_id, streak_count, is_win_streak))
+            pending_streak_state_updates.append((state_key, streak_token, riot_id))
         except requests.RequestException as exc:
             log(f"[recap] Could not build streak callout for {riot_id}: {exc}")
         except Exception as exc:
             log(f"[recap] Streak callout skipped for {riot_id}: {exc}")
+
+    if streak_sections:
+        recap_sections.extend(streak_sections)
+
+        recap_messages = []
+        current_sections = []
+        for section in recap_sections:
+            candidate = recap_section_separator.join(current_sections + [section]) if current_sections else section
+            if len(candidate) <= 2000:
+                current_sections.append(section)
+                continue
+            if current_sections:
+                recap_messages.append(recap_section_separator.join(current_sections))
+                current_sections = [section]
+                continue
+            recap_messages.append(section[:1950] + "\n...")
+
+        if current_sections:
+            recap_messages.append(recap_section_separator.join(current_sections))
+
+    for index, recap_message in enumerate(recap_messages):
+        await channel.send(recap_message)
+        if index < len(recap_messages) - 1:
+            await asyncio.sleep(recap_split_spacing_seconds)
+    if recap_messages:
+        log(
+            f"[recap] Posted recap batch in channel {match_recap_channel_id}: "
+            f"matches={len(recap_sections)} messages={len(recap_messages)}."
+        )
+    for state_key, streak_token, riot_id in pending_streak_state_updates:
+        await asyncio.to_thread(db_set_state, state_key, streak_token)
+        log(f"[recap] Posted streak callout for {riot_id} ({streak_token}).")
 
     if not db_enabled:
         return

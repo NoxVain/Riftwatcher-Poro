@@ -231,9 +231,9 @@ def test_process_recap_cycle_posts_streak_callout_when_threshold_crossed():
         )
     )
 
-    assert len(channel.messages) == 2
+    assert len(channel.messages) == 1
     assert "New Match Recap" in channel.messages[0]
-    assert "Heater Alert" in channel.messages[1] or "Momentum" in channel.messages[1]
+    assert "Heater Alert" in channel.messages[0] or "Momentum" in channel.messages[0]
 
 
 def test_process_recap_cycle_no_new_matches_skips_post_and_sync():

@@ -38,10 +38,19 @@ def db_acquire_connection():
     except queue.Empty:
         pass
 
+    should_create = False
     with DB_POOL_LOCK:
         if DB_POOL_TOTAL < max(1, DB_POOL_SIZE):
             DB_POOL_TOTAL += 1
+            should_create = True
+
+    if should_create:
+        try:
             return create_db_connection()
+        except Exception:
+            with DB_POOL_LOCK:
+                DB_POOL_TOTAL = max(0, DB_POOL_TOTAL - 1)
+            raise
 
     return DB_POOL.get()
 

@@ -385,10 +385,10 @@ class RiotApiClient:
 
         mode_records = create_mode_records()
         performance_totals = create_performance_totals()
-        detail_fetch_limit = max(1, self.max_today_match_details)
+        detail_fetch_limit = int(self.max_today_match_details or 0)
         today_details_fetched = 0
         for match_id in match_ids:
-            if today_details_fetched >= detail_fetch_limit:
+            if detail_fetch_limit > 0 and today_details_fetched >= detail_fetch_limit:
                 self.log(
                     f"[mood] {riot_id}: reached MAX_TODAY_MATCH_DETAILS={self.max_today_match_details}, "
                     "stopping further today match processing."

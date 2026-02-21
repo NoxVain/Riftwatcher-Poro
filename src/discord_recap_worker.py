@@ -62,6 +62,8 @@ async def process_recap_cycle(
     puuid_by_riot_id = {}
     recent_ids_by_riot_id = {}
     matches_to_report = set()
+    pending_latest_match_id_by_riot = {}
+    pending_new_match_ids_by_riot = {}
     for riot_id in friends:
         try:
             puuid = await riot_client.fetch_puuid(riot_id)
@@ -81,7 +83,8 @@ async def process_recap_cycle(
             new_match_ids = mood_service.get_new_match_ids(recent_ids, last_announced)
             if new_match_ids:
                 matches_to_report.update(new_match_ids)
-            await asyncio.to_thread(db_set_state, state_key, latest_match_id)
+                pending_latest_match_id_by_riot[riot_id] = latest_match_id
+                pending_new_match_ids_by_riot[riot_id] = set(new_match_ids)
         except requests.RequestException as exc:
             log(f"[recap] Failed while checking {riot_id}: {exc}")
 
@@ -90,10 +93,12 @@ async def process_recap_cycle(
 
     puuid_to_riot_id = {puuid: riot_id for riot_id, puuid in puuid_by_riot_id.items()}
     match_entries = []
+    failed_match_ids = set()
     for match_id in matches_to_report:
         try:
             match_info = await riot_client.fetch_match_info(match_id)
         except requests.RequestException as exc:
+            failed_match_ids.add(match_id)
             log(f"[recap] Failed fetching match {match_id}: {exc}")
             continue
 
@@ -157,6 +162,21 @@ async def process_recap_cycle(
             f"[recap] Posted recap batch in channel {match_recap_channel_id}: "
             f"matches={len(recap_sections)} messages={len(recap_messages)}."
         )
+
+    for riot_id, latest_match_id in pending_latest_match_id_by_riot.items():
+        failed_for_player = False
+        for match_id in pending_new_match_ids_by_riot.get(riot_id, set()):
+            if match_id in failed_match_ids:
+                failed_for_player = True
+                break
+        if failed_for_player:
+            log(
+                f"[recap] Keeping previous recap state for {riot_id}; "
+                "will retry due to fetch failures in this cycle."
+            )
+            continue
+        state_key = match_recap_state_key(riot_id)
+        await asyncio.to_thread(db_set_state, state_key, latest_match_id)
 
     affected_riot_ids = set()
     for _end_ts, _match_id, _queue_id, _duration_seconds, tracked_participants in match_entries:

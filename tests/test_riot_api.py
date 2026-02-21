@@ -130,6 +130,53 @@ def test_get_today_mode_records_stops_detail_fetches_at_limit(monkeypatch):
     assert fetched_ids == ["m5", "m4"]
 
 
+def test_get_today_mode_records_no_limit_when_config_is_zero(monkeypatch):
+    client = RiotApiClient(
+        riot_api_key="test-key",
+        riot_platform_routing="euw1",
+        log=lambda _msg: None,
+        log_riot_requests=False,
+        report_timezone=timezone.utc,
+        report_day_start_hour=6,
+        max_today_match_details=0,
+        max_match_ids_scan=2000,
+        max_in_memory_match_cache=200,
+        db_get_puuid=lambda _riot_id: None,
+        db_upsert_player=lambda _riot_id, _puuid: None,
+        db_get_match_info=lambda _match_id: None,
+        db_upsert_match_info=lambda _match_id, _match_info: None,
+        db_set_last_seen_match_id=lambda _riot_id, _match_id: None,
+    )
+
+    fetched_ids = []
+    match_ids = ["m5", "m4", "m3"]
+
+    async def fake_fetch_puuid(_riot_id):
+        return "puuid-alpha"
+
+    async def fake_fetch_match_ids(_puuid, _start_time_unix):
+        return match_ids
+
+    async def fake_fetch_match_info(match_id):
+        fetched_ids.append(match_id)
+        return {
+            "info": {
+                "queueId": 420,
+                "gameDuration": 1800,
+                "gameEndTimestamp": 1_700_000_000_000,
+                "participants": [{"puuid": "puuid-alpha", "win": True}],
+            }
+        }
+
+    monkeypatch.setattr(client, "fetch_puuid", fake_fetch_puuid)
+    monkeypatch.setattr(client, "fetch_match_ids", fake_fetch_match_ids)
+    monkeypatch.setattr(client, "fetch_match_info", fake_fetch_match_info)
+
+    asyncio.run(client.get_today_mode_records("Alpha#EUW"))
+
+    assert fetched_ids == ["m5", "m4", "m3"]
+
+
 def test_get_today_mode_records_ignores_remakes(monkeypatch):
     client = RiotApiClient(
         riot_api_key="test-key",

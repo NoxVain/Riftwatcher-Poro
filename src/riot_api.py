@@ -292,6 +292,15 @@ class RiotApiClient:
         )
         return await self.riot_get_json_async(url, request_tier=request_tier)
 
+    async def fetch_match_ids_page(self, puuid, *, start=0, count=100, request_tier="priority"):
+        safe_count = max(1, min(int(count), 100))
+        safe_start = max(0, int(start))
+        url = (
+            "https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/"
+            f"{puuid}/ids?start={safe_start}&count={safe_count}"
+        )
+        return await self.riot_get_json_async(url, request_tier=request_tier)
+
     async def fetch_match_info(self, match_id, *, cache_in_memory=True, request_tier="priority"):
         if cache_in_memory:
             cached = self.match_info_cache.get(match_id)

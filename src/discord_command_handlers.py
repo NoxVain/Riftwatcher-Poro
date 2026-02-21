@@ -123,6 +123,7 @@ async def handle_incoming_message(
     if content_lower == HEALTH_COMMAND.casefold():
         stats = await mood_service.run_health_check(start_monotonic)
         uptime = str(timedelta(seconds=stats["uptime_seconds"]))
+        top_backfill_offsets = ", ".join(stats.get("top_backfill_offsets", [])) or "none"
         await message.channel.send(
             (
                 f"Health OK\n"
@@ -130,7 +131,10 @@ async def handle_incoming_message(
                 f"- Tracked players: `{stats['tracked_players']}`\n"
                 f"- DB: `{'ok' if stats['db_ok'] else 'down'}`\n"
                 f"- Match cache entries: `{stats['match_cache_entries']}`\n"
-                f"- Report cache active: `{'yes' if stats['request_cache_active'] else 'no'}`"
+                f"- Report cache active: `{'yes' if stats['request_cache_active'] else 'no'}`\n"
+                f"- Backfill cursors active: `{stats.get('players_with_backfill_offset', 0)}/{stats['tracked_players']}`\n"
+                f"- Backfill max offset: `{stats.get('max_backfill_offset', 0)}`\n"
+                f"- Backfill top offsets: `{top_backfill_offsets}`"
             )
         )
         log("[health] Sent health status message.")

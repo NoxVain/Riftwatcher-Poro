@@ -309,6 +309,25 @@ def db_health_stats():
     return {"db_ok": bool(ping and ping[0] == 1), "match_cache_entries": count}
 
 
+def db_load_backfill_offsets():
+    rows = db_execute(
+        """
+        SELECT state_key, state_value
+        FROM bot_state
+        WHERE state_key LIKE 'backfill_offset::%';
+        """,
+        fetch=True,
+    ) or []
+    offsets = {}
+    for state_key, state_value in rows:
+        riot_key = str(state_key).split("::", 1)[1]
+        try:
+            offsets[riot_key] = max(0, int(state_value))
+        except (TypeError, ValueError):
+            continue
+    return offsets
+
+
 def db_load_ranked_state(riot_id):
     rows = db_execute(
         """

@@ -486,3 +486,35 @@ def test_refresh_daily_stats_once_starts_with_oldest_collected_player():
     asyncio.run(service.refresh_daily_stats_once())
 
     assert riot.get_today_mode_records_calls == ["Charlie#NA1", "Bravo#NA1", "Alpha#NA1"]
+
+
+def test_run_health_check_includes_backfill_offsets_for_tracked_players():
+    service = MoodService(
+        log=lambda _message: None,
+        friends=["Alpha#NA1", "Bravo#NA1"],
+        riot_client=FakeRiotClient(),
+        report_timezone=timezone.utc,
+        report_day_start_hour=6,
+        report_cache_seconds=120,
+        daily_refresh_seconds=300,
+        db_enabled=True,
+        db_load_latest_stats=lambda _day: [],
+        db_load_weekly_stats=lambda _start, _end: [],
+        db_upsert_daily_stats=lambda *_args, **_kwargs: None,
+        db_get_daily_stats_for_player=lambda _day, _riot_id: None,
+        db_get_last_seen_match_id=lambda _riot_id: None,
+        db_set_last_seen_match_id=lambda _riot_id, _match_id: None,
+        db_health_stats=lambda: {"db_ok": True, "match_cache_entries": 42},
+        db_load_backfill_offsets=lambda: {
+            "alpha#na1": 250,
+            "charlie#na1": 900,
+        },
+    )
+
+    stats = asyncio.run(service.run_health_check(start_monotonic=0.0))
+
+    assert stats["db_ok"] is True
+    assert stats["match_cache_entries"] == 42
+    assert stats["players_with_backfill_offset"] == 1
+    assert stats["max_backfill_offset"] == 250
+    assert stats["top_backfill_offsets"] == ["Alpha#NA1=250"]

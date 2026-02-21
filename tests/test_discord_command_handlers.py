@@ -67,6 +67,9 @@ class FakeMoodService:
             "db_ok": True,
             "match_cache_entries": 0,
             "request_cache_active": False,
+            "players_with_backfill_offset": 1,
+            "max_backfill_offset": 400,
+            "top_backfill_offsets": ["Alpha#NA1=400"],
         }
 
 
@@ -308,3 +311,38 @@ def test_handle_week_command_loading_text_uses_configured_hour():
     )
 
     assert "Monday 09:00 -> next Monday 09:00" in status_message.edits[0]
+
+
+def test_health_command_includes_backfill_status():
+    channel = FakeChannel(channel_id=777)
+    incoming = FakeIncomingMessage("!health", channel)
+    mood_service = FakeMoodService(build_outputs=["unused"])
+    riot_client = FakeRiotClient()
+
+    asyncio.run(
+        handle_incoming_message(
+            message=incoming,
+            channel_id=777,
+            friends=["Alpha#NA1"],
+            riot_client=riot_client,
+            mood_service=mood_service,
+            report_timezone_name="UTC",
+            report_day_start_hour=9,
+            db_enabled=True,
+            start_monotonic=0.0,
+            mood_request_lock=asyncio.Lock(),
+            request_id_context=contextvars.ContextVar("request_id", default=None),
+            create_request_id=lambda _prefix: "health-1234",
+            get_or_create_report_message=lambda _channel, _initial_content: None,
+            remember_report_message=lambda _message: None,
+            normalize_riot_id=lambda riot_id: riot_id,
+            db_upsert_player=lambda _riot_id, _puuid: None,
+            log=lambda _msg: None,
+        )
+    )
+
+    assert len(channel.sent_messages) == 1
+    text = channel.sent_messages[0].content
+    assert "Backfill cursors active" in text
+    assert "Backfill max offset" in text
+    assert "Alpha#NA1=400" in text

@@ -71,6 +71,7 @@ db_health_stats = dbm.db_health_stats
 db_get_daily_stats_for_player = dbm.db_get_daily_stats_for_player
 db_load_latest_stats = dbm.db_load_latest_stats
 db_load_weekly_stats = dbm.db_load_weekly_stats
+db_load_backfill_offsets = dbm.db_load_backfill_offsets
 db_load_ranked_state = dbm.db_load_ranked_state
 db_load_tracked_players = dbm.db_load_tracked_players
 db_delete_ranked_state_queue = dbm.db_delete_ranked_state_queue
@@ -191,6 +192,7 @@ mood_service = MoodService(
     db_get_last_seen_match_id=db_get_last_seen_match_id,
     db_set_last_seen_match_id=db_set_last_seen_match_id,
     db_health_stats=db_health_stats,
+    db_load_backfill_offsets=db_load_backfill_offsets,
 )
 
 
@@ -456,15 +458,20 @@ async def background_match_cache_backfiller():
             total_backfilled = await process_backfill_cycle(
                 friends=FRIENDS,
                 riot_client=riot_client,
-                mood_service=mood_service,
-                db_get_last_seen_match_id=db_get_last_seen_match_id,
+                db_get_state=db_get_state,
+                db_set_state=db_set_state,
                 db_get_match_info=db_get_match_info,
                 recent_ids_count=backfill_recent_ids_count,
                 per_player_limit=backfill_per_player_limit,
                 log=log,
             )
-            if total_backfilled > 0:
-                log(f"[backfill] Cycle complete: cached={total_backfilled}.")
+            offsets = await asyncio.to_thread(db_load_backfill_offsets)
+            active_offsets = sum(1 for riot_id in FRIENDS if int(offsets.get(riot_id.casefold(), 0) or 0) > 0)
+            max_offset = max((int(offsets.get(riot_id.casefold(), 0) or 0) for riot_id in FRIENDS), default=0)
+            log(
+                f"[backfill] Cycle summary: cached={total_backfilled}, "
+                f"active_offsets={active_offsets}/{len(FRIENDS)}, max_offset={max_offset}."
+            )
         except Exception as exc:
             log(f"[backfill] Unexpected background error: {exc}")
         finally:

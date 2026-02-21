@@ -48,6 +48,7 @@ class MoodService:
         db_get_last_seen_match_id,
         db_set_last_seen_match_id,
         db_health_stats,
+        db_load_backfill_offsets=None,
     ):
         self.log = log
         self.friends = friends
@@ -64,6 +65,7 @@ class MoodService:
         self.db_get_last_seen_match_id = db_get_last_seen_match_id
         self.db_set_last_seen_match_id = db_set_last_seen_match_id
         self.db_health_stats = db_health_stats
+        self.db_load_backfill_offsets = db_load_backfill_offsets or (lambda: {})
         self.report_cache = {"text": None, "expires_at": 0.0, "day": None}
         self.weekly_report_cache = {"text": None, "expires_at": 0.0, "window": None}
 
@@ -608,14 +610,27 @@ class MoodService:
 
     async def run_health_check(self, start_monotonic):
         uptime_seconds = int(time.monotonic() - start_monotonic)
+        backfill_offsets = {}
         try:
             db_stats = await asyncio.to_thread(self.db_health_stats)
             db_ok = db_stats["db_ok"]
             cache_entries = db_stats["match_cache_entries"]
+            backfill_offsets = await asyncio.to_thread(self.db_load_backfill_offsets)
         except Exception as exc:
             db_ok = False
             cache_entries = 0
             self.log(f"[health] DB health check failed: {exc}")
+
+        tracked_by_key = {riot_id.casefold(): riot_id for riot_id in self.friends}
+        tracked_offsets = []
+        for key, riot_id in tracked_by_key.items():
+            offset = int(backfill_offsets.get(key, 0) or 0)
+            tracked_offsets.append((riot_id, max(0, offset)))
+
+        players_with_backfill_offset = sum(1 for _riot_id, offset in tracked_offsets if offset > 0)
+        max_backfill_offset = max((offset for _riot_id, offset in tracked_offsets), default=0)
+        top_backfill = sorted(tracked_offsets, key=lambda row: (-row[1], row[0].casefold()))
+        top_backfill = [f"{riot_id}={offset}" for riot_id, offset in top_backfill if offset > 0][:3]
 
         return {
             "uptime_seconds": uptime_seconds,
@@ -623,5 +638,8 @@ class MoodService:
             "db_ok": db_ok,
             "match_cache_entries": cache_entries,
             "request_cache_active": self.report_cache["text"] is not None,
+            "players_with_backfill_offset": players_with_backfill_offset,
+            "max_backfill_offset": max_backfill_offset,
+            "top_backfill_offsets": top_backfill,
         }
 

@@ -68,7 +68,7 @@ async def process_recap_cycle(
         try:
             puuid = await riot_client.fetch_puuid(riot_id)
             puuid_by_riot_id[riot_id] = puuid
-            recent_ids = await riot_client.fetch_recent_match_ids(puuid, count=20)
+            recent_ids = await riot_client.fetch_recent_match_ids(puuid, count=20, riot_id=riot_id)
             recent_ids_by_riot_id[riot_id] = recent_ids
             if not recent_ids:
                 continue

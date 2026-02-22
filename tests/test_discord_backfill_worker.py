@@ -14,8 +14,8 @@ class FakeRiotClient:
         _ = request_tier
         return self.puuid_by_riot_id[riot_id]
 
-    async def fetch_match_ids_page(self, puuid, *, start=0, count=100, request_tier="priority"):
-        _ = count, request_tier
+    async def fetch_match_ids_page(self, puuid, *, start=0, count=100, request_tier="priority", riot_id=None):
+        _ = count, request_tier, riot_id
         pages = self.page_ids_by_puuid.get(puuid, {})
         return pages.get(start, [])
 

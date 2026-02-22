@@ -233,13 +233,24 @@ class RiotApiClient:
             await self.wait_for_backfill_window()
         return await asyncio.to_thread(self.riot_get_json, url, request_tier=request_tier)
 
-    async def fetch_puuid(self, riot_id, *, request_tier="priority"):
+    @staticmethod
+    def get_http_status(exc):
+        if not isinstance(exc, requests.HTTPError):
+            return None
+        if exc.response is None:
+            return None
+        return exc.response.status_code
+
+    async def fetch_puuid(self, riot_id, *, request_tier="priority", force_refresh=False):
         cache_key = riot_id.casefold()
+        if force_refresh:
+            self.puuid_cache.pop(cache_key, None)
+
         if cache_key in self.puuid_cache:
             return self.puuid_cache[cache_key]
 
         persisted_puuid = await asyncio.to_thread(self.db_get_puuid, riot_id)
-        if persisted_puuid:
+        if persisted_puuid and not force_refresh:
             self.puuid_cache[cache_key] = persisted_puuid
             return persisted_puuid
 
@@ -256,17 +267,34 @@ class RiotApiClient:
         await asyncio.to_thread(self.db_upsert_player, riot_id, puuid)
         return puuid
 
-    async def fetch_match_ids(self, puuid, start_time_unix, *, request_tier="priority"):
+    async def fetch_match_ids(self, puuid, start_time_unix, *, request_tier="priority", riot_id=None):
+        if riot_id:
+            puuid = await self.fetch_puuid(riot_id, request_tier=request_tier)
+
         page_size = 100
         start = 0
         all_match_ids = []
+        retried_with_refresh = False
 
         while True:
             url = (
                 "https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/"
                 f"{puuid}/ids?startTime={start_time_unix}&start={start}&count={page_size}"
             )
-            page_match_ids = await self.riot_get_json_async(url, request_tier=request_tier)
+            try:
+                page_match_ids = await self.riot_get_json_async(url, request_tier=request_tier)
+            except requests.HTTPError as exc:
+                status_code = self.get_http_status(exc)
+                if (
+                    riot_id
+                    and status_code == 400
+                    and not retried_with_refresh
+                ):
+                    retried_with_refresh = True
+                    puuid = await self.fetch_puuid(riot_id, request_tier=request_tier, force_refresh=True)
+                    self.log(f"[riot] Refreshed puuid for {riot_id} after match-v5 400 response.")
+                    continue
+                raise
             if not page_match_ids:
                 break
 
@@ -284,22 +312,50 @@ class RiotApiClient:
 
         return all_match_ids
 
-    async def fetch_recent_match_ids(self, puuid, count=20, *, request_tier="priority"):
-        safe_count = max(1, min(count, 100))
-        url = (
-            "https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/"
-            f"{puuid}/ids?count={safe_count}"
-        )
-        return await self.riot_get_json_async(url, request_tier=request_tier)
+    async def fetch_recent_match_ids(self, puuid, count=20, *, request_tier="priority", riot_id=None):
+        if riot_id:
+            puuid = await self.fetch_puuid(riot_id, request_tier=request_tier)
 
-    async def fetch_match_ids_page(self, puuid, *, start=0, count=100, request_tier="priority"):
+        safe_count = max(1, min(count, 100))
+        refreshed = False
+        while True:
+            url = (
+                "https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/"
+                f"{puuid}/ids?count={safe_count}"
+            )
+            try:
+                return await self.riot_get_json_async(url, request_tier=request_tier)
+            except requests.HTTPError as exc:
+                status_code = self.get_http_status(exc)
+                if riot_id and status_code == 400 and not refreshed:
+                    refreshed = True
+                    puuid = await self.fetch_puuid(riot_id, request_tier=request_tier, force_refresh=True)
+                    self.log(f"[riot] Refreshed puuid for {riot_id} after recent-ids 400 response.")
+                    continue
+                raise
+
+    async def fetch_match_ids_page(self, puuid, *, start=0, count=100, request_tier="priority", riot_id=None):
+        if riot_id:
+            puuid = await self.fetch_puuid(riot_id, request_tier=request_tier)
+
         safe_count = max(1, min(int(count), 100))
         safe_start = max(0, int(start))
-        url = (
-            "https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/"
-            f"{puuid}/ids?start={safe_start}&count={safe_count}"
-        )
-        return await self.riot_get_json_async(url, request_tier=request_tier)
+        refreshed = False
+        while True:
+            url = (
+                "https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/"
+                f"{puuid}/ids?start={safe_start}&count={safe_count}"
+            )
+            try:
+                return await self.riot_get_json_async(url, request_tier=request_tier)
+            except requests.HTTPError as exc:
+                status_code = self.get_http_status(exc)
+                if riot_id and status_code == 400 and not refreshed:
+                    refreshed = True
+                    puuid = await self.fetch_puuid(riot_id, request_tier=request_tier, force_refresh=True)
+                    self.log(f"[riot] Refreshed puuid for {riot_id} after paged-ids 400 response.")
+                    continue
+                raise
 
     async def fetch_match_info(self, match_id, *, cache_in_memory=True, request_tier="priority"):
         if cache_in_memory:
@@ -340,15 +396,28 @@ class RiotApiClient:
 
     async def fetch_ranked_entries(self, riot_id):
         puuid = await self.fetch_puuid(riot_id)
-        by_puuid_url = (
-            f"https://{self.riot_platform_routing}.api.riotgames.com"
-            f"/lol/league/v4/entries/by-puuid/{puuid}"
-        )
-        try:
+
+        async def fetch_by_puuid(current_puuid):
+            by_puuid_url = (
+                f"https://{self.riot_platform_routing}.api.riotgames.com"
+                f"/lol/league/v4/entries/by-puuid/{current_puuid}"
+            )
             return await self.riot_get_json_async(by_puuid_url)
+
+        fallback_statuses = {400, 404, 405}
+        try:
+            return await fetch_by_puuid(puuid)
         except requests.HTTPError as exc:
-            status_code = exc.response.status_code if exc.response is not None else None
-            if status_code not in {404, 405}:
+            status_code = self.get_http_status(exc)
+            if status_code == 400:
+                puuid = await self.fetch_puuid(riot_id, force_refresh=True)
+                try:
+                    return await fetch_by_puuid(puuid)
+                except requests.HTTPError as retry_exc:
+                    status_code = self.get_http_status(retry_exc)
+                    if status_code not in fallback_statuses:
+                        raise
+            elif status_code not in fallback_statuses:
                 raise
 
         summoner_id = await self.fetch_summoner_id(puuid)
@@ -379,7 +448,7 @@ class RiotApiClient:
             self.report_timezone,
             day_start_hour=self.report_day_start_hour,
         )
-        match_ids = await self.fetch_match_ids(puuid, start_time_unix)
+        match_ids = await self.fetch_match_ids(puuid, start_time_unix, riot_id=riot_id)
         if match_ids:
             await asyncio.to_thread(self.db_set_last_seen_match_id, riot_id, match_ids[0])
 
@@ -447,7 +516,7 @@ class RiotApiClient:
             self.report_timezone,
             day_start_hour=self.report_day_start_hour,
         )
-        match_ids = await self.fetch_match_ids(puuid, start_time_unix)
+        match_ids = await self.fetch_match_ids(puuid, start_time_unix, riot_id=riot_id)
         return riot_id, puuid, len(match_ids)
 
     async def build_debug_player_report(self, riot_id, report_timezone_name, normalize_riot_id):
@@ -457,7 +526,7 @@ class RiotApiClient:
         )
         normalized = normalize_riot_id(riot_id)
         puuid = await self.fetch_puuid(normalized)
-        recent_ids = await self.fetch_recent_match_ids(puuid, count=20)
+        recent_ids = await self.fetch_recent_match_ids(puuid, count=20, riot_id=normalized)
         window_label = f"since {self.report_day_start_hour:02d}:00"
         lines = [
             f"Player debug (timezone={report_timezone_name}, window={window_label}):",

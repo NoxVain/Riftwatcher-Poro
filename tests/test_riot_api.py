@@ -107,7 +107,8 @@ def test_get_today_mode_records_stops_detail_fetches_at_limit(monkeypatch):
     async def fake_fetch_puuid(_riot_id):
         return "puuid-alpha"
 
-    async def fake_fetch_match_ids(_puuid, _start_time_unix):
+    async def fake_fetch_match_ids(_puuid, _start_time_unix, *, request_tier="priority", riot_id=None):
+        _ = request_tier, riot_id
         return match_ids
 
     async def fake_fetch_match_info(match_id):
@@ -154,7 +155,8 @@ def test_get_today_mode_records_no_limit_when_config_is_zero(monkeypatch):
     async def fake_fetch_puuid(_riot_id):
         return "puuid-alpha"
 
-    async def fake_fetch_match_ids(_puuid, _start_time_unix):
+    async def fake_fetch_match_ids(_puuid, _start_time_unix, *, request_tier="priority", riot_id=None):
+        _ = request_tier, riot_id
         return match_ids
 
     async def fake_fetch_match_info(match_id):
@@ -198,7 +200,8 @@ def test_get_today_mode_records_ignores_remakes(monkeypatch):
     async def fake_fetch_puuid(_riot_id):
         return "puuid-alpha"
 
-    async def fake_fetch_match_ids(_puuid, _start_time_unix):
+    async def fake_fetch_match_ids(_puuid, _start_time_unix, *, request_tier="priority", riot_id=None):
+        _ = request_tier, riot_id
         return ["m2", "m1"]
 
     async def fake_fetch_match_info(match_id):
@@ -318,3 +321,57 @@ def test_rate_limiter_applies_extra_backfill_budget_guard(monkeypatch):
 
     assert slept
     assert client._request_timestamps[-1] >= now["value"]
+
+
+def test_fetch_ranked_entries_falls_back_to_by_summoner_after_400(monkeypatch):
+    client = build_client()
+    called_urls = []
+
+    async def fake_fetch_puuid(_riot_id, *, request_tier="priority", force_refresh=False):
+        _ = request_tier, force_refresh
+        return "puuid-alpha"
+
+    async def fake_fetch_summoner_id(_puuid):
+        return "summoner-alpha"
+
+    async def fake_riot_get_json_async(url, *, request_tier="priority"):
+        _ = request_tier
+        called_urls.append(url)
+        if "/by-puuid/" in url:
+            raise requests.HTTPError("HTTP 400", response=DummyResponse(400))
+        return [{"queueType": "RANKED_SOLO_5x5"}]
+
+    monkeypatch.setattr(client, "fetch_puuid", fake_fetch_puuid)
+    monkeypatch.setattr(client, "fetch_summoner_id", fake_fetch_summoner_id)
+    monkeypatch.setattr(client, "riot_get_json_async", fake_riot_get_json_async)
+
+    result = asyncio.run(client.fetch_ranked_entries("Alpha#EUW"))
+
+    assert result == [{"queueType": "RANKED_SOLO_5x5"}]
+    assert any("/by-summoner/" in url for url in called_urls)
+
+
+def test_fetch_recent_match_ids_refreshes_puuid_after_400(monkeypatch):
+    client = build_client()
+    refresh_calls = []
+
+    async def fake_fetch_puuid(_riot_id, *, request_tier="priority", force_refresh=False):
+        _ = request_tier
+        refresh_calls.append(force_refresh)
+        return "puuid-fresh" if force_refresh else "puuid-stale"
+
+    async def fake_riot_get_json_async(url, *, request_tier="priority"):
+        _ = request_tier
+        if "puuid-stale" in url:
+            raise requests.HTTPError("HTTP 400", response=DummyResponse(400))
+        return ["EUW1_123", "EUW1_122"]
+
+    monkeypatch.setattr(client, "fetch_puuid", fake_fetch_puuid)
+    monkeypatch.setattr(client, "riot_get_json_async", fake_riot_get_json_async)
+
+    result = asyncio.run(
+        client.fetch_recent_match_ids("puuid-stale", count=20, riot_id="Alpha#EUW")
+    )
+
+    assert result == ["EUW1_123", "EUW1_122"]
+    assert refresh_calls == [False, True]

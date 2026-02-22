@@ -507,7 +507,11 @@ class MoodService:
         for riot_id in self.friends:
             try:
                 puuid = await self.riot_client.fetch_puuid(riot_id)
-                recent_ids = await self.riot_client.fetch_recent_match_ids(puuid, count=max(1, recent_count))
+                recent_ids = await self.riot_client.fetch_recent_match_ids(
+                    puuid,
+                    count=max(1, recent_count),
+                    riot_id=riot_id,
+                )
                 if not recent_ids:
                     continue
 

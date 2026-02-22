@@ -34,6 +34,7 @@ async def process_backfill_cycle(
                 start=offset,
                 count=max(1, recent_ids_count),
                 request_tier="backfill",
+                riot_id=riot_id,
             )
             if not page_ids:
                 if offset > 0:

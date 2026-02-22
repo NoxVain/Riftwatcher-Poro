@@ -23,7 +23,8 @@ class FakeRiotClient:
     async def fetch_puuid(self, riot_id):
         return self.puuid_by_riot_id[riot_id]
 
-    async def fetch_recent_match_ids(self, puuid, count=20):
+    async def fetch_recent_match_ids(self, puuid, count=20, riot_id=None):
+        _ = count, riot_id
         return self.recent_ids_by_puuid.get(puuid, [])
 
     async def fetch_match_info(self, match_id):

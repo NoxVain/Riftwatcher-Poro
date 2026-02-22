@@ -112,6 +112,7 @@ Optional (with defaults):
 - `LOG_RIOT_REQUESTS` (`false`)
 - `LOG_JSON` (`false`)
 - `RIOT_PLATFORM_ROUTING` (`euw1`)
+- `RIOT_REGIONAL_ROUTING` (`europe`) — regional host for account/match-v5 API calls (`europe`, `americas`, `asia`)
 
 ## Data Tables
 

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from src.report_logic import (
+    accumulate_participant_performance,
     format_mode_line,
     get_match_duration_seconds,
     get_mode_bucket,
@@ -135,7 +136,6 @@ class MoodService:
             mode_records = {
                 "solo_duo": {"wins": row[1], "losses": row[2]},
                 "flex": {"wins": row[3], "losses": row[4]},
-                "arcade": {"wins": row[5], "losses": row[6]},
             }
             performance_totals = {
                 "cs_total": int(row[10] or 0),
@@ -546,7 +546,6 @@ class MoodService:
                 mode_records = {
                     "solo_duo": {"wins": int(row[0]), "losses": int(row[1])},
                     "flex": {"wins": int(row[2]), "losses": int(row[3])},
-                    "arcade": {"wins": int(row[4]), "losses": int(row[5])},
                 }
                 performance_totals = {
                     "cs_total": int(row[6] or 0),
@@ -585,16 +584,7 @@ class MoodService:
                         mode_records[bucket_name]["losses"] += 1
                         player_changed = True
                     duration_seconds = get_match_duration_seconds(match_info)
-                    performance_totals["minutes_total"] += max(0.0, duration_seconds / 60.0)
-                    performance_totals["cs_total"] += int(participant.get("totalMinionsKilled", 0) or 0)
-                    performance_totals["cs_total"] += int(participant.get("neutralMinionsKilled", 0) or 0)
-                    performance_totals["objective_damage"] += int(participant.get("damageDealtToObjectives", 0) or 0)
-                    performance_totals["player_damage"] += int(participant.get("totalDamageDealtToChampions", 0) or 0)
-                    performance_totals["healing"] += int(participant.get("totalHeal", 0) or 0)
-                    performance_totals["damage_taken"] += int(participant.get("totalDamageTaken", 0) or 0)
-                    performance_totals["kills"] += int(participant.get("kills", 0) or 0)
-                    performance_totals["deaths"] += int(participant.get("deaths", 0) or 0)
-                    performance_totals["vision_score"] += int(participant.get("visionScore", 0) or 0)
+                    accumulate_participant_performance(performance_totals, participant, duration_seconds)
 
                 if player_changed:
                     await asyncio.to_thread(

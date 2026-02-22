@@ -9,6 +9,7 @@ from urllib.parse import quote
 import requests
 
 from src.report_logic import (
+    accumulate_participant_performance,
     create_mode_records,
     create_performance_totals,
     get_match_duration_seconds,
@@ -46,6 +47,7 @@ class RiotApiClient:
         *,
         riot_api_key,
         riot_platform_routing,
+        riot_regional_routing="europe",
         log,
         log_riot_requests,
         report_timezone,
@@ -62,6 +64,7 @@ class RiotApiClient:
     ):
         self.riot_api_key = riot_api_key
         self.riot_platform_routing = riot_platform_routing.strip().lower()
+        self.riot_regional_routing = riot_regional_routing.strip().lower()
         self.log = log
         self.log_riot_requests = log_riot_requests
         self.report_timezone = report_timezone
@@ -258,7 +261,7 @@ class RiotApiClient:
         encoded_name = quote(game_name, safe="")
         encoded_tag = quote(tag_line, safe="")
         url = (
-            "https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/"
+            f"https://{self.riot_regional_routing}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/"
             f"{encoded_name}/{encoded_tag}"
         )
         data = await self.riot_get_json_async(url, request_tier=request_tier)
@@ -278,7 +281,7 @@ class RiotApiClient:
 
         while True:
             url = (
-                "https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/"
+                f"https://{self.riot_regional_routing}.api.riotgames.com/lol/match/v5/matches/by-puuid/"
                 f"{puuid}/ids?startTime={start_time_unix}&start={start}&count={page_size}"
             )
             try:
@@ -320,7 +323,7 @@ class RiotApiClient:
         refreshed = False
         while True:
             url = (
-                "https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/"
+                f"https://{self.riot_regional_routing}.api.riotgames.com/lol/match/v5/matches/by-puuid/"
                 f"{puuid}/ids?count={safe_count}"
             )
             try:
@@ -343,7 +346,7 @@ class RiotApiClient:
         refreshed = False
         while True:
             url = (
-                "https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/"
+                f"https://{self.riot_regional_routing}.api.riotgames.com/lol/match/v5/matches/by-puuid/"
                 f"{puuid}/ids?start={safe_start}&count={safe_count}"
             )
             try:
@@ -370,7 +373,7 @@ class RiotApiClient:
                 self.cache_match_info(match_id, persisted)
             return persisted
 
-        url = f"https://europe.api.riotgames.com/lol/match/v5/matches/{match_id}"
+        url = f"https://{self.riot_regional_routing}.api.riotgames.com/lol/match/v5/matches/{match_id}"
         match_info = await self.riot_get_json_async(url, request_tier=request_tier)
         if cache_in_memory:
             self.cache_match_info(match_id, match_info)
@@ -482,16 +485,7 @@ class RiotApiClient:
                 mode_records[bucket_name]["losses"] += 1
 
             duration_seconds = get_match_duration_seconds(match_info)
-            performance_totals["minutes_total"] += max(0.0, duration_seconds / 60.0)
-            performance_totals["cs_total"] += int(participant.get("totalMinionsKilled", 0) or 0)
-            performance_totals["cs_total"] += int(participant.get("neutralMinionsKilled", 0) or 0)
-            performance_totals["objective_damage"] += int(participant.get("damageDealtToObjectives", 0) or 0)
-            performance_totals["player_damage"] += int(participant.get("totalDamageDealtToChampions", 0) or 0)
-            performance_totals["healing"] += int(participant.get("totalHeal", 0) or 0)
-            performance_totals["damage_taken"] += int(participant.get("totalDamageTaken", 0) or 0)
-            performance_totals["kills"] += int(participant.get("kills", 0) or 0)
-            performance_totals["deaths"] += int(participant.get("deaths", 0) or 0)
-            performance_totals["vision_score"] += int(participant.get("visionScore", 0) or 0)
+            accumulate_participant_performance(performance_totals, participant, duration_seconds)
 
         wins, losses = get_mode_totals(mode_records)
         elapsed_ms = int((time.perf_counter() - player_start) * 1000)

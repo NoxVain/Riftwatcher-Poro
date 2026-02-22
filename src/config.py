@@ -58,6 +58,7 @@ def get_env_str(name, default):
 TOKEN = require_env("DISCORD_TOKEN")
 RIOT_API_KEY = require_env("RIOT_API_KEY")
 RIOT_PLATFORM_ROUTING = get_env_str("RIOT_PLATFORM_ROUTING", "euw1").lower()
+RIOT_REGIONAL_ROUTING = get_env_str("RIOT_REGIONAL_ROUTING", "europe").lower()
 DAILY_REPORT_CHANNEL_ID = int(require_env("DAILY_REPORT_CHANNEL_ID"))
 WEEKLY_REPORT_CHANNEL_ID = int(require_env("WEEKLY_REPORT_CHANNEL_ID"))
 EVENTS_CHANNEL_ID = int(require_env("EVENTS_CHANNEL_ID"))

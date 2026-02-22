@@ -11,7 +11,6 @@ from src.report_logic import (
     get_mode_totals,
     is_remake_match,
     is_match_in_report_cycle,
-    is_match_in_last_24h,
     rank_sort_key,
     wilson_lower_bound,
 )
@@ -49,7 +48,6 @@ def test_get_mode_totals_counts_ranked_only():
     records = create_mode_records()
     records["solo_duo"]["wins"] = 2
     records["flex"]["losses"] = 1
-    records["arcade"]["wins"] = 99
     assert get_mode_totals(records) == (2, 1)
 
 
@@ -57,14 +55,6 @@ def test_get_match_end_unix_seconds_falls_back_when_end_timestamp_missing():
     match_info = {"info": {"gameCreation": 1_000_000, "gameDuration": 120}}
     assert get_match_end_unix_seconds(match_info) == 1120
 
-
-def test_is_match_in_last_24h_uses_game_end_timestamp():
-    now_ts = 2_000_000
-    recent_match = {"info": {"gameEndTimestamp": (now_ts - 60) * 1000}}
-    old_match = {"info": {"gameEndTimestamp": (now_ts - (24 * 60 * 60) - 1) * 1000}}
-
-    assert is_match_in_last_24h(recent_match, now_ts=now_ts)
-    assert not is_match_in_last_24h(old_match, now_ts=now_ts)
 
 
 def test_report_cycle_start_uses_previous_day_before_cutoff():

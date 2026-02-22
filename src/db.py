@@ -148,15 +148,6 @@ def init_db():
         ON player_daily_stats (day_date, lower(riot_id), updated_at DESC);
         """
     )
-    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS cs_total INTEGER NOT NULL DEFAULT 0;")
-    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS minutes_total DOUBLE PRECISION NOT NULL DEFAULT 0;")
-    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS objective_damage BIGINT NOT NULL DEFAULT 0;")
-    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS player_damage BIGINT NOT NULL DEFAULT 0;")
-    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS healing BIGINT NOT NULL DEFAULT 0;")
-    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS damage_taken BIGINT NOT NULL DEFAULT 0;")
-    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS kills INTEGER NOT NULL DEFAULT 0;")
-    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS deaths INTEGER NOT NULL DEFAULT 0;")
-    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS vision_score INTEGER NOT NULL DEFAULT 0;")
     db_execute(
         """
         CREATE TABLE IF NOT EXISTS match_info_cache (
@@ -441,8 +432,8 @@ def db_upsert_daily_stats(day_date, riot_id, mode_records, performance_totals=No
     solo_losses = mode_records["solo_duo"]["losses"]
     flex_wins = mode_records["flex"]["wins"]
     flex_losses = mode_records["flex"]["losses"]
-    arcade_wins = mode_records["arcade"]["wins"]
-    arcade_losses = mode_records["arcade"]["losses"]
+    arcade_wins = 0
+    arcade_losses = 0
     total_wins = solo_wins + flex_wins
     total_losses = solo_losses + flex_losses
     stats = performance_totals or {}

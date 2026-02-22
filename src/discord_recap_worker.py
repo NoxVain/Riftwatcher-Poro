@@ -41,6 +41,23 @@ async def get_ranked_streak_info(riot_client, puuid, recent_ids, max_matches=8):
     return streak_count, streak_result
 
 
+def _pack_sections_into_messages(sections, separator, max_len=2000):
+    messages = []
+    current = []
+    for section in sections:
+        candidate = separator.join(current + [section]) if current else section
+        if len(candidate) <= max_len:
+            current.append(section)
+        elif current:
+            messages.append(separator.join(current))
+            current = [section]
+        else:
+            messages.append(section[:max_len - 50] + "\n...")
+    if current:
+        messages.append(separator.join(current))
+    return messages
+
+
 async def process_recap_cycle(
     *,
     friends,
@@ -137,21 +154,7 @@ async def process_recap_cycle(
         recap_sections.append("\n".join(lines))
         log(f"[recap] Prepared new match recap for {match_id} in channel {match_recap_channel_id}.")
 
-    recap_messages = []
-    current_sections = []
-    for section in recap_sections:
-        candidate = recap_section_separator.join(current_sections + [section]) if current_sections else section
-        if len(candidate) <= 2000:
-            current_sections.append(section)
-            continue
-        if current_sections:
-            recap_messages.append(recap_section_separator.join(current_sections))
-            current_sections = [section]
-            continue
-        recap_messages.append(section[:1950] + "\n...")
-
-    if current_sections:
-        recap_messages.append(recap_section_separator.join(current_sections))
+    recap_messages = _pack_sections_into_messages(recap_sections, recap_section_separator)
 
     for riot_id, latest_match_id in pending_latest_match_id_by_riot.items():
         failed_for_player = False
@@ -203,21 +206,7 @@ async def process_recap_cycle(
     if streak_sections:
         recap_sections.extend(streak_sections)
 
-        recap_messages = []
-        current_sections = []
-        for section in recap_sections:
-            candidate = recap_section_separator.join(current_sections + [section]) if current_sections else section
-            if len(candidate) <= 2000:
-                current_sections.append(section)
-                continue
-            if current_sections:
-                recap_messages.append(recap_section_separator.join(current_sections))
-                current_sections = [section]
-                continue
-            recap_messages.append(section[:1950] + "\n...")
-
-        if current_sections:
-            recap_messages.append(recap_section_separator.join(current_sections))
+        recap_messages = _pack_sections_into_messages(recap_sections, recap_section_separator)
 
     for index, recap_message in enumerate(recap_messages):
         await channel.send(recap_message)

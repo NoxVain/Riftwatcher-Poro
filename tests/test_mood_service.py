@@ -159,7 +159,7 @@ def test_get_leader_badges_by_player_marks_category_leads():
 def test_build_report_falls_back_to_live_when_snapshot_stale():
     riot = FakeRiotClient()
     riot.today_records_by_riot_id["Alpha#NA1"] = (
-        {"solo_duo": {"wins": 2, "losses": 1}, "flex": {"wins": 0, "losses": 0}, "arcade": {"wins": 0, "losses": 0}},
+        {"solo_duo": {"wins": 2, "losses": 1}, "flex": {"wins": 0, "losses": 0}},
         {
             "cs_total": 0,
             "minutes_total": 0.0,
@@ -189,7 +189,7 @@ def test_build_report_falls_back_to_live_when_snapshot_stale():
 def test_build_report_uses_snapshot_when_only_one_player_has_ranked_games():
     riot = FakeRiotClient()
     riot.today_records_by_riot_id["Alpha#NA1"] = (
-        {"solo_duo": {"wins": 2, "losses": 0}, "flex": {"wins": 0, "losses": 0}, "arcade": {"wins": 0, "losses": 0}},
+        {"solo_duo": {"wins": 2, "losses": 0}, "flex": {"wins": 0, "losses": 0}},
         {
             "cs_total": 0,
             "minutes_total": 0.0,
@@ -203,7 +203,7 @@ def test_build_report_uses_snapshot_when_only_one_player_has_ranked_games():
         },
     )
     riot.today_records_by_riot_id["Bravo#NA1"] = (
-        {"solo_duo": {"wins": 1, "losses": 1}, "flex": {"wins": 0, "losses": 0}, "arcade": {"wins": 0, "losses": 0}},
+        {"solo_duo": {"wins": 1, "losses": 1}, "flex": {"wins": 0, "losses": 0}},
         {
             "cs_total": 0,
             "minutes_total": 0.0,
@@ -419,7 +419,7 @@ def test_refresh_recent_matches_snapshot_falls_back_when_baseline_missing():
     riot.puuid_by_riot_id["Alpha#NA1"] = "puuid-alpha"
     riot.recent_ids_by_puuid["puuid-alpha"] = ["m2", "m1"]
     riot.today_records_by_riot_id["Alpha#NA1"] = (
-        {"solo_duo": {"wins": 3, "losses": 2}, "flex": {"wins": 0, "losses": 0}, "arcade": {"wins": 0, "losses": 0}},
+        {"solo_duo": {"wins": 3, "losses": 2}, "flex": {"wins": 0, "losses": 0}},
         {
             "cs_total": 100,
             "minutes_total": 30.0,
@@ -461,15 +461,15 @@ def test_refresh_recent_matches_snapshot_falls_back_when_baseline_missing():
 def test_refresh_daily_stats_once_starts_with_oldest_collected_player():
     riot = FakeRiotClient()
     riot.today_records_by_riot_id["Alpha#NA1"] = (
-        {"solo_duo": {"wins": 1, "losses": 0}, "flex": {"wins": 0, "losses": 0}, "arcade": {"wins": 0, "losses": 0}},
+        {"solo_duo": {"wins": 1, "losses": 0}, "flex": {"wins": 0, "losses": 0}},
         {"cs_total": 0, "minutes_total": 0.0},
     )
     riot.today_records_by_riot_id["Bravo#NA1"] = (
-        {"solo_duo": {"wins": 0, "losses": 1}, "flex": {"wins": 0, "losses": 0}, "arcade": {"wins": 0, "losses": 0}},
+        {"solo_duo": {"wins": 0, "losses": 1}, "flex": {"wins": 0, "losses": 0}},
         {"cs_total": 0, "minutes_total": 0.0},
     )
     riot.today_records_by_riot_id["Charlie#NA1"] = (
-        {"solo_duo": {"wins": 2, "losses": 0}, "flex": {"wins": 0, "losses": 0}, "arcade": {"wins": 0, "losses": 0}},
+        {"solo_duo": {"wins": 2, "losses": 0}, "flex": {"wins": 0, "losses": 0}},
         {"cs_total": 0, "minutes_total": 0.0},
     )
 

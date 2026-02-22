@@ -1,5 +1,4 @@
 import math
-import time
 from datetime import datetime, timedelta, timezone
 
 
@@ -15,7 +14,6 @@ def create_mode_records():
     return {
         "solo_duo": {"wins": 0, "losses": 0},
         "flex": {"wins": 0, "losses": 0},
-        "arcade": {"wins": 0, "losses": 0},
     }
 
 
@@ -37,6 +35,19 @@ def get_mode_totals(mode_records):
     wins = mode_records["solo_duo"]["wins"] + mode_records["flex"]["wins"]
     losses = mode_records["solo_duo"]["losses"] + mode_records["flex"]["losses"]
     return wins, losses
+
+
+def accumulate_participant_performance(performance_totals, participant, duration_seconds):
+    performance_totals["minutes_total"] += max(0.0, duration_seconds / 60.0)
+    performance_totals["cs_total"] += int(participant.get("totalMinionsKilled", 0) or 0)
+    performance_totals["cs_total"] += int(participant.get("neutralMinionsKilled", 0) or 0)
+    performance_totals["objective_damage"] += int(participant.get("damageDealtToObjectives", 0) or 0)
+    performance_totals["player_damage"] += int(participant.get("totalDamageDealtToChampions", 0) or 0)
+    performance_totals["healing"] += int(participant.get("totalHeal", 0) or 0)
+    performance_totals["damage_taken"] += int(participant.get("totalDamageTaken", 0) or 0)
+    performance_totals["kills"] += int(participant.get("kills", 0) or 0)
+    performance_totals["deaths"] += int(participant.get("deaths", 0) or 0)
+    performance_totals["vision_score"] += int(participant.get("visionScore", 0) or 0)
 
 
 def wilson_lower_bound(wins, losses, z=1.28):
@@ -118,9 +129,3 @@ def is_match_in_report_cycle(match_info, report_timezone, day_start_hour=6, now_
     return end_ts >= window_start
 
 
-def is_match_in_last_24h(match_info, now_ts=None):
-    if now_ts is None:
-        now_ts = int(time.time())
-    window_start = now_ts - (24 * 60 * 60)
-    end_ts = get_match_end_unix_seconds(match_info)
-    return end_ts >= window_start

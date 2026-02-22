@@ -41,6 +41,7 @@ def log(message):
 TOKEN = cfg.TOKEN
 RIOT_API_KEY = cfg.RIOT_API_KEY
 RIOT_PLATFORM_ROUTING = cfg.RIOT_PLATFORM_ROUTING
+RIOT_REGIONAL_ROUTING = cfg.RIOT_REGIONAL_ROUTING
 DAILY_REPORT_CHANNEL_ID = cfg.DAILY_REPORT_CHANNEL_ID
 WEEKLY_REPORT_CHANNEL_ID = cfg.WEEKLY_REPORT_CHANNEL_ID
 EVENTS_CHANNEL_ID = cfg.EVENTS_CHANNEL_ID
@@ -161,6 +162,7 @@ def trigger_riot_key_alert():
 riot_client = RiotApiClient(
     riot_api_key=RIOT_API_KEY,
     riot_platform_routing=RIOT_PLATFORM_ROUTING,
+    riot_regional_routing=RIOT_REGIONAL_ROUTING,
     log=log,
     log_riot_requests=LOG_RIOT_REQUESTS,
     report_timezone=REPORT_TIMEZONE,
@@ -592,6 +594,7 @@ async def on_ready():
     log(f"[startup] LOG_RIOT_REQUESTS={LOG_RIOT_REQUESTS}")
     log(f"[startup] LOG_JSON={LOG_JSON}")
     log(f"[startup] RIOT_PLATFORM_ROUTING={RIOT_PLATFORM_ROUTING}")
+    log(f"[startup] RIOT_REGIONAL_ROUTING={RIOT_REGIONAL_ROUTING}")
     log(f"[startup] MAX_TODAY_MATCH_DETAILS={MAX_TODAY_MATCH_DETAILS}")
     log(f"[startup] REPORT_DAY_START_HOUR={REPORT_DAY_START_HOUR}")
     log(f"[startup] MAX_MATCH_IDS_SCAN={MAX_MATCH_IDS_SCAN}")

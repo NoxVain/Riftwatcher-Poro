@@ -112,11 +112,11 @@ def test_process_recap_cycle_posts_recap_and_syncs_affected_players():
     }
     riot.mode_records_by_riot_id = {
         "Alpha#NA1": (
-            {"solo_duo": {"wins": 1, "losses": 0}, "flex": {"wins": 0, "losses": 0}, "arcade": {"wins": 0, "losses": 0}},
+            {"solo_duo": {"wins": 1, "losses": 0}, "flex": {"wins": 0, "losses": 0}},
             {"cs_total": 100, "minutes_total": 30.0},
         ),
         "Bravo#NA1": (
-            {"solo_duo": {"wins": 0, "losses": 1}, "flex": {"wins": 0, "losses": 0}, "arcade": {"wins": 0, "losses": 0}},
+            {"solo_duo": {"wins": 0, "losses": 1}, "flex": {"wins": 0, "losses": 0}},
             {"cs_total": 90, "minutes_total": 30.0},
         ),
     }
@@ -202,7 +202,7 @@ def test_process_recap_cycle_posts_streak_callout_when_threshold_crossed():
     }
     riot.mode_records_by_riot_id = {
         "Alpha#NA1": (
-            {"solo_duo": {"wins": 3, "losses": 0}, "flex": {"wins": 0, "losses": 0}, "arcade": {"wins": 0, "losses": 0}},
+            {"solo_duo": {"wins": 3, "losses": 0}, "flex": {"wins": 0, "losses": 0}},
             {"cs_total": 100, "minutes_total": 30.0},
         ),
     }
@@ -367,7 +367,7 @@ def test_process_recap_cycle_batches_multiple_matches_into_single_post():
     }
     riot.mode_records_by_riot_id = {
         "Alpha#NA1": (
-            {"solo_duo": {"wins": 1, "losses": 1}, "flex": {"wins": 0, "losses": 0}, "arcade": {"wins": 0, "losses": 0}},
+            {"solo_duo": {"wins": 1, "losses": 1}, "flex": {"wins": 0, "losses": 0}},
             {"cs_total": 100, "minutes_total": 30.0},
         ),
     }
@@ -416,7 +416,7 @@ def test_process_recap_cycle_does_not_advance_state_when_match_fetch_fails():
     riot.recent_ids_by_puuid = {"puuid-a": ["EUW1_2", "EUW1_1"]}
     riot.mode_records_by_riot_id = {
         "Alpha#NA1": (
-            {"solo_duo": {"wins": 1, "losses": 0}, "flex": {"wins": 0, "losses": 0}, "arcade": {"wins": 0, "losses": 0}},
+            {"solo_duo": {"wins": 1, "losses": 0}, "flex": {"wins": 0, "losses": 0}},
             {"cs_total": 100, "minutes_total": 30.0},
         ),
     }

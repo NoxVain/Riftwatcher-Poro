@@ -25,6 +25,7 @@ def build_client():
     return RiotApiClient(
         riot_api_key="test-key",
         riot_platform_routing="euw1",
+        riot_regional_routing="europe",
         log=lambda _msg: None,
         log_riot_requests=False,
         report_timezone=None,

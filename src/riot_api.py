@@ -428,13 +428,6 @@ class RiotApiClient:
         return await self.riot_get_json_async(url)
 
     @staticmethod
-    def get_participant_win(match_info, puuid):
-        for participant in match_info["info"]["participants"]:
-            if participant["puuid"] == puuid:
-                return participant["win"]
-        return None
-
-    @staticmethod
     def get_participant(match_info, puuid):
         for participant in match_info["info"]["participants"]:
             if participant["puuid"] == puuid:

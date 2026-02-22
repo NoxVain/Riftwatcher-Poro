@@ -78,10 +78,10 @@ All workers run continuously while connected, each with startup jitter and cycle
    - load tracked players
    - construct Riot client + mood service
    - initialize scoreboard message and schedule workers
-2. Command flow (`!Mood`)
+2. Command flow (`!Daily`)
    - fetch report (snapshot/cache/live as needed)
    - update persisted scoreboard message
-3. Command flow (`!Week`)
+3. Command flow (`!Weekly`)
    - aggregate stored `player_daily_stats` rows from Monday day-start cutoff through next Monday cutoff
    - update persisted weekly scoreboard message
 4. Refresh flow
@@ -119,11 +119,12 @@ All workers run continuously while connected, each with startup jitter and cycle
 
 ## Channels
 
-- `DAILY_REPORT_CHANNEL_ID`: scoreboard + command channel
+- `DAILY_REPORT_CHANNEL_ID`: daily scoreboard + `!Daily` command
+- `WEEKLY_REPORT_CHANNEL_ID`: weekly scoreboard + `!Weekly` command
+- `EVENTS_CHANNEL_ID`: ops/admin commands (`!help`, `!health`, `!test`, `!riottest`, `!Add`, `!DebugPlayer`)
 - `MATCH_RECAP_CHANNEL_ID`: match recap posts
-- `EVENTS_CHANNEL_ID`: rank/news events
 
-All three are required and no channel fallback chain is used.
+All channels are required and no channel fallback chain is used.
 
 ## Key Operational Behaviors
 

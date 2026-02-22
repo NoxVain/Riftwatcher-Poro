@@ -1,4 +1,4 @@
-discord.py
-requests
-psycopg[binary]
-pytest
+discord.py>=2.6,<3
+requests>=2.32,<3
+psycopg[binary]>=3.2,<4
+pytest>=9,<10

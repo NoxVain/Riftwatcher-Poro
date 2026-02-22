@@ -84,7 +84,7 @@ class FakeRiotClient:
 
 def test_handle_mood_command_updates_scoreboard_from_snapshot_then_refresh():
     channel = FakeChannel(channel_id=777)
-    incoming = FakeIncomingMessage("!Mood", channel)
+    incoming = FakeIncomingMessage("!Daily", channel)
     status_message = FakeStatusMessage(content="old content")
     mood_service = FakeMoodService(build_outputs=["snapshot report", "fresh report"])
     riot_client = FakeRiotClient()
@@ -116,6 +116,8 @@ def test_handle_mood_command_updates_scoreboard_from_snapshot_then_refresh():
             normalize_riot_id=lambda riot_id: riot_id,
             db_upsert_player=lambda _riot_id, _puuid: None,
             log=logs.append,
+            weekly_report_channel_id=888,
+            events_channel_id=999,
         )
     )
 
@@ -128,7 +130,7 @@ def test_handle_mood_command_updates_scoreboard_from_snapshot_then_refresh():
 
 
 def test_handle_add_command_happy_path_persists_and_invalidates_cache():
-    channel = FakeChannel(channel_id=777)
+    channel = FakeChannel(channel_id=999)
     incoming = FakeIncomingMessage("!Add Alpha#NA1", channel)
     mood_service = FakeMoodService(build_outputs=["unused"])
     riot_client = FakeRiotClient()
@@ -154,6 +156,8 @@ def test_handle_add_command_happy_path_persists_and_invalidates_cache():
             normalize_riot_id=lambda riot_id: riot_id.strip(),
             db_upsert_player=lambda riot_id, puuid: upserts.append((riot_id, puuid)),
             log=lambda _msg: None,
+            weekly_report_channel_id=888,
+            events_channel_id=999,
         )
     )
 
@@ -166,8 +170,8 @@ def test_handle_add_command_happy_path_persists_and_invalidates_cache():
 
 
 def test_handle_week_command_updates_weekly_scoreboard_message():
-    channel = FakeChannel(channel_id=777)
-    incoming = FakeIncomingMessage("!Week", channel)
+    channel = FakeChannel(channel_id=888)
+    incoming = FakeIncomingMessage("!Weekly", channel)
     status_message = FakeStatusMessage(content="old weekly")
     mood_service = FakeMoodService(build_outputs=["unused"])
     riot_client = FakeRiotClient()
@@ -200,6 +204,8 @@ def test_handle_week_command_updates_weekly_scoreboard_message():
             log=lambda _msg: None,
             get_or_create_weekly_report_message=get_or_create_weekly_report_message,
             remember_weekly_report_message=remember_weekly_report_message,
+            weekly_report_channel_id=888,
+            events_channel_id=999,
         )
     )
 
@@ -209,7 +215,7 @@ def test_handle_week_command_updates_weekly_scoreboard_message():
 
 
 def test_handle_help_command_shows_usage_and_channels():
-    channel = FakeChannel(channel_id=777)
+    channel = FakeChannel(channel_id=999)
     incoming = FakeIncomingMessage("!help", channel)
     mood_service = FakeMoodService(build_outputs=["unused"])
     riot_client = FakeRiotClient()
@@ -234,6 +240,7 @@ def test_handle_help_command_shows_usage_and_channels():
             db_upsert_player=lambda _riot_id, _puuid: None,
             log=lambda _msg: None,
             weekly_report_channel_id=888,
+            events_channel_id=999,
         )
     )
 
@@ -242,12 +249,13 @@ def test_handle_help_command_shows_usage_and_channels():
     assert "!help" in help_text
     assert "<#777>" in help_text
     assert "<#888>" in help_text
+    assert "<#999>" in help_text
     assert "09:00" in help_text
 
 
 def test_known_command_in_wrong_channel_prompts_to_use_daily_channel():
     channel = FakeChannel(channel_id=999)
-    incoming = FakeIncomingMessage("!Mood", channel)
+    incoming = FakeIncomingMessage("!Daily", channel)
     mood_service = FakeMoodService(build_outputs=["unused"])
     riot_client = FakeRiotClient()
 
@@ -270,6 +278,8 @@ def test_known_command_in_wrong_channel_prompts_to_use_daily_channel():
             normalize_riot_id=lambda riot_id: riot_id,
             db_upsert_player=lambda _riot_id, _puuid: None,
             log=lambda _msg: None,
+            weekly_report_channel_id=888,
+            events_channel_id=9999,
         )
     )
 
@@ -278,8 +288,8 @@ def test_known_command_in_wrong_channel_prompts_to_use_daily_channel():
 
 
 def test_handle_week_command_loading_text_uses_configured_hour():
-    channel = FakeChannel(channel_id=777)
-    incoming = FakeIncomingMessage("!Week", channel)
+    channel = FakeChannel(channel_id=888)
+    incoming = FakeIncomingMessage("!Weekly", channel)
     status_message = FakeStatusMessage(content="old weekly")
     mood_service = FakeMoodService(build_outputs=["unused"])
     riot_client = FakeRiotClient()
@@ -307,6 +317,8 @@ def test_handle_week_command_loading_text_uses_configured_hour():
             db_upsert_player=lambda _riot_id, _puuid: None,
             log=lambda _msg: None,
             get_or_create_weekly_report_message=get_or_create_weekly_report_message,
+            weekly_report_channel_id=888,
+            events_channel_id=999,
         )
     )
 
@@ -314,7 +326,7 @@ def test_handle_week_command_loading_text_uses_configured_hour():
 
 
 def test_health_command_includes_backfill_status():
-    channel = FakeChannel(channel_id=777)
+    channel = FakeChannel(channel_id=999)
     incoming = FakeIncomingMessage("!health", channel)
     mood_service = FakeMoodService(build_outputs=["unused"])
     riot_client = FakeRiotClient()
@@ -338,6 +350,8 @@ def test_health_command_includes_backfill_status():
             normalize_riot_id=lambda riot_id: riot_id,
             db_upsert_player=lambda _riot_id, _puuid: None,
             log=lambda _msg: None,
+            weekly_report_channel_id=888,
+            events_channel_id=999,
         )
     )
 

@@ -16,21 +16,21 @@ from src.constants import (
 )
 
 
-def format_help_text(*, report_day_start_hour, daily_channel_id, weekly_channel_id):
+def format_help_text(*, report_day_start_hour, daily_channel_id, weekly_channel_id, events_channel_id):
     daily_channel_ref = f"<#{daily_channel_id}>"
     weekly_channel_ref = f"<#{weekly_channel_id}>" if weekly_channel_id else daily_channel_ref
+    events_channel_ref = f"<#{events_channel_id}>"
     return (
         "**MoodBot commands**\n"
-        f"- `{MOOD_COMMAND}`: Refresh daily scoreboard (games since `{report_day_start_hour:02d}:00`).\n"
+        f"- `{MOOD_COMMAND}`: Refresh daily scoreboard (run in {daily_channel_ref}).\n"
         f"- `{WEEK_COMMAND}`: Refresh weekly scoreboard for Monday `{report_day_start_hour:02d}:00` -> next Monday "
-        f"`{report_day_start_hour:02d}:00` (posted in {weekly_channel_ref}).\n"
-        f"- `{ADD_COMMAND} Name#Tag`: Add a tracked Riot ID.\n"
-        f"- `{DEBUG_PLAYER_COMMAND} Name#Tag`: Show queue/window debug details.\n"
-        f"- `{HEALTH_COMMAND}`: Show bot/DB/cache health.\n"
-        f"- `{RIOT_TEST_COMMAND}`: Verify Riot API connectivity.\n"
-        f"- `{TEST_COMMAND}`: Verify Discord send permissions.\n"
-        f"- `{HELP_COMMAND}`: Show this help.\n"
-        f"Use commands in {daily_channel_ref}."
+        f"`{report_day_start_hour:02d}:00` (run/post in {weekly_channel_ref}).\n"
+        f"- `{ADD_COMMAND} Name#Tag`: Add a tracked Riot ID (run in {events_channel_ref}).\n"
+        f"- `{DEBUG_PLAYER_COMMAND} Name#Tag`: Show queue/window debug details (run in {events_channel_ref}).\n"
+        f"- `{HEALTH_COMMAND}`: Show bot/DB/cache health (run in {events_channel_ref}).\n"
+        f"- `{RIOT_TEST_COMMAND}`: Verify Riot API connectivity (run in {events_channel_ref}).\n"
+        f"- `{TEST_COMMAND}`: Verify Discord send permissions (run in {events_channel_ref}).\n"
+        f"- `{HELP_COMMAND}`: Show this help (run in {events_channel_ref})."
     )
 
 
@@ -51,6 +51,27 @@ def is_supported_command(content_lower):
         content_lower.startswith(f"{ADD_COMMAND.casefold()} ")
         or content_lower.startswith(f"{DEBUG_PLAYER_COMMAND.casefold()} ")
     )
+
+
+def command_channel_id(content_lower, *, daily_channel_id, weekly_channel_id, events_channel_id):
+    if content_lower == MOOD_COMMAND.casefold():
+        return daily_channel_id
+    if content_lower == WEEK_COMMAND.casefold():
+        return weekly_channel_id
+    if (
+        content_lower in {
+            TEST_COMMAND.casefold(),
+            RIOT_TEST_COMMAND.casefold(),
+            ADD_COMMAND.casefold(),
+            DEBUG_PLAYER_COMMAND.casefold(),
+            HEALTH_COMMAND.casefold(),
+            HELP_COMMAND.casefold(),
+        }
+        or content_lower.startswith(f"{ADD_COMMAND.casefold()} ")
+        or content_lower.startswith(f"{DEBUG_PLAYER_COMMAND.casefold()} ")
+    ):
+        return events_channel_id
+    return None
 
 
 async def handle_incoming_message(
@@ -75,32 +96,42 @@ async def handle_incoming_message(
     get_or_create_weekly_report_message=None,
     remember_weekly_report_message=None,
     weekly_report_channel_id=None,
+    events_channel_id=None,
     resolve_channel=None,
 ):
     content = message.content.strip()
     content_lower = content.casefold()
-    weekly_channel_id = weekly_report_channel_id or channel_id
+    daily_channel_id = channel_id
+    weekly_channel_id = weekly_report_channel_id or daily_channel_id
+    events_channel_id = events_channel_id or daily_channel_id
 
-    if message.channel.id != channel_id:
-        if content.startswith("!") and is_supported_command(content_lower):
+    if content.startswith("!") and is_supported_command(content_lower):
+        expected_channel_id = command_channel_id(
+            content_lower,
+            daily_channel_id=daily_channel_id,
+            weekly_channel_id=weekly_channel_id,
+            events_channel_id=events_channel_id,
+        )
+        if expected_channel_id is not None and message.channel.id != expected_channel_id:
             await message.channel.send(
-                f"Use MoodBot commands in <#{channel_id}>. Run `{HELP_COMMAND}` there for usage."
+                f"Use `{content.split(' ', 1)[0]}` in <#{expected_channel_id}>."
             )
-        return
+            return
 
     if content_lower == HELP_COMMAND.casefold():
         await message.channel.send(
             format_help_text(
                 report_day_start_hour=report_day_start_hour,
-                daily_channel_id=channel_id,
+                daily_channel_id=daily_channel_id,
                 weekly_channel_id=weekly_channel_id,
+                events_channel_id=events_channel_id,
             )
         )
         return
 
     if content_lower == TEST_COMMAND.casefold():
         await message.channel.send("API test: MoodBot is online and can send messages.")
-        log(f"[test] Sent API test message in channel {channel_id}.")
+        log(f"[test] Sent API test message in channel {message.channel.id}.")
         return
 
     if content_lower == RIOT_TEST_COMMAND.casefold():
@@ -193,13 +224,13 @@ async def handle_incoming_message(
                         await status_message.edit(content=snapshot_with_note)
                         displayed_text = snapshot_with_note
                         remember_report_message(status_message)
-                        log(f"[mood] Sent stored snapshot report in channel {channel_id}.")
+                        log(f"[mood] Sent stored snapshot report in channel {daily_channel_id}.")
 
                         await mood_service.refresh_recent_matches_snapshot(recent_count=20)
                         refreshed_text = await mood_service.build_today_win_rate_report()
                         if refreshed_text != displayed_text:
                             await status_message.edit(content=refreshed_text)
-                            log(f"[mood] Updated report after quick refresh in channel {channel_id}.")
+                            log(f"[mood] Updated report after quick refresh in channel {daily_channel_id}.")
                         else:
                             log("[mood] Quick refresh produced no visible report change.")
                     else:
@@ -216,7 +247,7 @@ async def handle_incoming_message(
                         remember_report_message(status_message)
                         log(
                             f"[mood] Sent cycle win rate report (since {report_day_start_hour:02d}:00) "
-                            f"in channel {channel_id}."
+                            f"in channel {daily_channel_id}."
                         )
                 except (KeyError, requests.RequestException) as exc:
                     await status_message.edit(content=f"Mood report failed: {exc}")

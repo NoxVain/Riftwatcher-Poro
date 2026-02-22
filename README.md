@@ -32,8 +32,8 @@ This project does not use Riot's official logos.
 
 ## Features
 
-- `!Mood` keeps a single scoreboard message updated in `DAILY_REPORT_CHANNEL_ID`.
-- `!Week` keeps a single weekly scoreboard message updated in `WEEKLY_REPORT_CHANNEL_ID`.
+- `!Daily` keeps a single scoreboard message updated in `DAILY_REPORT_CHANNEL_ID`.
+- `!Weekly` keeps a single weekly scoreboard message updated in `WEEKLY_REPORT_CHANNEL_ID`.
 - Daily window starts at `REPORT_DAY_START_HOUR` in `REPORT_TIMEZONE`.
 - Weekly window aggregates existing daily stats from Monday at `REPORT_DAY_START_HOUR` through next Monday at the same hour in `REPORT_TIMEZONE`.
 - Ranked queues tracked in report:
@@ -71,15 +71,19 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 
 ## Commands
 
-- `!Mood`
-- `!Week`
+- `!Daily`
+- `!Weekly`
 - `!Add Name#Tag`
 - `!DebugPlayer Name#Tag`
 - `!health`
 - `!test`
 - `!riottest`
+- `!help`
 
-Commands are handled only in `DAILY_REPORT_CHANNEL_ID`.
+Command routing:
+- `!Daily` in `DAILY_REPORT_CHANNEL_ID`
+- `!Weekly` in `WEEKLY_REPORT_CHANNEL_ID`
+- all other commands in `EVENTS_CHANNEL_ID`
 
 ## Environment Variables
 

@@ -572,20 +572,20 @@ async def background_daily_refresher():
 async def on_ready():
     global BACKGROUND_REFRESH_TASK, BACKGROUND_RECAP_TASK, BACKGROUND_RANK_TASK, BACKGROUND_BACKFILL_TASK, STARTUP_SCOREBOARD_INIT_DONE
     log(f"[startup] Logged in as {client.user} (id={client.user.id})")
-    log(f"[startup] Use {TEST_COMMAND} in channel {DAILY_REPORT_CHANNEL_ID} to test sending.")
-    log(f"[startup] Use {RIOT_TEST_COMMAND} in channel {DAILY_REPORT_CHANNEL_ID} to test Riot API access.")
+    log(f"[startup] Use {TEST_COMMAND} in channel {EVENTS_CHANNEL_ID} to test sending.")
+    log(f"[startup] Use {RIOT_TEST_COMMAND} in channel {EVENTS_CHANNEL_ID} to test Riot API access.")
     log(
         f"[startup] Use {MOOD_COMMAND} in channel {DAILY_REPORT_CHANNEL_ID} for results "
         f"since {REPORT_DAY_START_HOUR:02d}:00."
     )
     log(
-        f"[startup] Use {WEEK_COMMAND} in channel {DAILY_REPORT_CHANNEL_ID}; "
+        f"[startup] Use {WEEK_COMMAND} in channel {WEEKLY_REPORT_CHANNEL_ID}; "
         f"it publishes in {WEEKLY_REPORT_CHANNEL_ID} "
         f"for Monday {REPORT_DAY_START_HOUR:02d}:00 -> next Monday {REPORT_DAY_START_HOUR:02d}:00."
     )
-    log(f"[startup] Use {ADD_COMMAND} <Name#Tag> to add a player at runtime.")
-    log(f"[startup] Use {DEBUG_PLAYER_COMMAND} <Name#Tag> to inspect queue bucket mapping.")
-    log(f"[startup] Use {HEALTH_COMMAND} in channel {DAILY_REPORT_CHANNEL_ID} for health status.")
+    log(f"[startup] Use {ADD_COMMAND} <Name#Tag> in channel {EVENTS_CHANNEL_ID} to add a player at runtime.")
+    log(f"[startup] Use {DEBUG_PLAYER_COMMAND} <Name#Tag> in channel {EVENTS_CHANNEL_ID} to inspect queue bucket mapping.")
+    log(f"[startup] Use {HEALTH_COMMAND} in channel {EVENTS_CHANNEL_ID} for health status.")
     log(f"[startup] Loaded {len(FRIENDS)} tracked players from postgres.")
     log("[startup] Player store: postgres")
     log(f"[startup] Report timezone: {REPORT_TIMEZONE_NAME}")
@@ -658,6 +658,7 @@ async def on_message(message):
         db_upsert_player=db_upsert_player,
         log=log,
         weekly_report_channel_id=WEEKLY_REPORT_CHANNEL_ID,
+        events_channel_id=EVENTS_CHANNEL_ID,
         resolve_channel=resolve_channel,
     )
 

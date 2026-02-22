@@ -172,3 +172,56 @@ Historical draft recovered from earlier README notes (`d8d0edc`):
 5. If recap feed feels slow/noisy:
    - tune `MATCH_RECAP_POLL_SECONDS` (effective floor is 30s)
    - recap batching/split pacing is now built-in.
+
+## Resume Snapshot (2026-02-22)
+
+- Branch: `main`
+- Working tree at end of session: clean expected after pull
+- Latest pushed commit:
+  - `4ac1fe8` `feat(recap): merge streak callouts into recap batch posts`
+
+### Implemented This Session
+
+- Recap + streak post consolidation:
+  - Streak callouts are now appended into the recap batch output when they occur in the same recap cycle.
+  - Result: fewer back-to-back Discord posts in recap/event-heavy moments.
+  - Files:
+    - `src/discord_recap_worker.py`
+    - `tests/test_discord_recap_worker.py`
+
+### Validation
+
+- Recap worker tests:
+  - `& 'C:\Users\gardf\AppData\Local\Python\bin\python.exe' -m pytest -q tests/test_discord_recap_worker.py`
+  - Result: `6 passed`
+- Full suite:
+  - `& 'C:\Users\gardf\AppData\Local\Python\bin\python.exe' -m pytest -q`
+  - Result: `60 passed`
+
+### Ops/DB Checks Performed
+
+- Connected to Railway Postgres with `psql`.
+- Verified `bot_state` and `player_ranked_state` freshness:
+  - active backfill offsets updating
+  - `last_seen_match_id::*` keys current
+  - recap/streak state keys present and updating
+  - daily/weekly report message pointers present
+  - rank baseline rows updated recently
+- One Riot ID displays garbled in Windows console output (code page issue), but state keys are internally consistent.
+
+### Important Follow-up
+
+- Rotate Railway Postgres password immediately (password was exposed in terminal/chat during setup).
+- Optional: add `C:\Program Files\PostgreSQL\17\bin` to PATH for direct `psql` usage.
+
+### Quick Re-entry Steps
+
+1. Pull latest `main`.
+2. Rotate DB password and update `DATABASE_URL` where configured.
+3. Redeploy/restart worker if environment was changed.
+4. Run smoke checks in Discord:
+   - `!health`
+   - `!Mood`
+   - `!Week`
+5. Verify recap behavior:
+   - confirm recap + streak appear in one combined recap batch message.

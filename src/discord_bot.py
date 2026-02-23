@@ -98,6 +98,10 @@ WORKER_STATS = {
     "recap": {"cycles": 0, "errors": 0},
     "backfill": {"cycles": 0, "errors": 0},
 }
+DAILY_CYCLE_STATE_KEY = "daily_report_cycle_key"
+PREVIOUS_REPORT_CHANNEL_STATE_KEY = "previous_report_channel_id"
+PREVIOUS_REPORT_MESSAGE_STATE_KEY = "previous_report_message_id"
+PREVIOUS_REPORT_CYCLE_STATE_KEY = "previous_report_cycle_key"
 
 
 def load_tracked_players():
@@ -112,7 +116,8 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 MOOD_REQUEST_LOCK = asyncio.Lock()
 
-LAST_REPORT_MESSAGE = {"channel_id": None, "message_id": None}
+LAST_REPORT_MESSAGE = {"channel_id": None, "message_id": None, "cycle_key": None}
+LAST_PREVIOUS_REPORT_MESSAGE = {"channel_id": None, "message_id": None, "cycle_key": None}
 LAST_WEEKLY_REPORT_MESSAGE = {"channel_id": None, "message_id": None}
 STARTUP_SCOREBOARD_INIT_DONE = False
 BACKGROUND_REFRESH_TASK = None
@@ -215,6 +220,24 @@ def remember_report_message(message):
             db_set_last_report_message(message.channel.id, message.id)
 
 
+def remember_previous_report_message(message, cycle_key=None):
+    LAST_PREVIOUS_REPORT_MESSAGE["channel_id"] = message.channel.id
+    LAST_PREVIOUS_REPORT_MESSAGE["message_id"] = message.id
+    LAST_PREVIOUS_REPORT_MESSAGE["cycle_key"] = cycle_key
+    if DB_ENABLED:
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(asyncio.to_thread(db_set_state, PREVIOUS_REPORT_CHANNEL_STATE_KEY, str(message.channel.id)))
+            loop.create_task(asyncio.to_thread(db_set_state, PREVIOUS_REPORT_MESSAGE_STATE_KEY, str(message.id)))
+            if cycle_key is not None:
+                loop.create_task(asyncio.to_thread(db_set_state, PREVIOUS_REPORT_CYCLE_STATE_KEY, str(cycle_key)))
+        except RuntimeError:
+            db_set_state(PREVIOUS_REPORT_CHANNEL_STATE_KEY, str(message.channel.id))
+            db_set_state(PREVIOUS_REPORT_MESSAGE_STATE_KEY, str(message.id))
+            if cycle_key is not None:
+                db_set_state(PREVIOUS_REPORT_CYCLE_STATE_KEY, str(cycle_key))
+
+
 def remember_weekly_report_message(message):
     LAST_WEEKLY_REPORT_MESSAGE["channel_id"] = message.channel.id
     LAST_WEEKLY_REPORT_MESSAGE["message_id"] = message.id
@@ -241,6 +264,34 @@ async def resolve_channel(channel_id):
 
 
 async def get_or_create_report_message(channel, initial_content):
+    current_cycle_key = mood_service.get_cycle_key()
+    last_cycle_key = LAST_REPORT_MESSAGE.get("cycle_key")
+    previous_channel_id = LAST_PREVIOUS_REPORT_MESSAGE.get("channel_id")
+    previous_message_id = LAST_PREVIOUS_REPORT_MESSAGE.get("message_id")
+    previous_cycle_key = LAST_PREVIOUS_REPORT_MESSAGE.get("cycle_key")
+
+    if DB_ENABLED:
+        if last_cycle_key is None:
+            last_cycle_key = await asyncio.to_thread(db_get_state, DAILY_CYCLE_STATE_KEY)
+            LAST_REPORT_MESSAGE["cycle_key"] = last_cycle_key
+        if not previous_channel_id:
+            raw_previous_channel_id = await asyncio.to_thread(db_get_state, PREVIOUS_REPORT_CHANNEL_STATE_KEY)
+            try:
+                previous_channel_id = int(raw_previous_channel_id) if raw_previous_channel_id else None
+            except ValueError:
+                previous_channel_id = None
+            LAST_PREVIOUS_REPORT_MESSAGE["channel_id"] = previous_channel_id
+        if not previous_message_id:
+            raw_previous_message_id = await asyncio.to_thread(db_get_state, PREVIOUS_REPORT_MESSAGE_STATE_KEY)
+            try:
+                previous_message_id = int(raw_previous_message_id) if raw_previous_message_id else None
+            except ValueError:
+                previous_message_id = None
+            LAST_PREVIOUS_REPORT_MESSAGE["message_id"] = previous_message_id
+        if previous_cycle_key is None:
+            previous_cycle_key = await asyncio.to_thread(db_get_state, PREVIOUS_REPORT_CYCLE_STATE_KEY)
+            LAST_PREVIOUS_REPORT_MESSAGE["cycle_key"] = previous_cycle_key
+
     channel_id = LAST_REPORT_MESSAGE["channel_id"]
     message_id = LAST_REPORT_MESSAGE["message_id"]
 
@@ -252,18 +303,79 @@ async def get_or_create_report_message(channel, initial_content):
             channel_id = persisted_channel_id
             message_id = persisted_message_id
 
+    previous_message = None
+    if previous_channel_id == channel.id and previous_message_id:
+        try:
+            previous_message = await channel.fetch_message(previous_message_id)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            LAST_PREVIOUS_REPORT_MESSAGE["channel_id"] = None
+            LAST_PREVIOUS_REPORT_MESSAGE["message_id"] = None
+            LAST_PREVIOUS_REPORT_MESSAGE["cycle_key"] = None
+            previous_channel_id = None
+            previous_message_id = None
+            previous_cycle_key = None
+            if DB_ENABLED:
+                await asyncio.to_thread(db_set_state, PREVIOUS_REPORT_CHANNEL_STATE_KEY, "0")
+                await asyncio.to_thread(db_set_state, PREVIOUS_REPORT_MESSAGE_STATE_KEY, "0")
+                await asyncio.to_thread(db_set_state, PREVIOUS_REPORT_CYCLE_STATE_KEY, "")
+
+    today_message = None
     if channel_id == channel.id and message_id:
         try:
-            return await channel.fetch_message(message_id)
+            today_message = await channel.fetch_message(message_id)
         except (discord.NotFound, discord.Forbidden, discord.HTTPException):
             LAST_REPORT_MESSAGE["channel_id"] = None
             LAST_REPORT_MESSAGE["message_id"] = None
+            channel_id = None
+            message_id = None
             if DB_ENABLED:
                 await asyncio.to_thread(db_set_last_report_message, 0, 0)
 
-    message = await channel.send(initial_content)
-    remember_report_message(message)
-    return message
+    # Migration path: if only one tracked daily message exists, convert it into
+    # the previous-day slot and create a new today message below it.
+    if previous_message is None and today_message is not None:
+        placeholder_text = (
+            "✨------ **LEAGUE MOOD (PREVIOUS DAY)** ------✨\n\n"
+            "No previous-day snapshot available yet.\n\n"
+            "✨--------------------------------------------✨"
+        )
+        if today_message.content != placeholder_text:
+            await today_message.edit(content=placeholder_text)
+        remember_previous_report_message(today_message, cycle_key=None)
+        today_message = None
+        LAST_REPORT_MESSAGE["channel_id"] = None
+        LAST_REPORT_MESSAGE["message_id"] = None
+        if DB_ENABLED:
+            await asyncio.to_thread(db_set_last_report_message, 0, 0)
+
+    if previous_message is None:
+        previous_message = await channel.send(
+            "✨------ **LEAGUE MOOD (PREVIOUS DAY)** ------✨\n\n"
+            "No previous-day snapshot available yet.\n\n"
+            "✨--------------------------------------------✨"
+        )
+        remember_previous_report_message(previous_message, cycle_key=previous_cycle_key)
+
+    had_existing_today_message = today_message is not None
+    if today_message is None:
+        today_message = await channel.send(initial_content)
+        remember_report_message(today_message)
+
+    if not last_cycle_key:
+        LAST_REPORT_MESSAGE["cycle_key"] = current_cycle_key
+        if DB_ENABLED:
+            await asyncio.to_thread(db_set_state, DAILY_CYCLE_STATE_KEY, current_cycle_key)
+    elif last_cycle_key != current_cycle_key:
+        if had_existing_today_message:
+            previous_text = today_message.content
+            if previous_message.content != previous_text:
+                await previous_message.edit(content=previous_text)
+            remember_previous_report_message(previous_message, cycle_key=last_cycle_key)
+        LAST_REPORT_MESSAGE["cycle_key"] = current_cycle_key
+        if DB_ENABLED:
+            await asyncio.to_thread(db_set_state, DAILY_CYCLE_STATE_KEY, current_cycle_key)
+
+    return today_message
 
 
 async def get_or_create_weekly_report_message(channel, initial_content):
@@ -293,12 +405,7 @@ async def get_or_create_weekly_report_message(channel, initial_content):
 
 
 async def edit_last_report_message(prefer_snapshot=False, bypass_cache=False):
-    channel_id = LAST_REPORT_MESSAGE["channel_id"]
-    message_id = LAST_REPORT_MESSAGE["message_id"]
-    if not channel_id or not message_id:
-        return
-
-    channel = await resolve_channel(channel_id)
+    channel = await resolve_channel(DAILY_REPORT_CHANNEL_ID)
     if channel is None:
         return
 
@@ -307,14 +414,14 @@ async def edit_last_report_message(prefer_snapshot=False, bypass_cache=False):
             prefer_snapshot=prefer_snapshot,
             bypass_cache=bypass_cache,
         )
-        message = await channel.fetch_message(message_id)
+        message = await get_or_create_report_message(channel, report_text)
         if message.content == report_text:
-            log(f"[refresh] No report change; skipped editing message {message_id}.")
+            log(f"[refresh] No report change; skipped editing message {message.id}.")
             return
         await message.edit(content=report_text)
-        log(f"[refresh] Updated last report message {message_id} in channel {channel_id}.")
+        log(f"[refresh] Updated last report message {message.id} in channel {channel.id}.")
     except (discord.NotFound, discord.Forbidden) as exc:
-        log(f"[refresh] Could not edit last report message {message_id}: {exc}")
+        log(f"[refresh] Could not edit last report message: {exc}")
         LAST_REPORT_MESSAGE["channel_id"] = None
         LAST_REPORT_MESSAGE["message_id"] = None
         if DB_ENABLED:
@@ -516,15 +623,6 @@ async def background_daily_refresher():
                 nonlocal last_snapshot_push_at, last_snapshot_signature
                 now_mono = time.monotonic()
 
-                channel_id = LAST_REPORT_MESSAGE["channel_id"]
-                message_id = LAST_REPORT_MESSAGE["message_id"]
-                if not channel_id or not message_id:
-                    return
-
-                channel = await resolve_channel(channel_id)
-                if channel is None:
-                    return
-
                 try:
                     snapshot_text = await mood_service.build_today_win_rate_report(
                         prefer_snapshot=True,
@@ -538,20 +636,23 @@ async def background_daily_refresher():
                     if not should_push:
                         return
 
-                    message = await channel.fetch_message(message_id)
+                    channel = await resolve_channel(DAILY_REPORT_CHANNEL_ID)
+                    if channel is None:
+                        return
+                    message = await get_or_create_report_message(channel, snapshot_text)
                     if message.content != snapshot_text:
                         await message.edit(content=snapshot_text)
                         log(
-                            f"[refresh] Updated last report message {message_id} in channel {channel_id} "
+                            f"[refresh] Updated last report message {message.id} in channel {channel.id} "
                             f"(force={force})."
                         )
                     else:
-                        log(f"[refresh] Snapshot unchanged in Discord for message {message_id}.")
+                        log(f"[refresh] Snapshot unchanged in Discord for message {message.id}.")
 
                     last_snapshot_signature = signature
                     last_snapshot_push_at = now_mono
                 except (discord.NotFound, discord.Forbidden) as exc:
-                    log(f"[refresh] Could not edit last report message {message_id}: {exc}")
+                    log(f"[refresh] Could not edit last report message: {exc}")
                     LAST_REPORT_MESSAGE["channel_id"] = None
                     LAST_REPORT_MESSAGE["message_id"] = None
                     if DB_ENABLED:

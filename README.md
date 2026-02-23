@@ -32,7 +32,10 @@ This project does not use Riot's official logos.
 
 ## Features
 
-- `!Daily` keeps a single scoreboard message updated in `DAILY_REPORT_CHANNEL_ID`.
+- `!Daily` keeps two tracked messages in `DAILY_REPORT_CHANNEL_ID`:
+  - top message: previous day snapshot
+  - second message: current day live scoreboard
+- At daily rollover (`REPORT_DAY_START_HOUR` in `REPORT_TIMEZONE`), previous day message is replaced with the last completed daily report and its header includes the cycle date.
 - `!Weekly` keeps a single weekly scoreboard message updated in `WEEKLY_REPORT_CHANNEL_ID`.
 - Daily window starts at `REPORT_DAY_START_HOUR` in `REPORT_TIMEZONE`.
 - Weekly window aggregates existing daily stats from Monday at `REPORT_DAY_START_HOUR` through next Monday at the same hour in `REPORT_TIMEZONE`.
@@ -57,7 +60,8 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 
 - Refresh worker (`DAILY_REFRESH_SECONDS`, default `300`)
   - rebuilds daily stats
-  - updates scoreboard snapshot with throttling
+  - updates the current-day scoreboard snapshot with throttling
+  - ensures daily two-message layout exists and handles day rollover copy (today -> previous day)
   - runs DB match-cache cleanup (`MATCH_CACHE_RETENTION_DAYS`)
 - Rank worker (`max(30, DAILY_REFRESH_SECONDS)`)
   - compares current ranked entries vs persisted `player_ranked_state`

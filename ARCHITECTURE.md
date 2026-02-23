@@ -4,7 +4,9 @@
 
 MoodBot is a Discord worker service that tracks ranked League results for tracked Riot IDs and maintains:
 
-- one live daily scoreboard message
+- two daily scoreboard messages in the daily channel:
+  - previous day snapshot message (top)
+  - current day live scoreboard message (second)
 - one live weekly scoreboard message (Monday 06:00 -> next Monday 06:00 aggregate)
 - match recap messages
 - rank change event messages
@@ -80,7 +82,9 @@ All workers run continuously while connected, each with startup jitter and cycle
    - initialize scoreboard message and schedule workers
 2. Command flow (`!Daily`)
    - fetch report (snapshot/cache/live as needed)
-   - update persisted scoreboard message
+   - ensure both daily tracked messages exist
+   - update current-day message
+   - on day rollover, copy prior day final content into previous-day message (dated header), then continue updating current-day message
 3. Command flow (`!Weekly`)
    - aggregate stored `player_daily_stats` rows from Monday day-start cutoff through next Monday cutoff
    - update persisted weekly scoreboard message
@@ -110,7 +114,8 @@ All workers run continuously while connected, each with startup jitter and cycle
   - cached Riot match payloads
 - `bot_state`
   - key/value operational state:
-    - scoreboard message ids
+    - scoreboard message ids (including daily current + daily previous)
+    - daily cycle keys for rollover
     - last seen match ids
     - recap dedupe keys
     - one-time Riot 401 alert flag

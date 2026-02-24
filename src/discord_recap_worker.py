@@ -14,7 +14,7 @@ from src.discord_text import (
 from src.report_logic import derive_primary_role, get_match_duration_seconds, get_match_end_unix_seconds, get_mode_bucket, is_remake_match
 
 
-async def get_ranked_streak_info(riot_client, puuid, recent_ids, max_matches=8):
+async def get_ranked_streak_info(riot_client, puuid, recent_ids, max_matches=20):
     streak_result = None
     streak_count = 0
     for match_id in recent_ids[:max(1, max_matches)]:

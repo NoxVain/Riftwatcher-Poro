@@ -89,8 +89,7 @@ Historical draft recovered from earlier README notes (`d8d0edc`):
   - Auto-post superlatives from stats (best CS/min, biggest damage, most deaths, etc.).
 - Head-to-head leaderboard:
   - `!vs Name1 Name2` for today/week with win rate and KDA comparison.
-- Streak callouts:
-  - Highlight win heaters and loss tilt streaks with optional roast tone.
+- ~~Streak callouts~~ ✅ Implemented (2026-02-24)
 - Weekly title belts:
   - Rotating titles like "Damage King", "Objective Goblin", and "Vision Dad".
 - Prediction game:
@@ -225,3 +224,42 @@ Historical draft recovered from earlier README notes (`d8d0edc`):
    - `!Week`
 5. Verify recap behavior:
    - confirm recap + streak appear in one combined recap batch message.
+
+## Resume Snapshot (2026-02-24)
+
+- Branch: `main`
+- Working tree: clean
+- Latest pushed commits:
+  - `106433f` `docs: update README and ARCHITECTURE for streak tiers and !streak command`
+  - `1715a8a` `fix(commands): route !streak to match recap channel`
+  - `36349d1` `feat(commands): add !streak Name#Tag command`
+  - `5e20de4` `fix(recap): add ! to end of legendary streak message`
+  - `e03f073` `feat(recap): add legendary tier for 8+ game win/loss streaks`
+  - `4da4aa1` `fix(recap): increase streak lookback from 8 to 20 matches`
+
+### Implemented This Session
+
+- Fixed streak callout suppression for long streaks:
+  - `get_ranked_streak_info` lookback was capped at 8 matches; streaks beyond 8 produced the same dedup token and were silently dropped.
+  - Raised `max_matches` from 8 → 20 (matches the already-fetched `count=20` recent IDs).
+- Added third streak callout tier (8+ games):
+  - Win 8+: 👑 **LEGENDARY** "This is not a drill. Someone call Riot!"
+  - Loss 8+: 🛑 **FULL TILT** "Log off. Touch grass. This is a cry for help."
+  - Existing tiers unchanged: Momentum (3–4), Heater Alert / Cold Streak (5–7), Tilt Watch (5–7).
+- Added `!streak Name#Tag` command (recap channel):
+  - Fetches 20 recent matches, computes current ranked streak, posts the appropriate callout tier.
+  - Updates the dedup token so the worker won't re-fire the same count automatically.
+  - Works for any valid Riot ID (not limited to tracked players).
+  - Files: `src/constants.py`, `src/discord_command_handlers.py`, `src/discord_bot.py`, `tests/test_discord_command_handlers.py`
+
+### Validation
+
+- Full suite: `64 passed`
+
+### Quick Re-entry Steps
+
+1. Pull latest `main`.
+2. Run smoke checks:
+   - `!health` (events channel)
+   - `!streak Name#Tag` (recap channel)
+3. Verify streak tiers fire correctly on next win/loss past 8.

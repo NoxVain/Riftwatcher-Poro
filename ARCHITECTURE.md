@@ -21,13 +21,16 @@ MoodBot is a Discord worker service that tracks ranked League results for tracke
   - background worker scheduling
   - startup logging and scoreboard lifecycle
 - `src/discord_command_handlers.py`
-  - command routing and command execution flow
+  - command entrypoint that delegates into modular handlers
+- `src/commands/`
+  - command context, routing/channel policy, and split handlers (`ops`, `player`, `report`)
 - `src/discord_text.py`
   - pure text helpers (request id formatters, recap text helpers, report signatures)
 - `src/mood_service.py`
-  - report generation and cache policy
-  - snapshot/live fallback logic
-  - daily refresh orchestration
+  - service facade for report generation/cache policy
+  - delegates refresh/report internals to `src/services/`
+- `src/services/`
+  - `report_builder.py`, `refresh.py`, `baselines.py`
 - `src/riot_api.py`
   - Riot API calls (account/summoner/league/matches)
   - retry/backoff behavior
@@ -39,10 +42,12 @@ MoodBot is a Discord worker service that tracks ranked League results for tracke
   - rank-state diffing and alert posting
 - `src/discord_backfill_worker.py`
   - low-priority older-match DB cache fill
-- `src/db.py`
-  - connection pool
-  - schema creation/migrations
-  - persistence helpers
+- `src/runtime/`
+  - shared runtime worker loops, message-store helpers, and alert helpers
+- `src/db/`
+  - connection pool (`pool.py`)
+  - schema creation/migrations (`schema.py`)
+  - persistence helpers split by concern (`state.py`, `players.py`, `cache.py`, `stats.py`, `ranked_state.py`)
 - `src/report_logic.py`
   - pure queue/window/ranking helpers
 - `src/rank_logic.py`

@@ -18,14 +18,17 @@ This project does not use Riot's official logos.
 
 - `src/app.py` - process entrypoint
 - `src/discord_bot.py` - runtime wiring, startup logs, worker scheduling
-- `src/discord_command_handlers.py` - command routing for Discord messages
+- `src/discord_command_handlers.py` - command entrypoint/delegator
+- `src/commands/` - command context, routing, and domain-specific handlers
 - `src/discord_text.py` - Discord text/render helpers
 - `src/mood_service.py` - report orchestration and refresh logic
+- `src/services/` - mood-service helper modules (report builder, refresh, baselines)
 - `src/riot_api.py` - Riot API client, retries, match fetch/cache behavior
 - `src/discord_recap_worker.py` - recap polling and recap -> stats sync
 - `src/discord_rank_worker.py` - ranked state comparison and notifications
 - `src/discord_backfill_worker.py` - low-priority historical cache backfill
-- `src/db.py` - Postgres schema + persistence helpers
+- `src/runtime/` - shared runtime worker/message/alert helpers
+- `src/db/` - Postgres pool, schema, and persistence helpers
 - `src/report_logic.py` - pure ranking/window helpers
 - `src/rank_logic.py` - rank queue normalization and rank-change message formatting
 - `tests/` - unit tests

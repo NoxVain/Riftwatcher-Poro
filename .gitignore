@@ -1,6 +1,7 @@
 __pycache__/
 .vs/
 .venv/
+env/
 .pytest_cache/
 pytest-cache-files-*/
 bot.env

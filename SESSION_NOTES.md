@@ -222,7 +222,7 @@ Historical draft recovered from earlier README notes (`d8d0edc`):
    - `!Mood`
    - `!Week`
 5. Verify recap behavior:
-   - confirm recap + streak appear in one combined recap batch message.
+   - confirm recap posts and streak callouts are delivered as separate messages.
 
 ## Resume Snapshot (2026-02-24)
 

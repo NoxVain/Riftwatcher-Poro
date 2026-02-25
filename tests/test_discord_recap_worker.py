@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timezone
 
+import pytest
 import requests
 
 from src.discord_recap_worker import process_recap_cycle
@@ -532,3 +533,88 @@ def test_process_recap_cycle_does_not_advance_state_when_match_fetch_fails():
 
     assert state[_state_key("Alpha#NA1")] == "EUW1_1"
     assert channel.messages == []
+
+
+@pytest.mark.parametrize("tts_state, expected_tts", [("1", True), ("0", False)])
+def test_process_recap_cycle_keeps_recap_and_streak_separate_with_tts_toggle(tts_state, expected_tts):
+    channel = FakeChannel()
+    riot = FakeRiotClient()
+    mood = FakeMoodService()
+    now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+
+    riot.puuid_by_riot_id = {"Alpha#NA1": "puuid-a"}
+    riot.recent_ids_by_puuid = {"puuid-a": ["EUW1_3", "EUW1_2", "EUW1_1"]}
+    riot.match_info_by_id = {
+        "EUW1_3": {
+            "info": {
+                "queueId": 420,
+                "gameDuration": 1800,
+                "gameEndTimestamp": now_ms,
+                "participants": [_participant("puuid-a", win=True)],
+            }
+        },
+        "EUW1_2": {
+            "info": {
+                "queueId": 420,
+                "gameDuration": 1750,
+                "gameEndTimestamp": now_ms - 200000,
+                "participants": [_participant("puuid-a", win=True)],
+            }
+        },
+        "EUW1_1": {
+            "info": {
+                "queueId": 420,
+                "gameDuration": 1700,
+                "gameEndTimestamp": now_ms - 400000,
+                "participants": [_participant("puuid-a", win=True)],
+            }
+        },
+    }
+    riot.mode_records_by_riot_id = {
+        "Alpha#NA1": (
+            {"solo_duo": {"wins": 3, "losses": 0}, "flex": {"wins": 0, "losses": 0}},
+            {"cs_total": 100, "minutes_total": 30.0},
+        ),
+    }
+
+    state = {
+        _state_key("Alpha#NA1"): "EUW1_1",
+        "streak_tts_enabled": tts_state,
+    }
+
+    def db_get_state(key):
+        return state.get(key)
+
+    def db_set_state(key, value):
+        state[key] = value
+
+    asyncio.run(
+        process_recap_cycle(
+            friends=["Alpha#NA1"],
+            riot_client=riot,
+            mood_service=mood,
+            report_timezone=timezone.utc,
+            match_recap_channel_id=123,
+            channel=channel,
+            db_enabled=True,
+            db_get_state=db_get_state,
+            db_set_state=db_set_state,
+            db_upsert_daily_stats=lambda *_args, **_kwargs: None,
+            edit_last_report_message=lambda **_kwargs: asyncio.sleep(0),
+            log=lambda _msg: None,
+        )
+    )
+
+    assert len(channel.messages) == 2
+    recap_msg = channel.messages[0]
+    streak_msg = channel.messages[1]
+
+    assert "New Match Recap" in recap_msg["content"]
+    assert recap_msg["content"].count("New Match Recap") == 2
+    assert "Momentum" not in recap_msg["content"]
+    assert "Heater Alert" not in recap_msg["content"]
+    assert recap_msg["tts"] is False
+
+    assert "New Match Recap" not in streak_msg["content"]
+    assert ("Momentum" in streak_msg["content"]) or ("Heater Alert" in streak_msg["content"])
+    assert streak_msg["tts"] is expected_tts

@@ -5,7 +5,7 @@
 - Branch: `main`
 - Runtime entrypoint: `python -m src.app`
 - DB mode: Postgres required (`DATABASE_URL`)
-- Test status: `106 passed` (`python -m pytest -q`)
+- Test status: `115 passed` (`python -m pytest -q`)
 
 ## Current Architecture
 
@@ -33,6 +33,7 @@
   - toggle with `!tts on|off|status`
   - command allowed in `EVENTS_CHANNEL_ID` and `MATCH_RECAP_CHANNEL_ID`
 - `!streak` is enforced to recap channel routing (bare and with Riot ID arg).
+- `!profile Name#Tag` is available in `EVENTS_CHANNEL_ID`.
 
 ## Reliability / Correctness Fixes Completed Recently
 
@@ -46,6 +47,12 @@
 - Added recap integration coverage for recap/streak separation + TTS toggle.
 - Tightened GitLab CI test trigger rules:
   - tests run on `push` and `merge_request_event`.
+- Added worker latency metrics export in `!health` (`last/avg/max`).
+- Added stalled-worker watchdog alerts + recovery notices with dedupe state.
+- Updated scoring implementation:
+  - stricter Wilson confidence
+  - weighted performance percentile
+  - performance-weight ramp by game count
 
 ## CI/Deploy Notes
 
@@ -75,6 +82,7 @@
    - `!Weekly` (weekly channel)
    - `!tts status` (events or recap channel)
    - `!streak Name#Tag` (recap channel)
+   - `!profile Name#Tag` (events channel)
 
 ## Docs Index
 

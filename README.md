@@ -160,3 +160,4 @@ On Windows, if `python` resolves to a WindowsApps alias, run tests with an expli
 - If `MAX_TODAY_MATCH_DETAILS` is high, refresh cycles can become long on heavy accounts.
 - If Riot rate-limits (`429`), client retries with backoff.
 - Warning when recap and daily channel IDs are equal is informational only.
+- See `OPERATIONS.md` for incident response, deploy rules, and health triage steps.

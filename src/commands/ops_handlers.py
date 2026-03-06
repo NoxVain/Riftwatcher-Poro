@@ -1,10 +1,11 @@
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import requests
 
 from src.constants import (
     ADD_COMMAND,
+    BACKFILL_COMMAND,
     HEALTH_COMMAND,
     HELP_COMMAND,
     RIOT_TEST_COMMAND,
@@ -104,6 +105,67 @@ async def handle_ops_commands(ctx):
         report = await ctx.mood_service.build_score_breakdown_report()
         await ctx.message.channel.send(report)
         ctx.log("[score] Sent score breakdown.")
+        return True
+
+    if content_lower == BACKFILL_COMMAND.casefold():
+        await ctx.message.channel.send(f"Usage: `{BACKFILL_COMMAND} YYYY-MM-DD YYYY-MM-DD`")
+        return True
+
+    if content_lower.startswith(f"{BACKFILL_COMMAND.casefold()} "):
+        if not ctx.db_enabled:
+            await ctx.message.channel.send("Backfill requires postgres-backed mode.")
+            return True
+
+        parts = content.split()
+        if len(parts) != 3:
+            await ctx.message.channel.send(f"Usage: `{BACKFILL_COMMAND} YYYY-MM-DD YYYY-MM-DD`")
+            return True
+
+        try:
+            start_day = datetime.strptime(parts[1], "%Y-%m-%d").date()
+            end_day = datetime.strptime(parts[2], "%Y-%m-%d").date()
+        except ValueError:
+            await ctx.message.channel.send(
+                f"Backfill failed: invalid date format. Use `{BACKFILL_COMMAND} YYYY-MM-DD YYYY-MM-DD`."
+            )
+            return True
+
+        if end_day < start_day:
+            await ctx.message.channel.send("Backfill failed: end date must be on or after start date.")
+            return True
+
+        day_span = (end_day - start_day).days + 1
+        if day_span > 366:
+            await ctx.message.channel.send(
+                f"Backfill failed: range too large ({day_span} days). Max supported is 366 days per run."
+            )
+            return True
+
+        status_message = await ctx.message.channel.send(
+            f"\u23F3 Backfilling cached match stats for `{start_day.isoformat()}` -> `{end_day.isoformat()}`..."
+        )
+        try:
+            result = await ctx.mood_service.backfill_daily_stats_from_cache(start_day, end_day, max_payloads=0)
+            if result.get("error"):
+                await status_message.edit(content=f"Backfill failed: {result['error']}")
+                return True
+            await status_message.edit(
+                content=(
+                    f"\u2705 Backfill complete for `{start_day.isoformat()}` -> `{end_day.isoformat()}`.\n"
+                    f"- Cache payloads scanned: `{result.get('scanned_payloads', 0)}`\n"
+                    f"- Matches matched: `{result.get('matched_matches', 0)}`\n"
+                    f"- Player entries updated: `{result.get('upserts', 0)}`\n"
+                    f"- Days written: `{result.get('days_written', 0)}`\n"
+                    f"- Tracked players missing PUUID: `{result.get('players_without_puuid', 0)}`"
+                )
+            )
+            ctx.log(
+                f"[backfill] Completed cache backfill {start_day.isoformat()}..{end_day.isoformat()} "
+                f"upserts={result.get('upserts', 0)} scanned={result.get('scanned_payloads', 0)}"
+            )
+        except Exception as exc:
+            await status_message.edit(content=f"Backfill failed: {exc}")
+            ctx.log(f"[backfill] Failed cache backfill: {exc}")
         return True
 
     if content_lower == TTS_COMMAND.casefold():

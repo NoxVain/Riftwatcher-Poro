@@ -5,10 +5,17 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from src.report_logic import (
+    accumulate_participant_performance,
     compute_gamer_score,
+    create_mode_records,
+    create_performance_totals,
     derive_primary_role,
+    get_match_duration_seconds,
+    get_match_end_unix_seconds,
+    get_mode_bucket,
     get_mode_totals,
     get_report_cycle_key,
+    is_remake_match,
     rank_sort_key,
 )
 from src.riot_api import get_lol_name
@@ -321,6 +328,112 @@ class MoodService:
 
     async def build_score_breakdown_report(self):
         return await service_build_score_breakdown_report(self)
+
+    async def backfill_daily_stats_from_cache(self, start_day_date, end_day_date, max_payloads=0):
+        if not self.db_enabled:
+            return {"error": "db_disabled"}
+        if self.db_load_match_payloads_for_baseline is None:
+            return {"error": "cache_loader_unavailable"}
+
+        payloads = await asyncio.to_thread(self.db_load_match_payloads_for_baseline, int(max_payloads))
+        puuid_to_riot_id = {}
+        missing_puuid = []
+        for riot_id in self.friends:
+            cache_key = riot_id.casefold()
+            puuid = self.riot_client.puuid_cache.get(cache_key)
+            if puuid is None and hasattr(self.riot_client, "db_get_puuid"):
+                puuid = await asyncio.to_thread(self.riot_client.db_get_puuid, riot_id)
+            if not puuid:
+                missing_puuid.append(riot_id)
+                continue
+            puuid_to_riot_id[str(puuid)] = riot_id
+
+        per_day_player = {}
+        scanned_payloads = 0
+        matched_matches = 0
+        matched_participants = 0
+
+        for match_info in payloads:
+            scanned_payloads += 1
+            if not isinstance(match_info, dict):
+                continue
+            info = match_info.get("info", {}) or {}
+            queue_id = int(info.get("queueId", -1) or -1)
+            bucket_name = get_mode_bucket(queue_id)
+            if bucket_name is None:
+                continue
+            if is_remake_match(match_info):
+                continue
+
+            match_end_ts = get_match_end_unix_seconds(match_info)
+            match_end_utc = datetime.fromtimestamp(match_end_ts, tz=timezone.utc)
+            cycle_key = get_report_cycle_key(
+                self.report_timezone,
+                day_start_hour=self.report_day_start_hour,
+                now_utc=match_end_utc,
+            )
+            cycle_day = datetime.fromisoformat(cycle_key).date()
+            if cycle_day < start_day_date or cycle_day > end_day_date:
+                continue
+
+            participants = info.get("participants", []) or []
+            duration_seconds = get_match_duration_seconds(match_info)
+            touched = False
+            for participant in participants:
+                riot_id = puuid_to_riot_id.get(str(participant.get("puuid", "")))
+                if riot_id is None:
+                    continue
+                day_entry = per_day_player.setdefault(cycle_day, {}).setdefault(
+                    riot_id,
+                    {
+                        "mode_records": create_mode_records(),
+                        "performance_totals": create_performance_totals(),
+                    },
+                )
+                result = participant.get("win")
+                if result is True:
+                    day_entry["mode_records"][bucket_name]["wins"] += 1
+                elif result is False:
+                    day_entry["mode_records"][bucket_name]["losses"] += 1
+                accumulate_participant_performance(
+                    day_entry["performance_totals"],
+                    participant,
+                    duration_seconds,
+                    match_info=match_info,
+                )
+                matched_participants += 1
+                touched = True
+            if touched:
+                matched_matches += 1
+
+        upserts = 0
+        for cycle_day, players in sorted(per_day_player.items(), key=lambda row: row[0]):
+            cycle_key = cycle_day.isoformat()
+            for riot_id, payload in sorted(players.items(), key=lambda row: row[0].casefold()):
+                mode_records = payload["mode_records"]
+                performance_totals = payload["performance_totals"]
+                primary_role = derive_primary_role(performance_totals)
+                await asyncio.to_thread(
+                    self.db_upsert_daily_stats,
+                    cycle_key,
+                    riot_id,
+                    mode_records,
+                    performance_totals,
+                    primary_role,
+                )
+                upserts += 1
+
+        if upserts > 0:
+            self.invalidate_report_cache()
+
+        return {
+            "scanned_payloads": scanned_payloads,
+            "matched_matches": matched_matches,
+            "matched_participants": matched_participants,
+            "upserts": upserts,
+            "days_written": len(per_day_player),
+            "players_without_puuid": len(missing_puuid),
+        }
 
     async def run_health_check(self, start_monotonic, worker_stats=None):
         uptime_seconds = int(time.monotonic() - start_monotonic)

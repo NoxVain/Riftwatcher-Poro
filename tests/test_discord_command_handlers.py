@@ -50,6 +50,7 @@ class FakeMoodService:
     def __init__(self, build_outputs):
         self._build_outputs = list(build_outputs)
         self.refresh_recent_calls = []
+        self.backfill_calls = []
         self.invalidated = False
         self._role_baselines = None
 
@@ -99,6 +100,16 @@ class FakeMoodService:
 
     async def _ensure_role_baselines(self):
         return None
+
+    async def backfill_daily_stats_from_cache(self, start_day, end_day, max_payloads=0):
+        self.backfill_calls.append((start_day, end_day, max_payloads))
+        return {
+            "scanned_payloads": 42,
+            "matched_matches": 8,
+            "upserts": 5,
+            "days_written": 3,
+            "players_without_puuid": 1,
+        }
 
 
 class FakeRiotClient:
@@ -713,6 +724,76 @@ def test_health_command_includes_worker_latency_metrics_when_available():
     text = channel.sent_messages[0].content
     assert "refresh: 10ok/1err" in text
     assert "1200ms last/980ms avg/3000ms max" in text
+
+
+def test_backfill_command_runs_cache_backfill_and_reports_summary():
+    channel = FakeChannel(channel_id=999)
+    incoming = FakeIncomingMessage("!backfill 2026-01-01 2026-01-31", channel)
+    mood_service = FakeMoodService(build_outputs=["unused"])
+
+    asyncio.run(
+        handle_incoming_message(
+            message=incoming,
+            channel_id=777,
+            friends=["Alpha#NA1"],
+            riot_client=FakeRiotClient(),
+            mood_service=mood_service,
+            report_timezone_name="UTC",
+            report_day_start_hour=9,
+            db_enabled=True,
+            start_monotonic=0.0,
+            mood_request_lock=asyncio.Lock(),
+            request_id_context=contextvars.ContextVar("request_id", default=None),
+            create_request_id=lambda _prefix: "backfill-1234",
+            get_or_create_report_message=lambda _channel, _initial_content: None,
+            remember_report_message=lambda _message: None,
+            normalize_riot_id=lambda riot_id: riot_id,
+            db_upsert_player=lambda _riot_id, _puuid: None,
+            log=lambda _msg: None,
+            weekly_report_channel_id=888,
+            events_channel_id=999,
+        )
+    )
+
+    assert len(mood_service.backfill_calls) == 1
+    assert len(channel.sent_messages) == 1
+    text = channel.sent_messages[0].content
+    assert "Backfill complete" in text
+    assert "Player entries updated: `5`" in text
+
+
+def test_backfill_command_rejects_invalid_date_format():
+    channel = FakeChannel(channel_id=999)
+    incoming = FakeIncomingMessage("!backfill 2026-01-XX 2026-01-31", channel)
+    mood_service = FakeMoodService(build_outputs=["unused"])
+
+    asyncio.run(
+        handle_incoming_message(
+            message=incoming,
+            channel_id=777,
+            friends=["Alpha#NA1"],
+            riot_client=FakeRiotClient(),
+            mood_service=mood_service,
+            report_timezone_name="UTC",
+            report_day_start_hour=9,
+            db_enabled=True,
+            start_monotonic=0.0,
+            mood_request_lock=asyncio.Lock(),
+            request_id_context=contextvars.ContextVar("request_id", default=None),
+            create_request_id=lambda _prefix: "backfill-5678",
+            get_or_create_report_message=lambda _channel, _initial_content: None,
+            remember_report_message=lambda _message: None,
+            normalize_riot_id=lambda riot_id: riot_id,
+            db_upsert_player=lambda _riot_id, _puuid: None,
+            log=lambda _msg: None,
+            weekly_report_channel_id=888,
+            events_channel_id=999,
+        )
+    )
+
+    assert mood_service.backfill_calls == []
+    assert len(channel.sent_messages) == 1
+    assert "invalid date format" in channel.sent_messages[0].content
 
 
 def test_profile_command_returns_summary_for_player():

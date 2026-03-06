@@ -56,8 +56,21 @@ def create_performance_totals():
         "healing": 0,
         "damage_taken": 0,
         "kills": 0,
+        "assists": 0,
         "deaths": 0,
         "vision_score": 0,
+        "gold_earned": 0,
+        "wards_placed": 0,
+        "wards_killed": 0,
+        "turret_takedowns": 0,
+        "dragon_takedowns": 0,
+        "baron_takedowns": 0,
+        "double_kills": 0,
+        "triple_kills": 0,
+        "quadra_kills": 0,
+        "penta_kills": 0,
+        "kill_participation_num": 0,
+        "kill_participation_den": 0,
     }
 
 
@@ -67,7 +80,7 @@ def get_mode_totals(mode_records):
     return wins, losses
 
 
-def accumulate_participant_performance(performance_totals, participant, duration_seconds):
+def accumulate_participant_performance(performance_totals, participant, duration_seconds, match_info=None):
     performance_totals["minutes_total"] += max(0.0, duration_seconds / 60.0)
     performance_totals["cs_total"] += int(participant.get("totalMinionsKilled", 0) or 0)
     performance_totals["cs_total"] += int(participant.get("neutralMinionsKilled", 0) or 0)
@@ -75,9 +88,32 @@ def accumulate_participant_performance(performance_totals, participant, duration
     performance_totals["player_damage"] += int(participant.get("totalDamageDealtToChampions", 0) or 0)
     performance_totals["healing"] += int(participant.get("totalHeal", 0) or 0)
     performance_totals["damage_taken"] += int(participant.get("totalDamageTaken", 0) or 0)
-    performance_totals["kills"] += int(participant.get("kills", 0) or 0)
+    kills = int(participant.get("kills", 0) or 0)
+    assists = int(participant.get("assists", 0) or 0)
+    performance_totals["kills"] += kills
+    performance_totals["assists"] += assists
     performance_totals["deaths"] += int(participant.get("deaths", 0) or 0)
     performance_totals["vision_score"] += int(participant.get("visionScore", 0) or 0)
+    performance_totals["gold_earned"] += int(participant.get("goldEarned", 0) or 0)
+    performance_totals["wards_placed"] += int(participant.get("wardsPlaced", 0) or 0)
+    performance_totals["wards_killed"] += int(participant.get("wardsKilled", 0) or 0)
+    performance_totals["turret_takedowns"] += int(participant.get("turretTakedowns", 0) or 0)
+    performance_totals["dragon_takedowns"] += int(participant.get("dragonTakedowns", 0) or 0)
+    performance_totals["baron_takedowns"] += int(participant.get("baronTakedowns", 0) or 0)
+    performance_totals["double_kills"] += int(participant.get("doubleKills", 0) or 0)
+    performance_totals["triple_kills"] += int(participant.get("tripleKills", 0) or 0)
+    performance_totals["quadra_kills"] += int(participant.get("quadraKills", 0) or 0)
+    performance_totals["penta_kills"] += int(participant.get("pentaKills", 0) or 0)
+
+    team_id = participant.get("teamId")
+    if match_info is not None and team_id is not None:
+        team_kills = 0
+        participants = match_info.get("info", {}).get("participants", []) or []
+        for row in participants:
+            if row.get("teamId") == team_id:
+                team_kills += int(row.get("kills", 0) or 0)
+        performance_totals["kill_participation_num"] += (kills + assists)
+        performance_totals["kill_participation_den"] += team_kills
     position = str(participant.get("teamPosition", "") or "").upper()
     if position in VALID_POSITIONS:
         role_votes = performance_totals.setdefault("_role_votes", {})
@@ -292,4 +328,3 @@ def is_match_in_report_cycle(match_info, report_timezone, day_start_hour=6, now_
     window_start = get_report_cycle_start_unix_seconds(report_timezone, day_start_hour=day_start_hour, now_utc=now_utc)
     end_ts = get_match_end_unix_seconds(match_info)
     return end_ts >= window_start
-

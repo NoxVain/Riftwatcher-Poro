@@ -53,11 +53,18 @@ def db_health_stats():
 
 
 def db_load_match_payloads_for_baseline(limit=5000):
-    rows = db_execute(
-        "SELECT payload FROM match_info_cache ORDER BY updated_at DESC LIMIT %s;",
-        (int(limit),),
-        fetch=True,
-    ) or []
+    safe_limit = int(limit)
+    if safe_limit > 0:
+        rows = db_execute(
+            "SELECT payload FROM match_info_cache ORDER BY updated_at DESC LIMIT %s;",
+            (safe_limit,),
+            fetch=True,
+        ) or []
+    else:
+        rows = db_execute(
+            "SELECT payload FROM match_info_cache ORDER BY updated_at DESC;",
+            fetch=True,
+        ) or []
     result = []
     for (payload_text,) in rows:
         if not payload_text:

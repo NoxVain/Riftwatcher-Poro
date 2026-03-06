@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
 
 from src.report_logic import (
+    accumulate_participant_performance,
     compute_gamer_score,
     compute_perf_percentile,
+    create_performance_totals,
     create_mode_records,
     format_mode_line,
     gamer_score_weights_for_games,
@@ -115,6 +117,55 @@ def test_get_mode_totals_counts_ranked_only():
     records["solo_duo"]["wins"] = 2
     records["flex"]["losses"] = 1
     assert get_mode_totals(records) == (2, 1)
+
+
+def test_accumulate_participant_performance_collects_extended_stats_and_kp():
+    totals = create_performance_totals()
+    match_info = {
+        "info": {
+            "participants": [
+                {"teamId": 100, "kills": 5},
+                {"teamId": 100, "kills": 7},
+                {"teamId": 200, "kills": 9},
+            ]
+        }
+    }
+    participant = {
+        "teamId": 100,
+        "totalMinionsKilled": 120,
+        "neutralMinionsKilled": 20,
+        "damageDealtToObjectives": 3000,
+        "totalDamageDealtToChampions": 25000,
+        "totalHeal": 1500,
+        "totalDamageTaken": 18000,
+        "kills": 8,
+        "assists": 6,
+        "deaths": 3,
+        "visionScore": 22,
+        "goldEarned": 14000,
+        "wardsPlaced": 10,
+        "wardsKilled": 4,
+        "turretTakedowns": 2,
+        "dragonTakedowns": 1,
+        "baronTakedowns": 1,
+        "doubleKills": 1,
+        "tripleKills": 0,
+        "quadraKills": 0,
+        "pentaKills": 0,
+        "teamPosition": "MIDDLE",
+    }
+
+    accumulate_participant_performance(totals, participant, 1800, match_info=match_info)
+
+    assert totals["minutes_total"] == 30.0
+    assert totals["cs_total"] == 140
+    assert totals["assists"] == 6
+    assert totals["gold_earned"] == 14000
+    assert totals["wards_placed"] == 10
+    assert totals["turret_takedowns"] == 2
+    assert totals["double_kills"] == 1
+    assert totals["kill_participation_num"] == 14
+    assert totals["kill_participation_den"] == 12
 
 
 def test_get_match_end_unix_seconds_falls_back_when_end_timestamp_missing():

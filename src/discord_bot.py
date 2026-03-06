@@ -10,7 +10,7 @@ from src import config as cfg
 from src import db as dbm
 from src.discord_command_handlers import handle_incoming_message
 from src.discord_text import create_request_id
-from src.constants import ADD_COMMAND, DEBUG_PLAYER_COMMAND, HEALTH_COMMAND, MOOD_COMMAND, REMOVE_COMMAND, RIOT_TEST_COMMAND, TEST_COMMAND, WEEK_COMMAND
+from src.constants import ADD_COMMAND, BACKFILL_COMMAND, DEBUG_PLAYER_COMMAND, HEALTH_COMMAND, MOOD_COMMAND, REMOVE_COMMAND, RIOT_TEST_COMMAND, TEST_COMMAND, WEEK_COMMAND
 from src.mood_service import MoodService
 from src.riot_api import RiotApiClient
 from src.runtime.alerts import RiotAlertState, trigger_riot_key_alert as runtime_trigger_riot_key_alert
@@ -462,6 +462,7 @@ async def on_ready():
     log(f"[startup] Use {REMOVE_COMMAND} <Name#Tag> in channel {EVENTS_CHANNEL_ID} to remove a player at runtime.")
     log(f"[startup] Use {DEBUG_PLAYER_COMMAND} <Name#Tag> in channel {EVENTS_CHANNEL_ID} to inspect queue bucket mapping.")
     log(f"[startup] Use {HEALTH_COMMAND} in channel {EVENTS_CHANNEL_ID} for health status.")
+    log(f"[startup] Use {BACKFILL_COMMAND} <YYYY-MM-DD> <YYYY-MM-DD> in channel {EVENTS_CHANNEL_ID} for cache backfill.")
     log(f"[startup] Loaded {len(FRIENDS)} tracked players from postgres.")
     log("[startup] Player store: postgres")
     log(f"[startup] Report timezone: {REPORT_TIMEZONE_NAME}")

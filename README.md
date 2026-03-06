@@ -96,6 +96,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 - `!remove Name#Tag`
 - `!DebugPlayer Name#Tag`
 - `!health`
+- `!backfill YYYY-MM-DD YYYY-MM-DD`
 - `!test`
 - `!riottest`
 - `!help`

@@ -131,8 +131,21 @@ async def refresh_recent_matches_snapshot(service, recent_count=20):
                 "healing": int(row["healing"] or 0),
                 "damage_taken": int(row["damage_taken"] or 0),
                 "kills": int(row["kills"] or 0),
+                "assists": int(row.get("assists", 0) or 0),
                 "deaths": int(row["deaths"] or 0),
                 "vision_score": int(row["vision_score"] or 0),
+                "gold_earned": int(row.get("gold_earned", 0) or 0),
+                "wards_placed": int(row.get("wards_placed", 0) or 0),
+                "wards_killed": int(row.get("wards_killed", 0) or 0),
+                "turret_takedowns": int(row.get("turret_takedowns", 0) or 0),
+                "dragon_takedowns": int(row.get("dragon_takedowns", 0) or 0),
+                "baron_takedowns": int(row.get("baron_takedowns", 0) or 0),
+                "double_kills": int(row.get("double_kills", 0) or 0),
+                "triple_kills": int(row.get("triple_kills", 0) or 0),
+                "quadra_kills": int(row.get("quadra_kills", 0) or 0),
+                "penta_kills": int(row.get("penta_kills", 0) or 0),
+                "kill_participation_num": int(row.get("kill_participation_num", 0) or 0),
+                "kill_participation_den": int(row.get("kill_participation_den", 0) or 0),
             }
             player_changed = False
             for match_id in reversed(new_match_ids):
@@ -160,7 +173,12 @@ async def refresh_recent_matches_snapshot(service, recent_count=20):
                     mode_records[bucket_name]["losses"] += 1
                     player_changed = True
                 duration_seconds = get_match_duration_seconds(match_info)
-                accumulate_participant_performance(performance_totals, participant, duration_seconds)
+                accumulate_participant_performance(
+                    performance_totals,
+                    participant,
+                    duration_seconds,
+                    match_info=match_info,
+                )
 
             if player_changed:
                 await asyncio.to_thread(

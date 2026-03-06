@@ -485,7 +485,12 @@ class RiotApiClient:
                 mode_records[bucket_name]["losses"] += 1
 
             duration_seconds = get_match_duration_seconds(match_info)
-            accumulate_participant_performance(performance_totals, participant, duration_seconds)
+            accumulate_participant_performance(
+                performance_totals,
+                participant,
+                duration_seconds,
+                match_info=match_info,
+            )
 
         wins, losses = get_mode_totals(mode_records)
         elapsed_ms = int((time.perf_counter() - player_start) * 1000)

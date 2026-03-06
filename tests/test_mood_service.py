@@ -8,6 +8,7 @@ class FakeRiotClient:
     def __init__(self):
         self.today_records_by_riot_id = {}
         self.puuid_by_riot_id = {}
+        self.puuid_cache = {}
         self.recent_ids_by_puuid = {}
         self.match_info_by_id = {}
         self.clear_match_cache_calls = 0
@@ -531,3 +532,83 @@ def test_run_health_check_includes_backfill_offsets_for_tracked_players():
     assert stats["players_with_backfill_offset"] == 1
     assert stats["max_backfill_offset"] == 250
     assert stats["top_backfill_offsets"] == ["Alpha#NA1=250"]
+
+
+def test_backfill_daily_stats_from_cache_rebuilds_range_from_cached_payloads():
+    riot = FakeRiotClient()
+    riot.puuid_cache["alpha#na1"] = "puuid-alpha"
+
+    now = datetime(2026, 2, 20, 12, 0, tzinfo=timezone.utc)
+    payloads = [
+        {
+            "info": {
+                "queueId": 420,
+                "gameDuration": 1800,
+                "gameEndTimestamp": int(now.timestamp() * 1000),
+                "participants": [
+                    {
+                        "puuid": "puuid-alpha",
+                        "teamId": 100,
+                        "win": True,
+                        "kills": 6,
+                        "assists": 4,
+                        "deaths": 2,
+                        "totalMinionsKilled": 120,
+                        "neutralMinionsKilled": 20,
+                        "damageDealtToObjectives": 2000,
+                        "totalDamageDealtToChampions": 18000,
+                        "totalHeal": 500,
+                        "totalDamageTaken": 12000,
+                        "visionScore": 18,
+                        "goldEarned": 12000,
+                    },
+                    {"puuid": "ally", "teamId": 100, "kills": 8},
+                    {"puuid": "enemy", "teamId": 200, "kills": 10},
+                ],
+            }
+        }
+    ]
+
+    upserts = []
+    service = MoodService(
+        log=lambda _msg: None,
+        friends=["Alpha#NA1"],
+        riot_client=riot,
+        report_timezone=timezone.utc,
+        report_day_start_hour=6,
+        report_cache_seconds=120,
+        daily_refresh_seconds=300,
+        db_enabled=True,
+        db_load_latest_stats=lambda _day: [],
+        db_load_weekly_stats=lambda _start, _end: [],
+        db_upsert_daily_stats=lambda cycle_key, riot_id, mode_records, performance_totals, primary_role=None: upserts.append(
+            (cycle_key, riot_id, mode_records, performance_totals, primary_role)
+        ),
+        db_get_daily_stats_for_player=lambda _day, _riot_id: None,
+        db_get_last_seen_match_id=lambda _riot_id: None,
+        db_set_last_seen_match_id=lambda _riot_id, _match_id: None,
+        db_health_stats=lambda: {"db_ok": True, "match_cache_entries": 1},
+        db_load_match_payloads_for_baseline=lambda _limit: payloads,
+    )
+
+    result = asyncio.run(
+        service.backfill_daily_stats_from_cache(
+            start_day_date=now.date(),
+            end_day_date=now.date(),
+            max_payloads=0,
+        )
+    )
+
+    assert result["upserts"] == 1
+    assert result["matched_matches"] == 1
+    assert result["matched_participants"] == 1
+    assert result["players_without_puuid"] == 0
+    assert len(upserts) == 1
+    cycle_key, riot_id, mode_records, performance_totals, _primary_role = upserts[0]
+    assert cycle_key == now.date().isoformat()
+    assert riot_id == "Alpha#NA1"
+    assert mode_records["solo_duo"]["wins"] == 1
+    assert performance_totals["assists"] == 4
+    assert performance_totals["gold_earned"] == 12000
+    assert performance_totals["kill_participation_num"] == 10
+    assert performance_totals["kill_participation_den"] == 14

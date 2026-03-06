@@ -33,8 +33,21 @@ def init_db():
             healing BIGINT NOT NULL DEFAULT 0,
             damage_taken BIGINT NOT NULL DEFAULT 0,
             kills INTEGER NOT NULL DEFAULT 0,
+            assists INTEGER NOT NULL DEFAULT 0,
             deaths INTEGER NOT NULL DEFAULT 0,
             vision_score INTEGER NOT NULL DEFAULT 0,
+            gold_earned BIGINT NOT NULL DEFAULT 0,
+            wards_placed INTEGER NOT NULL DEFAULT 0,
+            wards_killed INTEGER NOT NULL DEFAULT 0,
+            turret_takedowns INTEGER NOT NULL DEFAULT 0,
+            dragon_takedowns INTEGER NOT NULL DEFAULT 0,
+            baron_takedowns INTEGER NOT NULL DEFAULT 0,
+            double_kills INTEGER NOT NULL DEFAULT 0,
+            triple_kills INTEGER NOT NULL DEFAULT 0,
+            quadra_kills INTEGER NOT NULL DEFAULT 0,
+            penta_kills INTEGER NOT NULL DEFAULT 0,
+            kill_participation_num INTEGER NOT NULL DEFAULT 0,
+            kill_participation_den INTEGER NOT NULL DEFAULT 0,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             PRIMARY KEY (day_date, riot_id)
         );
@@ -47,6 +60,19 @@ def init_db():
         """
     )
     db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS primary_role TEXT NULL;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS assists INTEGER NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS gold_earned BIGINT NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS wards_placed INTEGER NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS wards_killed INTEGER NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS turret_takedowns INTEGER NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS dragon_takedowns INTEGER NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS baron_takedowns INTEGER NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS double_kills INTEGER NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS triple_kills INTEGER NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS quadra_kills INTEGER NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS penta_kills INTEGER NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS kill_participation_num INTEGER NOT NULL DEFAULT 0;")
+    db_execute("ALTER TABLE player_daily_stats ADD COLUMN IF NOT EXISTS kill_participation_den INTEGER NOT NULL DEFAULT 0;")
     db_execute(
         """
         CREATE TABLE IF NOT EXISTS match_info_cache (

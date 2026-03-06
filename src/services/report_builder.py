@@ -47,8 +47,21 @@ def rows_to_ranked_results(rows, tracked_friends, baselines=None):
             "healing": int(row["healing"] or 0),
             "damage_taken": int(row["damage_taken"] or 0),
             "kills": int(row["kills"] or 0),
+            "assists": int(row.get("assists", 0) or 0),
             "deaths": int(row["deaths"] or 0),
             "vision_score": int(row["vision_score"] or 0),
+            "gold_earned": int(row.get("gold_earned", 0) or 0),
+            "wards_placed": int(row.get("wards_placed", 0) or 0),
+            "wards_killed": int(row.get("wards_killed", 0) or 0),
+            "turret_takedowns": int(row.get("turret_takedowns", 0) or 0),
+            "dragon_takedowns": int(row.get("dragon_takedowns", 0) or 0),
+            "baron_takedowns": int(row.get("baron_takedowns", 0) or 0),
+            "double_kills": int(row.get("double_kills", 0) or 0),
+            "triple_kills": int(row.get("triple_kills", 0) or 0),
+            "quadra_kills": int(row.get("quadra_kills", 0) or 0),
+            "penta_kills": int(row.get("penta_kills", 0) or 0),
+            "kill_participation_num": int(row.get("kill_participation_num", 0) or 0),
+            "kill_participation_den": int(row.get("kill_participation_den", 0) or 0),
         }
         wins, losses = get_mode_totals(mode_records)
         total = wins + losses
@@ -265,8 +278,21 @@ async def build_score_breakdown_report(service):
             "healing": int(row["healing"] or 0),
             "damage_taken": int(row["damage_taken"] or 0),
             "kills": int(row["kills"] or 0),
+            "assists": int(row.get("assists", 0) or 0),
             "deaths": int(row["deaths"] or 0),
             "vision_score": int(row["vision_score"] or 0),
+            "gold_earned": int(row.get("gold_earned", 0) or 0),
+            "wards_placed": int(row.get("wards_placed", 0) or 0),
+            "wards_killed": int(row.get("wards_killed", 0) or 0),
+            "turret_takedowns": int(row.get("turret_takedowns", 0) or 0),
+            "dragon_takedowns": int(row.get("dragon_takedowns", 0) or 0),
+            "baron_takedowns": int(row.get("baron_takedowns", 0) or 0),
+            "double_kills": int(row.get("double_kills", 0) or 0),
+            "triple_kills": int(row.get("triple_kills", 0) or 0),
+            "quadra_kills": int(row.get("quadra_kills", 0) or 0),
+            "penta_kills": int(row.get("penta_kills", 0) or 0),
+            "kill_participation_num": int(row.get("kill_participation_num", 0) or 0),
+            "kill_participation_den": int(row.get("kill_participation_den", 0) or 0),
         }
         primary_role = str(row.get("primary_role") or "").upper() or None
         win_rate = (wins / (wins + losses)) * 100

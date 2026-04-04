@@ -1,11 +1,11 @@
-# Session Notes (2026-03-06)
+# Session Notes (2026-04-04)
 
 ## Current Snapshot
 
 - Branch: `main`
 - Runtime entrypoint: `python -m src.app`
 - DB mode: Postgres required (`DATABASE_URL`)
-- Test status: `124 passed` (`python -m pytest -q`)
+- Test status: `126 passed` (`python -m pytest -q`)
 
 ## Current Architecture
 
@@ -63,6 +63,9 @@
   - multi-kills (double/triple/quadra/penta)
   - kill participation numerator/denominator
 - Added one-shot historical cache backfill command (`!backfill`) for rebuilding old daily rows.
+- Prevented duplicate daily/weekly scoreboard posts on transient Discord message fetch failures:
+  - keep tracked message IDs on `discord.HTTPException`
+  - reset IDs only on `NotFound`/`Forbidden`
 
 ## CI/Deploy Notes
 

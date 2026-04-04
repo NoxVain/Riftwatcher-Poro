@@ -63,6 +63,21 @@ If behavior looks merged:
 2. Check for custom/manual posting logic outside MoodBot.
 3. Run tests: `python -m pytest -q tests/test_discord_recap_worker.py`.
 
+## Daily Scoreboard Duplicate Message Guard
+
+Symptom:
+- A new daily leaderboard message appears instead of updating the tracked one.
+
+Current behavior:
+- Transient Discord API fetch failures (`discord.HTTPException`) no longer clear tracked message IDs.
+- Tracked message state is cleared only when Discord returns `NotFound` or `Forbidden`.
+
+Troubleshooting:
+1. Confirm deployment includes commit `39b522c` or later.
+2. Check logs for `NotFound`/`Forbidden` while fetching tracked daily/weekly messages.
+3. Verify bot permissions in `DAILY_REPORT_CHANNEL_ID` still allow reading message history and editing messages.
+4. If IDs were previously reset due to old behavior, run `!Daily` once to re-anchor tracked message IDs.
+
 ## GitLab Deploy Rules
 
 Current pipeline behavior:

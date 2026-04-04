@@ -144,5 +144,6 @@ All channels are required and no channel fallback chain is used.
 
 - Snapshot throttling avoids unnecessary Discord edits in refresh cycles.
 - Oldest-data-first player ordering is used in full refresh cycles.
+- Daily and weekly tracked message references survive transient Discord fetch errors; message state is reset only on `NotFound`/`Forbidden`.
 - Riot `401` triggers one persisted alert flag to prevent notification spam.
 - Riot `429` retries are handled in the Riot client.

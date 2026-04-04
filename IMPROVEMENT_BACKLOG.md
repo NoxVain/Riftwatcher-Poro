@@ -1,6 +1,6 @@
 # Improvement Backlog
 
-This backlog tracks work not yet implemented as of 2026-03-06.
+This backlog tracks work not yet implemented as of 2026-04-04.
 
 ## Source docs reviewed
 
@@ -41,6 +41,7 @@ This backlog tracks work not yet implemented as of 2026-03-06.
   - refresh cleanup state decoupled from message state
   - worker latency metrics export in `!health`
   - stalled-worker watchdog with deduped alert/recovery messages
+  - transient Discord fetch failures no longer reset tracked daily/weekly message IDs
 - Scoring system adjustments shipped (no Scoring V2 rewrite):
   - stricter Wilson confidence default
   - weighted performance percentile

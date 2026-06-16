@@ -1,9 +1,16 @@
 __pycache__/
+*.pyc
 .vs/
 .venv/
 env/
+.env
+.env.*
+!.env.example
+.cache/
 .pytest_cache/
 pytest-cache-files-*/
+build/
+dist/
 bot.env
 AGENTS.md
 .claude/

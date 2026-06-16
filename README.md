@@ -168,10 +168,10 @@ Optional (with defaults):
 python -m pytest -q
 ```
 
-On Windows, if `python` resolves to a WindowsApps alias, run tests with an explicit interpreter path:
+On Windows, if `python` resolves to a WindowsApps alias, run tests with the Python launcher or an explicit interpreter path:
 
 ```powershell
-& 'C:\Users\gardf\AppData\Local\Python\bin\python.exe' -m pytest -q
+py -3.11 -m pytest -q
 ```
 
 ## Operations Notes

@@ -34,6 +34,8 @@ deploy_to_railway:
         - Procfile
         - railway.json
         - .gitlab-ci.yml
+        - .python-version
+        - .env.example
     - when: never
   before_script:
     - npm install -g @railway/cli

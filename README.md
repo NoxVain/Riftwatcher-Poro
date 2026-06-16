@@ -57,9 +57,12 @@ Start with:
 - Scoreboard rank ordering uses Wilson lower bound (displayed as `Gamer Score`).
 - Match recap posts in `MATCH_RECAP_CHANNEL_ID` with:
   - queue + end time + match duration
-  - champion/role
+  - champion/role for ranked Summoner's Rift queues
   - W/L, K/D/A, CS/min
   - player/objective damage, damage taken, healing, vision
+  - Arena (`1750`) placement/team formatting
+  - Arena augments and items by name when static data is available
+  - Arena skillshots hit/dodged from match challenge stats
 - Win/loss streak callouts post in `MATCH_RECAP_CHANNEL_ID` as separate messages:
   - 3-4 wins: Momentum
   - 5-7 wins: Heater Alert

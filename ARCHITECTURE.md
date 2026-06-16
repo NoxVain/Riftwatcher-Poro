@@ -71,6 +71,7 @@ All workers run continuously while connected, each with startup jitter and cycle
   - interval: `max(30, MATCH_RECAP_POLL_SECONDS)`
   - finds new matches using persisted per-player recap key
   - posts recap messages in `MATCH_RECAP_CHANNEL_ID` (queue, local end time, duration, per-player line items)
+  - formats Arena (`1750`) recaps with placement/team, augments/items, and skillshot challenge stats
   - posts win/loss streak callouts in `MATCH_RECAP_CHANNEL_ID` as separate messages (3-4: Momentum/Cold Streak, 5-7: Heater Alert/Tilt Watch, 8+: LEGENDARY/FULL TILT); deduped by `last_announced_streak::{riot_id}` token
   - streak callouts use Discord TTS by default; toggle with `!tts on|off|status`
   - lookback window: 20 matches

@@ -49,3 +49,8 @@ This backlog tracks work not yet implemented as of 2026-04-04.
 - Ops/docs refresh:
   - added `OPERATIONS.md` runbook
   - synced `README.md` and `SESSION_NOTES.md` to current behavior
+- Arena recap support:
+  - queue `1750` formatted as Arena 3x6
+  - placement/team ordering
+  - named augments/items and skillshots hit/dodged
+  - recap worker diagnostics for missing/skipped recaps

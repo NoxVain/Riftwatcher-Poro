@@ -28,6 +28,7 @@
 - Recap worker posts:
   - recap messages in `MATCH_RECAP_CHANNEL_ID`
   - streak callouts as separate messages (not merged into recap batches)
+  - Arena (`1750`) recaps with placement/team, named augments/items, and skillshots hit/dodged when match/static data is available
 - Streak TTS:
   - default ON
   - toggle with `!tts on|off|status`
@@ -66,6 +67,12 @@
 - Prevented duplicate daily/weekly scoreboard posts on transient Discord message fetch failures:
   - keep tracked message IDs on `discord.HTTPException`
   - reset IDs only on `NotFound`/`Forbidden`
+- Added Arena-specific match recap formatting:
+  - queue `1750` shown as Arena 3x6
+  - placement/team ordering
+  - named augment/item loadout lines via cached static data
+  - skillshots hit/dodged from participant challenge stats
+  - recap scan diagnostics for no-new/skip cases
 
 ## CI/Deploy Notes
 

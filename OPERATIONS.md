@@ -63,6 +63,25 @@ If behavior looks merged:
 2. Check for custom/manual posting logic outside MoodBot.
 3. Run tests: `python -m pytest -q tests/test_discord_recap_worker.py`.
 
+## Arena Recap Troubleshooting
+
+Expected behavior:
+- Queue `1750` posts as `Arena 3x6`.
+- Arena player lines use placement/team instead of lane role.
+- Augments and items are shown by name when static data can be loaded; raw IDs are used as fallback.
+- Skillshots hit/dodged are shown when Riot includes those challenge stats.
+
+If a recent Arena match does not appear:
+1. Check recap worker logs for `No new matches to post`.
+   - `initialized_players > 0` means the worker established a baseline and will only post future matches.
+   - `players_with_new_ids=0` means Riot's recent match list did not contain a newer match than the stored recap key.
+2. Check `Match scan summary`.
+   - `candidate_matches > 0` and `prepared_matches=0` means matches were fetched but skipped.
+   - `skipped_remakes` indicates remake/short-duration filtering.
+   - `skipped_no_tracked` indicates the fetched match did not include tracked participants.
+3. If the daily refresh sees `matches=1 total=0W-0L solo=0W-0L flex=0W-0L`, that can be normal for Arena because daily scoreboard totals only include solo/flex ranked queues.
+4. If augment/item names are missing, verify outbound access to CommunityDragon/Data Dragon from the host. The recap still works with raw IDs when static data is unavailable.
+
 ## Daily Scoreboard Duplicate Message Guard
 
 Symptom:

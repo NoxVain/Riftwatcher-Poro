@@ -3,8 +3,12 @@ from datetime import datetime
 
 import requests
 
+from src.arena_static import load_arena_display_names
 from src.discord_text import (
+    ARENA_QUEUE_IDS,
     format_match_duration,
+    get_arena_placement,
+    get_arena_subteam_id,
     format_recap_player_line,
     format_recap_queue_name,
     format_streak_callout,
@@ -58,6 +62,17 @@ def _pack_sections_into_messages(sections, separator, max_len=2000):
     if current:
         messages.append(separator.join(current))
     return messages
+
+
+def _recap_participant_sort_key(queue_id, row):
+    riot_id, participant = row
+    if queue_id in ARENA_QUEUE_IDS:
+        placement = get_arena_placement(participant)
+        subteam_id = get_arena_subteam_id(participant)
+        safe_placement = placement if placement is not None else 99
+        safe_subteam_id = subteam_id if isinstance(subteam_id, int) else 99
+        return (safe_placement, safe_subteam_id, riot_id.casefold())
+    return (riot_id.casefold(),)
 
 
 async def process_recap_cycle(
@@ -139,6 +154,7 @@ async def process_recap_cycle(
 
     match_entries.sort(key=lambda row: row[0])
     recap_sections = []
+    arena_display_names = None
     for end_ts, match_id, queue_id, duration_seconds, tracked_participants in match_entries:
         queue_name = format_recap_queue_name(queue_id)
         end_local = datetime.fromtimestamp(end_ts, tz=report_timezone)
@@ -148,9 +164,22 @@ async def process_recap_cycle(
             f"`{queue_name}` - \U0001F552 `{end_local:%d.%m.%Y %H:%M}` - \u23F1\uFE0F `{duration_label}`",
             "",
         ]
-        ordered_participants = sorted(tracked_participants, key=lambda row: row[0].casefold())
+        if queue_id in ARENA_QUEUE_IDS and arena_display_names is None:
+            arena_display_names = await asyncio.to_thread(load_arena_display_names)
+        augment_names = (arena_display_names or {}).get("augment_names", {})
+        item_names = (arena_display_names or {}).get("item_names", {})
+        ordered_participants = sorted(tracked_participants, key=lambda row: _recap_participant_sort_key(queue_id, row))
         for index, (riot_id, participant) in enumerate(ordered_participants):
-            lines.append(format_recap_player_line(riot_id, participant, duration_seconds))
+            lines.append(
+                format_recap_player_line(
+                    riot_id,
+                    participant,
+                    duration_seconds,
+                    queue_id=queue_id,
+                    augment_names=augment_names,
+                    item_names=item_names,
+                )
+            )
             if index < len(ordered_participants) - 1:
                 lines.append("")
         recap_sections.append("\n".join(lines))

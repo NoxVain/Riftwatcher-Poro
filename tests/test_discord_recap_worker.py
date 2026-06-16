@@ -485,6 +485,100 @@ def test_process_recap_cycle_batches_multiple_matches_into_single_post():
     assert edit_calls == [{"bypass_cache": True}]
 
 
+def test_process_recap_cycle_formats_arena_3x6_by_placement():
+    channel = FakeChannel()
+    riot = FakeRiotClient()
+    mood = FakeMoodService()
+    now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+
+    alpha = _participant("puuid-a", win=False)
+    alpha.update({
+        "championName": "Sett",
+        "placement": 1,
+        "playerSubteamId": 2,
+        "goldEarned": 18000,
+        "playerAugment1": 101,
+        "playerAugment2": 202,
+        "item0": 3157,
+        "item1": 3089,
+    })
+    bravo = _participant("puuid-b", win=False)
+    bravo.update({
+        "championName": "Lux",
+        "placement": 4,
+        "playerSubteamId": 5,
+        "goldEarned": 12000,
+    })
+
+    riot.puuid_by_riot_id = {"Bravo#NA1": "puuid-b", "Alpha#NA1": "puuid-a"}
+    riot.recent_ids_by_puuid = {"puuid-a": ["EUW1_ARENA", "EUW1_0"], "puuid-b": ["EUW1_ARENA", "EUW1_0"]}
+    riot.match_info_by_id = {
+        "EUW1_ARENA": {
+            "info": {
+                "queueId": 1750,
+                "gameDuration": 1400,
+                "gameEndTimestamp": now_ms,
+                "participants": [bravo, alpha],
+            }
+        }
+    }
+    riot.mode_records_by_riot_id = {
+        "Alpha#NA1": (
+            {"solo_duo": {"wins": 0, "losses": 0}, "flex": {"wins": 0, "losses": 0}},
+            {"cs_total": 0, "minutes_total": 23.3},
+        ),
+        "Bravo#NA1": (
+            {"solo_duo": {"wins": 0, "losses": 0}, "flex": {"wins": 0, "losses": 0}},
+            {"cs_total": 0, "minutes_total": 23.3},
+        ),
+    }
+
+    state = {_state_key("Alpha#NA1"): "EUW1_0", _state_key("Bravo#NA1"): "EUW1_0"}
+
+    def db_get_state(key):
+        return state.get(key)
+
+    def db_set_state(key, value):
+        state[key] = value
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(
+            "src.discord_recap_worker.load_arena_display_names",
+            lambda: {
+                "augment_names": {"101": "Warmup Routine", "202": "Scoped Weapons"},
+                "item_names": {"3157": "Zhonya's Hourglass", "3089": "Rabadon's Deathcap"},
+            },
+        )
+        asyncio.run(
+            process_recap_cycle(
+                friends=["Bravo#NA1", "Alpha#NA1"],
+                riot_client=riot,
+                mood_service=mood,
+                report_timezone=timezone.utc,
+                match_recap_channel_id=123,
+                channel=channel,
+                db_enabled=True,
+                db_get_state=db_get_state,
+                db_set_state=db_set_state,
+                db_upsert_daily_stats=lambda *_args, **_kwargs: None,
+                edit_last_report_message=lambda **_kwargs: asyncio.sleep(0),
+                log=lambda _msg: None,
+            )
+        )
+
+    assert len(channel.messages) == 1
+    content = channel.messages[0]["content"]
+    assert "Arena 3x6" in content
+    assert "**Alpha**" in content
+    assert "**Bravo**" in content
+    assert content.index("**Alpha**") < content.index("**Bravo**")
+    assert "Place #1" in content
+    assert "Place #4" in content
+    assert "Augments Warmup Routine, Scoped Weapons" in content
+    assert "Items Zhonya's Hourglass, Rabadon's Deathcap" in content
+    assert "CS/min" not in content
+
+
 def test_process_recap_cycle_does_not_advance_state_when_match_fetch_fails():
     channel = FakeChannel()
     riot = FakeRiotClient()

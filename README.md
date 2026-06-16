@@ -14,6 +14,15 @@ This project does not use Riot's official logos.
 - Run locally: `python -m src.app`
 - Railway/Procfile worker: `python -m src.app`
 
+## Self-Hosting
+
+MoodBot is intended to be self-hosted as one bot instance per Discord server/community. Each deployment uses its own Discord bot token, Riot API key, Postgres database, channel IDs, and tracked player list.
+
+Start with:
+
+- `.env.example` - copyable environment variable template.
+- `SELF_HOSTING.md` - Discord/Riot/Postgres/Railway setup guide.
+
 ## Project Structure
 
 - `src/app.py` - process entrypoint

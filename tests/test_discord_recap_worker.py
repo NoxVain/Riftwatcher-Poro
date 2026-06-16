@@ -501,6 +501,10 @@ def test_process_recap_cycle_formats_arena_3x6_by_placement():
         "playerAugment2": 202,
         "item0": 3157,
         "item1": 3089,
+        "challenges": {
+            "skillshotsHit": 13,
+            "skillshotsDodged": 42,
+        },
     })
     bravo = _participant("puuid-b", win=False)
     bravo.update({
@@ -574,6 +578,8 @@ def test_process_recap_cycle_formats_arena_3x6_by_placement():
     assert content.index("**Alpha**") < content.index("**Bravo**")
     assert "Place #1" in content
     assert "Place #4" in content
+    assert "Skillshots hit 13" in content
+    assert "Dodged 42" in content
     assert "Augments Warmup Routine, Scoped Weapons" in content
     assert "Items Zhonya's Hourglass, Rabadon's Deathcap" in content
     assert "`\n   🛒 `Items" in content

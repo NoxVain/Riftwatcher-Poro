@@ -55,6 +55,10 @@ def test_format_recap_player_line_uses_arena_placement():
         "item0": 3157,
         "item1": 3089,
         "item2": 0,
+        "challenges": {
+            "skillshotsHit": 13,
+            "skillshotsDodged": 42,
+        },
     }
 
     line = format_recap_player_line(
@@ -71,6 +75,8 @@ def test_format_recap_player_line_uses_arena_placement():
     assert "**Sett** - **Place #2**" in line
     assert "K/D/A 9/4/12" in line
     assert "Damage 45,000" in line
+    assert "Skillshots hit 13" in line
+    assert "Dodged 42" in line
     assert "Augments Warmup Routine, Scoped Weapons" in line
     assert "Items Zhonya's Hourglass, Rabadon's Deathcap" in line
     assert "`\n   🛒 `Items" in line

@@ -126,6 +126,13 @@ def get_participant_items(participant, item_names=None):
     return items
 
 
+def get_arena_skillshot_stats(participant):
+    challenges = participant.get("challenges") or {}
+    hit = int(challenges.get("skillshotsHit", 0) or 0)
+    dodged = int(challenges.get("skillshotsDodged", 0) or 0)
+    return hit, dodged
+
+
 def format_recap_player_line(
     riot_id,
     participant,
@@ -157,6 +164,9 @@ def format_recap_player_line(
         ]
         augments = get_arena_augments(participant, augment_names=augment_names)
         items = get_participant_items(participant, item_names=item_names)
+        skillshots_hit, skillshots_dodged = get_arena_skillshot_stats(participant)
+        if skillshots_hit or skillshots_dodged:
+            lines.append(f"   \U0001F3AF `Skillshots hit {skillshots_hit}`  \U0001F483 `Dodged {skillshots_dodged}`")
         if augments:
             lines.append(f"   \U0001F52E `Augments {', '.join(augments)}`")
         if items:

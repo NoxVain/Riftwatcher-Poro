@@ -119,6 +119,8 @@ In the events channel:
 !health
 ```
 
+Use `!health` regularly to monitor your Riot API key status, database connection, and background worker performance.
+
 Add tracked players:
 
 ```text

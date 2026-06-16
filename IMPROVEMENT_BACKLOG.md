@@ -54,3 +54,13 @@ This backlog tracks work not yet implemented as of 2026-04-04.
   - placement/team ordering
   - named augments/items and skillshots hit/dodged
   - recap worker diagnostics for missing/skipped recaps
+
+## Hardening & Reliability (Recently Shipped)
+
+- **Scoreboard Resilience**: Prevented duplicate daily/weekly scoreboard posts on transient Discord message fetch failures (`HTTPException`).
+- **Data Model Expansion**: `player_daily_stats` now tracks assists, gold, wards, objective takedowns, multi-kills, and kill participation.
+- **Arena Formatting**: Specialized match recap layout for Arena mode including augments and team placements.
+- **Historical Rebuilds**: Added `!backfill` command to rebuild daily stats from cached match payloads (up to 366 days).
+- **Worker Monitoring**: Added watchdog for stalled workers and latency metrics export in `!health`.
+- **Scoring Tuning**: Stricter Wilson confidence and weighted performance percentile ramps.
+- **Error Handling**: Hardened Riot 401 alert flow with deduplication and mark-on-success behavior.

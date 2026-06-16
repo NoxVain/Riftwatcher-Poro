@@ -126,3 +126,18 @@ Fast diagnosis patterns:
 - `DB: down`: investigate DB connectivity/credentials first.
 - Worker errors rising with no cycle growth: inspect logs for failing external API/channel access.
 - Recap issues with healthy DB: verify `MATCH_RECAP_CHANNEL_ID` permissions and Riot API health.
+
+## Local Testing & Smoke Checks
+
+For developers running a local instance for testing:
+
+1. **Environment**: Ensure all required variables from `README.md` are in your `.env`.
+2. **Verify Tests**: `python -m pytest -q` (requires no active bot or DB).
+3. **Smoke Test Command List**:
+   - `!health` (Check DB and worker cycles)
+   - `!Daily` (Trigger scoreboard update)
+   - `!Weekly` (Trigger weekly update)
+   - `!tts status` (Verify TTS configuration)
+   - `!streak Name#Tag` (Test streak routing)
+   - `!profile Name#Tag` (Test player data fetch)
+   - `!riottest` (Verify Riot API key and outbound connectivity)

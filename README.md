@@ -193,5 +193,4 @@ py -3.11 -m pytest -q
 
 - `ARCHITECTURE.md` for module/runtime structure.
 - `OPERATIONS.md` for incident response and runbook steps.
-- `SESSION_NOTES.md` for latest project memory snapshot.
 - `IMPROVEMENT_BACKLOG.md` for prioritized future work.

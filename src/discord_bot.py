@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 
 import discord
+from discord import app_commands
 
 from src import config as cfg
 from src import db as dbm
@@ -123,7 +124,62 @@ FRIENDS = load_tracked_players()
 
 intents = discord.Intents.default()
 intents.message_content = True
-client = discord.Client(intents=intents)
+class RiftwatcherClient(discord.Client):
+    def __init__(self, *, intents):
+        super().__init__(intents=intents)
+        self.tree = app_commands.CommandTree(self)
+
+    async def setup_hook(self):
+        # We'll sync the tree in on_ready or via a manual command for now
+        # to avoid slow global propagation during testing.
+        pass
+
+client = RiftwatcherClient(intents=intents)
+
+@client.tree.command(name="health", description="Check Riftwatcher Poro system status and Riot API connectivity.")
+async def health_slash(interaction: discord.Interaction):
+    # Reuse the same logic from !health
+    stats = await poro_service.run_health_check(START_MONOTONIC, worker_stats=WORKER_STATS)
+    uptime = str(timedelta(seconds=stats["uptime_seconds"]))
+    top_backfill_offsets = ", ".join(stats.get("top_backfill_offsets", [])) or "none"
+    wstats = stats.get("worker_stats") or {}
+    workers_line = ""
+    if wstats:
+        parts = []
+        for key, value in wstats.items():
+            segment = f"{key}: {value['cycles']}ok/{value['errors']}err"
+            if "elapsed_ms_last" in value:
+                segment += (
+                    f" ({value.get('elapsed_ms_last', 0)}ms last/"
+                    f"{value.get('elapsed_ms_avg', 0)}ms avg/"
+                    f"{value.get('elapsed_ms_max', 0)}ms max)"
+                )
+            parts.append(segment)
+        workers_line = f"\n- Workers: `{' | '.join(parts)}`"
+    baseline_age_seconds = stats.get("baseline_age_seconds")
+    if baseline_age_seconds is None:
+        baseline_line = "\n- Gamer Score baselines: `not yet built`"
+    else:
+        age = str(timedelta(seconds=baseline_age_seconds))
+        baseline_line = (
+            f"\n- Gamer Score baselines: "
+            f"`{stats['baseline_roles']} roles, {stats['baseline_samples']} samples (built {age} ago)`"
+        )
+    
+    content = (
+        "**Health OK**\n"
+        f"- Uptime: `{uptime}`\n"
+        f"- Tracked players: `{stats['tracked_players']}`\n"
+        f"- DB: `{'ok' if stats['db_ok'] else 'down'}`\n"
+        f"- Match cache entries: `{stats['match_cache_entries']}`\n"
+        f"- Report cache active: `{'yes' if stats['request_cache_active'] else 'no'}`\n"
+        f"- Backfill cursors active: `{stats.get('players_with_backfill_offset', 0)}/{stats['tracked_players']}`\n"
+        f"- Backfill max offset: `{stats.get('max_backfill_offset', 0)}`\n"
+        f"- Backfill top offsets: `{top_backfill_offsets}`"
+        f"{baseline_line}"
+        f"{workers_line}"
+    )
+    await interaction.response.send_message(content)
 DAILY_REQUEST_LOCK = asyncio.Lock()
 
 MESSAGE_STATE = create_message_state()
@@ -516,6 +572,24 @@ async def on_ready():
 async def on_message(message):
     if message.author.bot:
         return
+
+    content = message.content.strip()
+    if content == "!sync":
+        if not message.author.guild_permissions.administrator:
+            await message.channel.send("You need administrator permissions to sync commands.")
+            return
+        
+        status = await message.channel.send("Syncing slash commands...")
+        try:
+            # Sync to the current guild for immediate availability during testing
+            synced = await client.tree.sync()
+            await status.edit(content=f"Successfully synced {len(synced)} global commands.")
+            log(f"[startup] Synced {len(synced)} global commands via !sync.")
+        except Exception as exc:
+            await status.edit(content=f"Failed to sync commands: {exc}")
+            log(f"[error] Sync failed: {exc}")
+        return
+
     await handle_incoming_message(
         message=message,
         channel_id=DAILY_REPORT_CHANNEL_ID,

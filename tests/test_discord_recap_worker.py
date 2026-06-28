@@ -733,3 +733,39 @@ def test_process_recap_cycle_keeps_recap_and_streak_separate_with_tts_toggle(tts
     assert "New Match Recap" not in streak_msg["content"]
     assert ("Momentum" in streak_msg["content"]) or ("Heater Alert" in streak_msg["content"])
     assert streak_msg["tts"] is expected_tts
+
+
+def test_split_large_section():
+    from src.discord_recap_worker import _split_large_section
+
+    # Case 1: Multiple sections separated by double newlines
+    # Each paragraph is 400 chars. Total length = 1200 + 4 (newlines) = 1204 chars.
+    p1 = "a" * 400
+    p2 = "b" * 400
+    p3 = "c" * 400
+    section = f"{p1}\n\n{p2}\n\n{p3}"
+
+    # If max_len = 900, p1 + p2 fits (400 + 400 + 2 = 802 chars), but adding p3 exceeds it.
+    # So it should split into [p1 + \n\n + p2, p3]
+    chunks = _split_large_section(section, max_len=900)
+    assert len(chunks) == 2
+    assert chunks[0] == f"{p1}\n\n{p2}"
+    assert chunks[1] == p3
+
+
+def test_pack_sections_into_messages_graceful_split():
+    from src.discord_recap_worker import _pack_sections_into_messages
+
+    # Create a single massive section that exceeds max_len (2000 chars)
+    # 6 paragraphs of 400 chars each. Total = 2400 + 10 = 2410 chars.
+    p = ["x" * 400] * 6
+    section = "\n\n".join(p)
+
+    messages = _pack_sections_into_messages([section], separator="\n\n", max_len=2000)
+    # It should split into 2 messages:
+    # Msg 1: 4 paragraphs (400*4 + 6 = 1606 chars). Adding 5th would be 400*5 + 8 = 2008 chars (exceeds 2000).
+    # Msg 2: 2 paragraphs (400*2 + 2 = 802 chars).
+    assert len(messages) == 2
+    assert messages[0] == "\n\n".join(p[:4])
+    assert messages[1] == "\n\n".join(p[4:])
+

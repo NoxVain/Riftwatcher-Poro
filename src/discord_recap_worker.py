@@ -47,6 +47,48 @@ async def get_ranked_streak_info(riot_client, puuid, recent_ids, max_matches=20)
     return streak_count, streak_result
 
 
+def _split_large_section(section, max_len=2000):
+    chunks = []
+    lines = section.split("\n\n")
+    current_chunk = []
+    current_len = 0
+    for line in lines:
+        if len(line) > max_len:
+            sublines = line.split("\n")
+            for subline in sublines:
+                if len(subline) > max_len:
+                    sub_chunks = [subline[i:i+max_len] for i in range(0, len(subline), max_len)]
+                    for sc in sub_chunks:
+                        if current_chunk:
+                            chunks.append("\n".join(current_chunk))
+                            current_chunk = []
+                            current_len = 0
+                        chunks.append(sc)
+                else:
+                    if current_len + len(subline) + 1 > max_len:
+                        if current_chunk:
+                            chunks.append("\n".join(current_chunk))
+                        current_chunk = [subline]
+                        current_len = len(subline)
+                    else:
+                        current_chunk.append(subline)
+                        current_len += len(subline) + 1
+            continue
+
+        if current_len + len(line) + 2 > max_len:
+            if current_chunk:
+                chunks.append("\n\n".join(current_chunk))
+            current_chunk = [line]
+            current_len = len(line)
+        else:
+            current_chunk.append(line)
+            current_len += len(line) + (2 if len(current_chunk) > 1 else 0)
+            
+    if current_chunk:
+        chunks.append("\n\n".join(current_chunk))
+    return chunks
+
+
 def _pack_sections_into_messages(sections, separator, max_len=2000):
     messages = []
     current = []
@@ -56,9 +98,18 @@ def _pack_sections_into_messages(sections, separator, max_len=2000):
             current.append(section)
         elif current:
             messages.append(separator.join(current))
-            current = [section]
+            if len(section) > max_len:
+                section_chunks = _split_large_section(section, max_len)
+                current = [section_chunks[-1]]
+                for chunk in section_chunks[:-1]:
+                    messages.append(chunk)
+            else:
+                current = [section]
         else:
-            messages.append(section[:max_len - 50] + "\n...")
+            section_chunks = _split_large_section(section, max_len)
+            current = [section_chunks[-1]]
+            for chunk in section_chunks[:-1]:
+                messages.append(chunk)
     if current:
         messages.append(separator.join(current))
     return messages

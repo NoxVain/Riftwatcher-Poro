@@ -5,6 +5,7 @@ import time
 from collections import OrderedDict
 from datetime import datetime, timezone
 from urllib.parse import quote
+from src import config as cfg
 
 import requests
 
@@ -172,13 +173,13 @@ class RiotApiClient:
 
     def riot_get_json(self, url, *, request_tier="priority"):
         headers = {"X-Riot-Token": self.riot_api_key}
-        max_attempts = 5
+        max_attempts = 3
 
         for attempt in range(1, max_attempts + 1):
             try:
                 self._wait_for_rate_limit_slot(request_tier=request_tier)
                 start_time = time.perf_counter()
-                response = requests.get(url, headers=headers, timeout=20)
+                response = requests.get(url, headers=headers, timeout=(5.05, 20.05))
                 elapsed_ms = int((time.perf_counter() - start_time) * 1000)
                 if self.log_riot_requests:
                     self.log(f"[riot] {response.status_code} in {elapsed_ms}ms: {url}")
@@ -234,6 +235,8 @@ class RiotApiClient:
     async def riot_get_json_async(self, url, *, request_tier="priority"):
         if request_tier == "backfill":
             await self.wait_for_backfill_window()
+        if cfg.RIOT_REQUEST_YIELD_SECONDS > 0:
+            await asyncio.sleep(cfg.RIOT_REQUEST_YIELD_SECONDS)
         return await asyncio.to_thread(self.riot_get_json, url, request_tier=request_tier)
 
     @staticmethod

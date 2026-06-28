@@ -1,6 +1,7 @@
 import json
 
 from src.db.pool import db_execute
+from src import config as cfg
 
 
 def db_get_match_info(match_id):
@@ -52,7 +53,7 @@ def db_health_stats():
     return {"db_ok": bool(ping and ping[0] == 1), "match_cache_entries": count}
 
 
-def db_load_match_payloads_for_baseline(limit=5000):
+def db_load_match_payloads_for_baseline(limit=cfg.BASELINE_MATCH_LIMIT):
     safe_limit = int(limit)
     if safe_limit > 0:
         rows = db_execute(

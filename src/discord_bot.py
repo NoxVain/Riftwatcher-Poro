@@ -165,7 +165,7 @@ async def health_slash(interaction: discord.Interaction):
             f"\n- Gamer Score baselines: "
             f"`{stats['baseline_roles']} roles, {stats['baseline_samples']} samples (built {age} ago)`"
         )
-    
+
     content = (
         "**Health OK**\n"
         f"- Uptime: `{uptime}`\n"
@@ -371,7 +371,7 @@ async def edit_last_weekly_report_message(bypass_cache=False):
 
 
 async def daily_report(channel):
-    report_text = await poro_service.build_today_win_rate_report()
+    report_text = await poro_service.build_today_win_rate_report(prefer_snapshot=cfg.STARTUP_PREFER_SNAPSHOT)
     report_message = await get_or_create_report_message(channel, report_text)
     if report_message.content != report_text:
         await report_message.edit(content=report_text)
@@ -404,6 +404,8 @@ async def evaluate_rank_changes_and_notify():
 
 
 async def background_rank_notifier():
+    if cfg.WORKER_STAGGER_SECONDS > 0:
+        await asyncio.sleep(cfg.WORKER_STAGGER_SECONDS * 1)
     return await runtime_background_rank_notifier(
         db_enabled=DB_ENABLED,
         daily_refresh_seconds=DAILY_REFRESH_SECONDS,
@@ -416,6 +418,8 @@ async def background_rank_notifier():
 
 
 async def background_match_recap_notifier():
+    if cfg.WORKER_STAGGER_SECONDS > 0:
+        await asyncio.sleep(cfg.WORKER_STAGGER_SECONDS * 2)
     return await runtime_background_match_recap_notifier(
         client=client,
         match_recap_poll_seconds=MATCH_RECAP_POLL_SECONDS,
@@ -438,6 +442,8 @@ async def background_match_recap_notifier():
 
 
 async def background_match_cache_backfiller():
+    if cfg.WORKER_STAGGER_SECONDS > 0:
+        await asyncio.sleep(cfg.WORKER_STAGGER_SECONDS * 3)
     return await runtime_background_match_cache_backfiller(
         db_enabled=DB_ENABLED,
         daily_refresh_seconds=DAILY_REFRESH_SECONDS,
@@ -501,6 +507,11 @@ async def background_worker_stall_notifier():
 
 @client.event
 async def on_ready():
+    if cfg.ASYNCIO_THREAD_POOL_SIZE > 0:
+        import concurrent.futures
+        loop = asyncio.get_running_loop()
+        loop.set_default_executor(concurrent.futures.ThreadPoolExecutor(max_workers=cfg.ASYNCIO_THREAD_POOL_SIZE))
+
     global BACKGROUND_REFRESH_TASK, BACKGROUND_RECAP_TASK, BACKGROUND_RANK_TASK, BACKGROUND_BACKFILL_TASK, BACKGROUND_STALL_TASK, STARTUP_SCOREBOARD_INIT_DONE
     log(f"[startup] Logged in as {client.user} (id={client.user.id})")
     log(f"[startup] Use {TEST_COMMAND} in channel {EVENTS_CHANNEL_ID} to test sending.")
@@ -578,7 +589,7 @@ async def on_message(message):
         if not message.author.guild_permissions.administrator:
             await message.channel.send("You need administrator permissions to sync commands.")
             return
-        
+
         status = await message.channel.send("Syncing slash commands...")
         try:
             # Copy global commands to this specific guild for instant updates

@@ -1,6 +1,8 @@
 import os
 from zoneinfo import ZoneInfo
+from dotenv import load_dotenv
 
+load_dotenv()
 
 def require_env(name):
     value = os.getenv(name, "").strip()
@@ -83,3 +85,9 @@ MATCH_RECAP_CHANNEL_ID = int(require_env("MATCH_RECAP_CHANNEL_ID"))
 MATCH_RECAP_POLL_SECONDS = get_env_int("MATCH_RECAP_POLL_SECONDS", 90)
 DATABASE_URL = require_env("DATABASE_URL")
 DB_POOL_SIZE = get_env_int("DB_POOL_SIZE", 5)
+# --- Low-resource optimizations ---
+STARTUP_PREFER_SNAPSHOT = get_env_bool("STARTUP_PREFER_SNAPSHOT", False)
+BASELINE_MATCH_LIMIT = get_env_int("BASELINE_MATCH_LIMIT", 5000)
+RIOT_REQUEST_YIELD_SECONDS = float(get_env_str("RIOT_REQUEST_YIELD_SECONDS", "0.0"))
+ASYNCIO_THREAD_POOL_SIZE = get_env_int("ASYNCIO_THREAD_POOL_SIZE", 0)
+WORKER_STAGGER_SECONDS = get_env_int("WORKER_STAGGER_SECONDS", 0)

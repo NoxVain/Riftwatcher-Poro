@@ -85,6 +85,8 @@ class PoroService:
         self.db_load_match_payloads_for_baseline = db_load_match_payloads_for_baseline
         self._role_baselines = None
         self._baselines_built_at = 0.0
+        # One rebuild at a time; concurrent callers wait and reuse the result.
+        self._baselines_lock = asyncio.Lock()
         self.report_cache = {"text": None, "expires_at": 0.0, "day": None}
         self.weekly_report_cache = {"text": None, "expires_at": 0.0, "window": None}
 

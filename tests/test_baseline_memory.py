@@ -3,6 +3,7 @@
 import asyncio
 import json
 import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -179,6 +180,60 @@ def test_ensure_role_baselines_releases_memory_even_when_build_fails(monkeypatch
     assert service._role_baselines is None
     assert any("Failed to build role baselines" in line for line in logs)
     assert releases == [True]
+
+
+def _baseline_service(loader, logs):
+    return SimpleNamespace(
+        db_load_match_payloads_for_baseline=loader,
+        _role_baselines=None,
+        _baselines_built_at=0.0,
+        BASELINE_TTL_SECONDS=43200,
+        log=logs.append,
+    )
+
+
+def test_concurrent_callers_build_baselines_once(monkeypatch):
+    monkeypatch.setattr(baselines, "release_freed_memory", lambda: None)
+    loads = []
+
+    def slow_loader(_limit):
+        loads.append(threading.get_ident())
+        time.sleep(0.05)  # keep the first build running while the second caller arrives
+        for _ in range(3):  # baselines need 20+ samples per role/stat
+            yield _ranked_payload()
+
+    logs = []
+    service = _baseline_service(slow_loader, logs)
+
+    async def run():
+        # Startup: the scoreboard and the refresh worker both ask for baselines.
+        await asyncio.gather(baselines.ensure_role_baselines(service), baselines.ensure_role_baselines(service))
+
+    asyncio.run(run())
+
+    assert len(loads) == 1
+    assert sum("Role baselines built" in line for line in logs) == 1
+    assert "MIDDLE" in service._role_baselines
+
+
+def test_expired_baselines_are_rebuilt(monkeypatch):
+    monkeypatch.setattr(baselines, "release_freed_memory", lambda: None)
+    clock = [1000.0]
+    monkeypatch.setattr(baselines.time, "monotonic", lambda: clock[0])
+    loads = []
+
+    def loader(_limit):
+        loads.append(clock[0])
+        yield _ranked_payload()
+
+    service = _baseline_service(loader, [])
+
+    asyncio.run(baselines.ensure_role_baselines(service))
+    asyncio.run(baselines.ensure_role_baselines(service))  # still fresh: no rebuild
+    clock[0] += service.BASELINE_TTL_SECONDS + 1
+    asyncio.run(baselines.ensure_role_baselines(service))
+
+    assert loads == [1000.0, 1000.0 + service.BASELINE_TTL_SECONDS + 1]
 
 
 def test_release_freed_memory_trims_with_glibc(monkeypatch):

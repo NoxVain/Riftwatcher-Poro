@@ -1,7 +1,9 @@
 import asyncio
 import time
+from dataclasses import dataclass
 from datetime import datetime
 
+import discord
 import requests
 
 from src.arena_static import load_arena_display_names
@@ -25,7 +27,9 @@ from src.discord_text import (
     streak_callout_state_key,
     streak_tts_enabled_state_key,
 )
+from src.recap_cards import CardMatch, CardPlayer, build_card_messages, match_accent
 from src.recap_lp import (
+    LP_EDIT_LOCK,
     QUEUE_TYPE_BY_QUEUE_ID,
     add_lp_to_content,
     edit_recap_with_lp,
@@ -71,34 +75,76 @@ async def _attach_stored_lp(
     return player_line
 
 
-async def _register_lp_waiting(lp_waiting, sent_recaps, *, db_get_state, db_set_state, log):
-    for waiting in lp_waiting:
-        riot_id = waiting["riot_id"]
-        pending = waiting["pending"]
-        marker = f"{pending['heading']}\n"
-        holders = [
-            index for index, message in enumerate(sent_recaps)
-            if message is not None and (message.content or "").count(marker) == 1
-        ]
-        # Unsent, or ambiguous (same player/champion/result twice): leave without LP.
-        if len(holders) != 1:
-            continue
-        index = holders[0]
-        message = sent_recaps[index]
-        try:
-            event = await register_pending_recap(
-                db_get_state=db_get_state,
-                db_set_state=db_set_state,
-                riot_id=riot_id,
-                pending=dict(pending, message_id=message.id),
-                now=time.time(),
-            )
-            if event is not None:
-                edited = await edit_recap_with_lp(message, pending["heading"], format_lp_summary(event))
-                if edited is not None:
-                    sent_recaps[index] = edited
-        except Exception as exc:
-            log(f"[recap] Could not track LP for {riot_id} ({pending['match_id']}): {exc}")
+@dataclass
+class _SentBatch:
+    """One card message as posted: the card itself, or its plain-text fallback messages."""
+
+    messages: list
+    waiting: list
+    as_card: bool
+
+
+async def _send_recap_card(channel, card_message, section_separator, log):
+    """Send one card; if Discord rejects it, send the same recap as plain text.
+
+    The recap cursor is saved before sending, so a failure here can't make the bot
+    re-post or retry this batch forever; the fallback keeps the recap from being lost.
+    """
+    try:
+        sent = await channel.send(view=card_message.view)
+        return _SentBatch([sent], card_message.waiting, as_card=True)
+    except discord.HTTPException as exc:
+        log(f"[recap] Discord rejected the recap card (HTTP {getattr(exc, 'status', '?')}); sending it as plain text.")
+    sent_messages = []
+    for text in _pack_sections_into_messages(card_message.text_sections, section_separator):
+        sent_messages.append(await channel.send(text))
+    return _SentBatch(sent_messages, card_message.waiting, as_card=False)
+
+
+async def _latest_message(channel, message):
+    # Re-fetch so an LP edit doesn't overwrite another player's edit made in between.
+    fetch_message = getattr(channel, "fetch_message", None)
+    return await fetch_message(message.id) if fetch_message is not None else message
+
+
+async def _register_lp_waiting(sent_batches, channel, *, db_get_state, db_set_state, log):
+    for batch in sent_batches:
+        for waiting in batch.waiting:
+            riot_id = waiting["riot_id"]
+            pending = dict(waiting["pending"])
+            if batch.as_card:
+                message = batch.messages[0]
+            else:
+                # Plain-text fallback: find the one message holding this player's heading.
+                pending.pop("component_id", None)
+                marker = f"{pending['heading']}\n"
+                holders = [
+                    message for message in batch.messages
+                    if message is not None and (message.content or "").count(marker) == 1
+                ]
+                # Ambiguous (same player/champion/result twice): leave without LP.
+                message = holders[0] if len(holders) == 1 else None
+            if message is None:
+                continue
+            try:
+                event = await register_pending_recap(
+                    db_get_state=db_get_state,
+                    db_set_state=db_set_state,
+                    riot_id=riot_id,
+                    pending=dict(pending, message_id=message.id),
+                    now=time.time(),
+                )
+                if event is not None:
+                    async with LP_EDIT_LOCK:
+                        latest = await _latest_message(channel, message)
+                        await edit_recap_with_lp(
+                            latest,
+                            pending["heading"],
+                            format_lp_summary(event),
+                            component_id=pending.get("component_id"),
+                        )
+            except Exception as exc:
+                log(f"[recap] Could not track LP for {riot_id} ({pending['match_id']}): {exc}")
 
 
 async def get_ranked_streak_info(riot_client, puuid, recent_ids, max_matches=20):
@@ -320,23 +366,23 @@ async def process_recap_cycle(
             log(f"[recap] Could not read champion display setting: {exc}")
     icon_lookup_deadline = time.monotonic() + RECAP_LOOKUP_BUDGET_SECONDS
     lp_waiting = []
-    recap_sections = []
+    card_matches = []
     arena_display_names = None
     for end_ts, match_id, queue_id, duration_seconds, tracked_participants in match_entries:
         queue_name = format_recap_queue_name(queue_id)
         end_local = datetime.fromtimestamp(end_ts, tz=report_timezone)
         duration_label = format_match_duration(duration_seconds)
-        lines = [
-            "\U0001F3AE **New Match Recap**",
-            f"`{queue_name}` - \U0001F552 `{end_local:%d.%m.%Y %H:%M}` - \u23F1\uFE0F `{duration_label}`",
-            "",
-        ]
+        header = (
+            "\U0001F3AE **New Match Recap**\n"
+            f"`{queue_name}` - \U0001F552 `{end_local:%d.%m.%Y %H:%M}` - \u23F1\uFE0F `{duration_label}`"
+        )
+        card_players = []
         if queue_id in ARENA_QUEUE_IDS and arena_display_names is None:
             arena_display_names = await asyncio.to_thread(load_arena_display_names)
         augment_names = (arena_display_names or {}).get("augment_names", {})
         item_names = (arena_display_names or {}).get("item_names", {})
         ordered_participants = sorted(tracked_participants, key=lambda row: _recap_participant_sort_key(queue_id, row))
-        for index, (riot_id, participant) in enumerate(ordered_participants):
+        for riot_id, participant in ordered_participants:
             champion_icon = None
             if champion_display_mode != "name":
                 champion_icon = await champion_icons.get(
@@ -354,6 +400,7 @@ async def process_recap_cycle(
                     participant.get("championName", "Unknown"), champion_display_mode, champion_icon
                 ),
             )
+            waiting_before = len(lp_waiting)
             lp_queue_type = QUEUE_TYPE_BY_QUEUE_ID.get(queue_id)
             if lp_queue_type is not None and db_enabled:
                 player_line = await _attach_stored_lp(
@@ -368,13 +415,19 @@ async def process_recap_cycle(
                     lp_waiting=lp_waiting,
                     log=log,
                 )
-            lines.append(player_line)
-            if index < len(ordered_participants) - 1:
-                lines.append("")
-        recap_sections.append("\n".join(lines))
+            # _attach_stored_lp queued this player if LP will be edited in later.
+            pending = lp_waiting[-1]["pending"] if len(lp_waiting) > waiting_before else None
+            card_players.append(CardPlayer(riot_id, player_line, pending))
+        card_matches.append(
+            CardMatch(
+                header=header,
+                accent=match_accent(queue_id, [participant for _riot_id, participant in tracked_participants]),
+                players=card_players,
+            )
+        )
         log(f"[recap] Prepared new match recap for {match_id} in channel {match_recap_channel_id}.")
 
-    recap_messages = _pack_sections_into_messages(recap_sections, recap_section_separator)
+    card_messages = build_card_messages(card_matches)
 
     for riot_id, latest_match_id in pending_latest_match_id_by_riot.items():
         failed_for_player = False
@@ -423,19 +476,19 @@ async def process_recap_cycle(
         except Exception as exc:
             log(f"[recap] Streak callout skipped for {riot_id}: {exc}")
 
-    sent_recaps = []
-    for index, recap_message in enumerate(recap_messages):
-        sent_recaps.append(await channel.send(recap_message))
-        if index < len(recap_messages) - 1:
+    sent_batches = []
+    for index, card_message in enumerate(card_messages):
+        sent_batches.append(await _send_recap_card(channel, card_message, recap_section_separator, log))
+        if index < len(card_messages) - 1:
             await asyncio.sleep(recap_split_spacing_seconds)
-    if recap_messages:
+    if card_messages:
         log(
             f"[recap] Posted recap batch in channel {match_recap_channel_id}: "
-            f"matches={len(recap_sections)} messages={len(recap_messages)}."
+            f"matches={len(card_matches)} messages={len(card_messages)}."
         )
     if lp_waiting:
         await _register_lp_waiting(
-            lp_waiting, sent_recaps, db_get_state=db_get_state, db_set_state=db_set_state, log=log
+            sent_batches, channel, db_get_state=db_get_state, db_set_state=db_set_state, log=log
         )
 
     streak_tts_enabled = True

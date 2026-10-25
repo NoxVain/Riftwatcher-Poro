@@ -58,6 +58,7 @@ Start with:
 - `src/rank_logic.py` - rank queue normalization and rank-change message formatting
 - `src/recap_lp.py` - LP gain/loss for ranked recaps from the rank worker's polls
 - `src/arena_static.py` - Arena augment/item display-name loader (CommunityDragon/Data Dragon)
+- `src/recap_cards.py` - match recap cards (Components V2): packing within Discord limits, per-player components for LP edits
 - `src/champion_icons.py` - recap champion display mode and portrait emojis (Data Dragon -> Discord application emojis)
 - `tests/` - unit tests
 
@@ -88,7 +89,9 @@ Start with:
   - Arena (`1700`/`1710`/`1750`, with `1750` shown as `Arena 3x6`): placement/team ordering, damage + team damage share, taken/healing/shielded, gold
   - Arena augments and items by name when static data is available (raw IDs otherwise)
   - Arena skillshots hit/dodged from match challenge stats
-  - large batches are split across messages at player boundaries
+  - each match is a card (Discord Components V2) with the same text as before and a result-coloured edge: green all wins, red all losses, blurple mixed, gold Arena, grey unknown
+  - large batches are split across messages at player boundaries (40 components / 4000 characters per message); a match that doesn't fit continues under a "(continued)" header
+  - if Discord rejects a card, that batch is posted as the plain-text recap instead, so recaps are never lost
   - Solo/Duo and Flex lines show rank and LP change, e.g. `Gold II · 40LP → 22LP (-18)`:
     - no extra Riot requests: the rank worker's existing poll supplies the before/after rank
     - if the rank worker sees the game first, LP is in the recap when it posts; otherwise the recap is edited when the next rank poll sees it (usually within `DAILY_REFRESH_SECONDS`)

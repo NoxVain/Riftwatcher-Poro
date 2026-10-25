@@ -10,6 +10,7 @@ import asyncio
 import json
 
 from src.rank_logic import APEX_TIERS, DIVISION_ORDER, TIER_ORDER, format_rank, normalize_queue_type
+from src.recap_cards import add_lp_to_card
 
 
 QUEUE_TYPE_BY_QUEUE_ID = {420: "RANKED_SOLO_5X5", 440: "RANKED_FLEX_SR"}
@@ -21,6 +22,9 @@ MAX_MESSAGE_LENGTH = 2000
 # Rank and recap workers share one event loop; this keeps their read-modify-write
 # of the pending/event lists from interleaving.
 LP_STATE_LOCK = asyncio.Lock()
+# Serializes fetch-then-edit of posted recaps, so two players' LP edits on the same
+# message can't overwrite each other.
+LP_EDIT_LOCK = asyncio.Lock()
 
 
 def lp_pending_state_key(riot_id):
@@ -207,8 +211,18 @@ async def register_pending_recap(*, db_get_state, db_set_state, riot_id, pending
     return None
 
 
-async def edit_recap_with_lp(message, heading, summary):
-    """Edit the LP summary into a recap message; returns the updated message or None."""
+async def edit_recap_with_lp(message, heading, summary, *, component_id=None):
+    """Edit the LP summary into a recap message; returns the updated message or None.
+
+    Card recaps target the player's text component by ID; plain-text recaps (and card
+    batches that fell back to text) match the player's heading line.
+    """
+    if component_id is not None:
+        view = add_lp_to_card(message, component_id, heading, summary, add_lp_to_content)
+        if view is None:
+            return None
+        edited = await message.edit(view=view)
+        return edited if edited is not None else message
     updated = add_lp_to_content(message.content or "", heading, summary)
     if updated is None:
         return None
@@ -280,8 +294,11 @@ async def retry_stored_lp_events(*, riot_id, recap_channel, db_get_state, db_set
 
 async def _edit_pending_recap(riot_id, pending, event, recap_channel, log):
     try:
-        message = await recap_channel.fetch_message(int(pending["message_id"]))
-        edited = await edit_recap_with_lp(message, pending["heading"], format_lp_summary(event))
+        async with LP_EDIT_LOCK:
+            message = await recap_channel.fetch_message(int(pending["message_id"]))
+            edited = await edit_recap_with_lp(
+                message, pending["heading"], format_lp_summary(event), component_id=pending.get("component_id")
+            )
     except Exception as exc:
         log(f"[rank] Could not add LP to recap for {riot_id} ({pending.get('match_id')}): {exc}")
         return False

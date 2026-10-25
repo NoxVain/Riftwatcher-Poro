@@ -3,11 +3,14 @@ import json
 import time
 from datetime import datetime, timezone
 
+import discord
 import pytest
 import requests
 
+from discord_fakes import ComponentMessage, view_text
 from src.champion_icons import CHAMPION_DISPLAY_STATE_KEY
 from src.discord_recap_worker import process_recap_cycle
+from src.recap_cards import ACCENT_WIN
 from src.recap_lp import handle_lp_event, lp_events_state_key, lp_pending_state_key
 
 
@@ -38,8 +41,11 @@ class FakeChannel:
     def __init__(self):
         self.messages = []
 
-    async def send(self, message, tts=False):
-        self.messages.append({"content": message, "tts": bool(tts)})
+    async def send(self, message=None, tts=False, *, view=None):
+        # Cards are recorded with their text so assertions read like the plain recap.
+        self.messages.append(
+            {"content": view_text(view) if view is not None else message, "view": view, "tts": bool(tts)}
+        )
 
 
 class FakeRiotClient:
@@ -774,24 +780,14 @@ def test_pack_sections_into_messages_graceful_split():
     assert messages[1] == "\n\n".join(p[4:])
 
 
-class FakeSentMessage:
-    def __init__(self, message_id, content):
-        self.id = message_id
-        self.content = content
-
-    async def edit(self, *, content):
-        self.content = content
-        return self
-
-
 class MessageReturningChannel(FakeChannel):
     def __init__(self):
         super().__init__()
         self.sent = []
 
-    async def send(self, message, tts=False):
-        await super().send(message, tts=tts)
-        sent = FakeSentMessage(len(self.sent) + 1, message)
+    async def send(self, message=None, tts=False, *, view=None):
+        await super().send(message, tts=tts, view=view)
+        sent = ComponentMessage(len(self.sent) + 1, content=message, view=view)
         self.sent.append(sent)
         return sent
 
@@ -885,7 +881,7 @@ def test_process_recap_cycle_tracks_recap_for_later_lp_edit():
     )
 
     assert handled is True
-    assert "(Loss) | `Gold II · 40LP → 22LP (-18)`\n" in channel.sent[0].content
+    assert "(Loss) | `Gold II · 40LP → 22LP (-18)`\n" in channel.sent[0].display
 
 
 def test_process_recap_cycle_skips_lp_for_non_ranked_queue():
@@ -969,5 +965,149 @@ def test_process_recap_cycle_lp_edit_still_matches_portrait_heading():
     )
 
     assert handled is True
-    assert "<:Ahri:1> **Ahri** (Loss) | `Gold II" in channel.sent[0].content
+    assert "<:Ahri:1> **Ahri** (Loss) | `Gold II" in channel.sent[0].display
+
+
+def test_process_recap_cycle_sends_coloured_card_with_match_time():
+    channel = MessageReturningChannel()
+
+    _run_single_match_recap(channel, {}, win=True)
+
+    view = channel.messages[0]["view"]
+    assert view is not None
+    container = view.children[0]
+    assert container.accent_colour == ACCENT_WIN
+    text = channel.messages[0]["content"]
+    assert "New Match Recap" in text and "\U0001F552 `" in text  # match end time is kept
+    assert "✅ **Alpha** | `Mid` • **Ahri** (Win)" in text
+
+
+def test_card_pending_lp_targets_the_player_component():
+    state = {}
+    channel = MessageReturningChannel()
+
+    _run_single_match_recap(channel, state, win=False)
+
+    [pending] = json.loads(state[lp_pending_state_key("Alpha#NA1")])
+    assert isinstance(pending["component_id"], int)
+    assert pending["message_id"] == 1
+
+
+class RejectingCardChannel(MessageReturningChannel):
+    async def send(self, message=None, tts=False, *, view=None):
+        if view is not None:
+            response = type("Response", (), {"status": 400, "reason": "Bad Request"})()
+            raise discord.HTTPException(response, "Invalid Form Body")
+        return await super().send(message, tts=tts)
+
+
+def test_rejected_card_falls_back_to_plain_text_and_lp_still_edits():
+    state = {}
+    channel = RejectingCardChannel()
+
+    end_ts = _run_single_match_recap(channel, state, win=False)
+
+    assert len(channel.messages) == 1
+    assert channel.messages[0]["view"] is None
+    assert "New Match Recap" in channel.messages[0]["content"]
+    assert state[_state_key("Alpha#NA1")] == "NA1_2"  # cursor still advances
+    [pending] = json.loads(state[lp_pending_state_key("Alpha#NA1")])
+    assert "component_id" not in pending
+
+    handled = asyncio.run(
+        handle_lp_event(
+            riot_id="Alpha#NA1",
+            event=_lp_event(won=False, delta=-18, league_points=22, observed_at=end_ts + 120),
+            recap_channel=channel,
+            db_get_state=state.get,
+            db_set_state=state.__setitem__,
+            log=lambda _msg: None,
+            now=time.time(),
+        )
+    )
+    assert handled is True
+    assert "(Loss) | `Gold II · 40LP → 22LP (-18)`\n" in channel.sent[0].display
+
+
+class MessageSnapshot:
+    """What Discord returns from a fetch: a copy at that moment; edits go to the real message."""
+
+    def __init__(self, original):
+        self.id = original.id
+        self.content = original.content
+        self.components = list(original.components)
+        self._original = original
+
+    async def edit(self, **kwargs):
+        return await self._original.edit(**kwargs)
+
+
+class SlowFetchChannel(MessageReturningChannel):
+    async def fetch_message(self, message_id):
+        snapshot = MessageSnapshot(await super().fetch_message(message_id))
+        await asyncio.sleep(0.01)  # let a concurrent edit interleave between fetch and edit
+        return snapshot
+
+
+def test_concurrent_lp_edits_on_one_card_both_survive():
+    riot = FakeRiotClient()
+    end_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000) - 60_000
+    riot.puuid_by_riot_id = {"Alpha#NA1": "puuid-a", "Bravo#NA1": "puuid-b"}
+    riot.recent_ids_by_puuid = {"puuid-a": ["NA1_2", "NA1_1"], "puuid-b": ["NA1_2", "NA1_1"]}
+    riot.match_info_by_id = {
+        "NA1_2": {
+            "info": {
+                "queueId": 420,
+                "gameDuration": 1800,
+                "gameEndTimestamp": end_ms,
+                "participants": [_participant("puuid-a", win=False), _participant("puuid-b", win=False)],
+            }
+        }
+    }
+    riot.mode_records_by_riot_id = {"Alpha#NA1": ({}, {}), "Bravo#NA1": ({}, {})}
+    state = {_state_key("Alpha#NA1"): "NA1_1", _state_key("Bravo#NA1"): "NA1_1"}
+    channel = SlowFetchChannel()
+
+    async def edit_last_report_message(**_kwargs):
+        return None
+
+    asyncio.run(
+        process_recap_cycle(
+            friends=["Alpha#NA1", "Bravo#NA1"],
+            riot_client=riot,
+            poro_service=FakePoroService(),
+            report_timezone=timezone.utc,
+            match_recap_channel_id=123,
+            channel=channel,
+            db_enabled=True,
+            db_get_state=state.get,
+            db_set_state=state.__setitem__,
+            db_upsert_daily_stats=lambda *_args, **_kwargs: None,
+            edit_last_report_message=edit_last_report_message,
+            log=lambda _msg: None,
+        )
+    )
+    assert len(channel.sent) == 1
+    observed = end_ms / 1000 + 120
+
+    async def both():
+        return await asyncio.gather(
+            *(
+                handle_lp_event(
+                    riot_id=riot_id,
+                    event=_lp_event(won=False, delta=delta, league_points=lp, observed_at=observed),
+                    recap_channel=channel,
+                    db_get_state=state.get,
+                    db_set_state=state.__setitem__,
+                    log=lambda _msg: None,
+                    now=time.time(),
+                )
+                for riot_id, delta, lp in (("Alpha#NA1", -18, 22), ("Bravo#NA1", -20, 30))
+            )
+        )
+
+    assert asyncio.run(both()) == [True, True]
+    text = channel.sent[0].display
+    assert "40LP → 22LP (-18)" in text
+    assert "50LP → 30LP (-20)" in text
 

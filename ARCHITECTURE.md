@@ -75,6 +75,8 @@ Riftwatcher Poro is a Discord worker service that tracks ranked League results f
   - LP events from rank-worker polls, LP math/formatting, and the pending-recap/event join state
 - `src/arena_static.py`
   - Arena augment (CommunityDragon) and item (Data Dragon) display names; successful loads are cached per process, failed sources retry after 10 minutes; recaps fall back to raw IDs
+- `src/recap_cards.py`
+  - match recap cards (Components V2): accent by result, packing within Discord limits with LP reserve, per-player text components, LP edit by component ID
 - `src/champion_icons.py`
   - recap champion display mode (`name`/`icon`/`both`) and portrait emojis: Data Dragon portraits uploaded once as application-owned emojis named after the champion (`:Ahri:`, `:KaiSa:`; punctuation/spaces dropped), mapped from the numeric champion ID via the Data Dragon catalog; emojis from the earlier `rw_champ_<championId>` naming are renamed in place, not re-uploaded; serialized lookups, 5-minute emoji cache and failure backoff, daily catalog cache, 10-second lookup timeout, bounded downloads
 
@@ -100,7 +102,9 @@ All workers run continuously while connected, each with startup jitter and cycle
   - posts recap messages in `MATCH_RECAP_CHANNEL_ID` (queue label, local end time, duration, per-player line items); remakes and matches without tracked players are skipped
   - labels ranked queues plus common non-ranked queues (normals, Swiftplay/Quickplay, ARAM, ARAM Mayhem, Clash, rotating modes, Co-op vs AI)
   - formats Arena (`1700`/`1710`/`1750`) recaps with placement/team, damage share, augments/items, and skillshot challenge stats
-  - packs recaps into 2000-char messages, splitting at player boundaries, 3s apart
+  - posts each match as a card (`src/recap_cards.py`, Discord Components V2): one container per match with the plain-text header and player lines, result-coloured accent, one text component per player; packed within 40 components / 4000 characters per message (an LP reserve is kept per pending player; oversized text is shortened, never rejected), messages 3s apart
+  - if Discord rejects a card (`HTTPException`), the same batch is sent as plain text (2000-char messages split at player boundaries). The recap cursor is still saved before sending, so a failed send can't cause endless retries
+  - pending LP stores the player's card component ID; the LP edit (`edit_recap_with_lp`) rebuilds the card with `LayoutView.from_message` and edits only that component. Plain-text recaps still match the player's heading line. Fetch-then-edit runs under `LP_EDIT_LOCK` so two players' edits on one message can't overwrite each other
   - posts ranked win/loss streak callouts in `MATCH_RECAP_CHANNEL_ID` as separate messages (wins: 3-4 Momentum, 5-7 Heater Alert, 8-9 LEGENDARY, 10+ FINAL BOSS UNLOCKED; losses: 3-4 Cold Streak, 5-7 Tilt Watch, 8-9 FULL TILT, 10-12 UNINSTALL PROTOCOL, 13+ BIOHAZARD IN THE LOBBY); deduped by `last_announced_streak::{riot_id}` token
   - streak callouts use Discord TTS by default; toggle with `!tts on|off|status`
   - champion display per `!champdisplay name|icon|both` (default `name`); portrait modes fall back to the name, and a batch spends at most 15 seconds on new portrait lookups before using cached ones only. The LP edit matches the recap's first line as posted, so portraits don't affect it

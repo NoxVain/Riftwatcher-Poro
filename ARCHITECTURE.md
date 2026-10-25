@@ -71,6 +71,8 @@ Riftwatcher Poro is a Discord worker service that tracks ranked League results f
   - pure queue/window/ranking helpers, Gamer Score and Wilson math, remake detection
 - `src/rank_logic.py`
   - rank normalization/comparison and rank-message text
+- `src/recap_lp.py`
+  - LP events from rank-worker polls, LP math/formatting, and the pending-recap/event join state
 - `src/arena_static.py`
   - Arena augment (CommunityDragon) and item (Data Dragon) display names; successful loads are cached per process, failed sources retry after 10 minutes; recaps fall back to raw IDs
 
@@ -89,6 +91,7 @@ All workers run continuously while connected, each with startup jitter and cycle
   - compares current ranked entries with `player_ranked_state`
   - sends rank up/down messages to `EVENTS_CHANNEL_ID`
   - first observation is baseline only (no alert); queues that disappear from Riot's response are removed from the baseline
+  - LP for recaps (`src/recap_lp.py`): when a Solo/Duo or Flex queue's counters moved by exactly one game with a consistent LP change (wins gain LP; losses lose LP or stay at 0), it builds an LP event (100 LP per division, shared Master+ ladder). It edits the matching pending recap in `MATCH_RECAP_CHANNEL_ID` (same queue and result, game ended up to 30 minutes before the poll, newest first) or stores the event for the recap worker. No extra Riot requests; LP failures are logged and never block rank-state persistence
 - Recap worker
   - interval: `max(30, MATCH_RECAP_POLL_SECONDS)`
   - finds new matches using persisted per-player recap key (`last_announced_match_id::{riot_id}`); a player's first observation is baseline only
@@ -100,6 +103,7 @@ All workers run continuously while connected, each with startup jitter and cycle
   - streak callouts use Discord TTS by default; toggle with `!tts on|off|status`
   - lookback window: 20 matches
   - a player's recap key only advances when all of their new matches fetched successfully (failed fetches retry next cycle)
+  - Solo/Duo and Flex lines take a stored LP event if the rank worker saw the game first; otherwise, after sending, the line is registered as pending (message ID + heading line) for the rank worker to edit. A recap is skipped if its heading appears more than once in the batch. Pending lines and events expire after 30 minutes; a shared `asyncio.Lock` serializes both workers' updates
   - refreshes affected players' daily stats and forces daily + weekly scoreboard update
 - Backfill worker
   - interval: `max(120, DAILY_REFRESH_SECONDS * 2)`
@@ -202,6 +206,7 @@ Badges (`report_builder.py`) are separate from the score: per-minute rates shrun
   - key/value operational state:
     - scoreboard message ids (`last_report_*`, `last_weekly_report_*`, previous-day message + cycle keys)
     - per-player cursors: `last_seen_match_id::`, `last_announced_match_id::`, `last_announced_streak::`, `backfill_offset::`
+    - per-player LP joins (JSON lists, 30-minute expiry): `recap_lp_pending::` (posted recap lines awaiting LP), `recap_lp_events::` (LP changes awaiting a recap)
     - `streak_tts_enabled`
     - alert dedupe flags: `riot_401_alert_sent`, `worker_stall_alert_sent::{worker}`, `esports_auth_alert_sent`
     - esports state: `esports_match_snapshot`, `esports_schedule_posted_cycle`, `esports_weekly_schedule_posted_week`

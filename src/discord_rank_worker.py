@@ -1,8 +1,10 @@
 import asyncio
+import time
 
 import requests
 
 from src.rank_logic import format_rank_change_message, normalize_queue_type
+from src.recap_lp import build_lp_event, handle_lp_event
 
 
 async def process_rank_cycle(
@@ -14,7 +16,11 @@ async def process_rank_cycle(
     db_upsert_ranked_state,
     db_delete_ranked_state_queue,
     log,
+    recap_channel=None,
+    db_get_state=None,
+    db_set_state=None,
 ):
+    lp_enabled = db_get_state is not None and db_set_state is not None
     for riot_id in friends:
         try:
             previous_rows = await asyncio.to_thread(db_load_ranked_state, riot_id)
@@ -55,6 +61,12 @@ async def process_rank_cycle(
                     await channel.send(message)
                     log(f"[rank] Rank change posted for {riot_id} ({queue_type}).")
 
+            if lp_enabled:
+                await _record_lp_events(
+                    riot_id, previous_by_queue, current_by_queue,
+                    recap_channel=recap_channel, db_get_state=db_get_state, db_set_state=db_set_state, log=log,
+                )
+
             for queue_type, entry in current_by_queue.items():
                 await asyncio.to_thread(db_upsert_ranked_state, riot_id, queue_type, entry)
             for queue_type in previous_by_queue.keys():
@@ -64,3 +76,24 @@ async def process_rank_cycle(
             log(f"[rank] Failed rank-check for {riot_id}: {exc}")
         except Exception as exc:
             log(f"[rank] Unexpected rank-check error for {riot_id}: {exc}")
+
+
+async def _record_lp_events(riot_id, previous_by_queue, current_by_queue, *, recap_channel, db_get_state, db_set_state, log):
+    now = time.time()
+    for queue_type, current_entry in current_by_queue.items():
+        event = build_lp_event(previous_by_queue.get(queue_type), current_entry, now)
+        if event is None:
+            continue
+        try:
+            await handle_lp_event(
+                riot_id=riot_id,
+                event=event,
+                recap_channel=recap_channel,
+                db_get_state=db_get_state,
+                db_set_state=db_set_state,
+                log=log,
+                now=now,
+            )
+        except Exception as exc:
+            # LP is cosmetic; never let it block rank-state persistence.
+            log(f"[rank] Could not record LP change for {riot_id} ({queue_type}): {exc}")

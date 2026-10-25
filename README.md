@@ -56,6 +56,7 @@ Start with:
 - `src/db/` - Postgres pool, schema, and persistence helpers
 - `src/report_logic.py` - pure ranking/window helpers
 - `src/rank_logic.py` - rank queue normalization and rank-change message formatting
+- `src/recap_lp.py` - LP gain/loss for ranked recaps from the rank worker's polls
 - `src/arena_static.py` - Arena augment/item display-name loader (CommunityDragon/Data Dragon)
 - `tests/` - unit tests
 
@@ -87,6 +88,11 @@ Start with:
   - Arena augments and items by name when static data is available (raw IDs otherwise)
   - Arena skillshots hit/dodged from match challenge stats
   - large batches are split across messages at player boundaries
+  - Solo/Duo and Flex lines show rank and LP change, e.g. `Gold II | -18LP → 22LP`:
+    - no extra Riot requests: the rank worker's existing poll supplies the before/after rank
+    - if the rank worker sees the game first, LP is in the recap when it posts; otherwise the recap is edited when the next rank poll sees it (usually within `DAILY_REFRESH_SECONDS`)
+    - LP is only shown when exactly one game in that queue happened between two rank polls with a matching result; otherwise (two quick games, season reset, dodges/decay) the line stays without LP
+    - recaps are left alone if no LP arrives within 30 minutes
 - Ranked win/loss streak callouts post in `MATCH_RECAP_CHANNEL_ID` as separate messages:
   - 3-4 wins: Momentum
   - 5-7 wins: Heater Alert
@@ -140,6 +146,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
   - runs DB match-cache cleanup (`MATCH_CACHE_RETENTION_DAYS`) at most once per hour
 - Rank worker (`max(30, DAILY_REFRESH_SECONDS)`)
   - compares current ranked entries vs persisted `player_ranked_state`
+  - turns a one-game win/loss counter change into an LP event and edits it into the matching recap (or stores it for the recap worker)
 - Recap worker (`max(30, MATCH_RECAP_POLL_SECONDS)`, default `90`)
   - detects newly finished matches (last 20 per player) and posts recaps
   - posts streak callouts as separate messages (not merged into recap batches)

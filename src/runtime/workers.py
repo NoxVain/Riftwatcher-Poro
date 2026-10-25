@@ -51,10 +51,15 @@ async def evaluate_rank_changes_and_notify(
     db_upsert_ranked_state,
     db_delete_ranked_state_queue,
     log,
+    match_recap_channel_id=None,
+    db_get_state=None,
+    db_set_state=None,
 ):
     channel = await resolve_channel(events_channel_id)
     if channel is None:
         return
+    # Recap channel is only needed to edit LP into posted recaps.
+    recap_channel = await resolve_channel(match_recap_channel_id) if match_recap_channel_id else None
     await process_rank_cycle(
         friends=friends,
         channel=channel,
@@ -63,6 +68,9 @@ async def evaluate_rank_changes_and_notify(
         db_upsert_ranked_state=db_upsert_ranked_state,
         db_delete_ranked_state_queue=db_delete_ranked_state_queue,
         log=log,
+        recap_channel=recap_channel,
+        db_get_state=db_get_state,
+        db_set_state=db_set_state,
     )
 
 

@@ -411,6 +411,9 @@ async def evaluate_rank_changes_and_notify():
         db_upsert_ranked_state=db_upsert_ranked_state,
         db_delete_ranked_state_queue=db_delete_ranked_state_queue,
         log=log,
+        match_recap_channel_id=MATCH_RECAP_CHANNEL_ID,
+        db_get_state=db_get_state,
+        db_set_state=db_set_state,
     )
 
 

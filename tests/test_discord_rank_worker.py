@@ -1,8 +1,10 @@
 import asyncio
+import json
 
 import requests
 
 from src.discord_rank_worker import process_rank_cycle
+from src.recap_lp import lp_pending_state_key
 
 
 def _row(queue_type, tier, division, lp=0):
@@ -127,3 +129,95 @@ def test_process_rank_cycle_continues_after_one_player_failure():
 
     assert ("Good#EUW", "RANKED_SOLO_5X5") in upserts
     assert any("Failed rank-check for Bad#EUW" in msg for msg in logs)
+
+
+class FakeRecapMessage:
+    def __init__(self, message_id, content):
+        self.id = message_id
+        self.content = content
+
+    async def edit(self, *, content):
+        self.content = content
+        return self
+
+
+class FakeRecapChannel:
+    def __init__(self, message):
+        self.message = message
+
+    async def fetch_message(self, message_id):
+        assert message_id == self.message.id
+        return self.message
+
+
+def _ranked_row(lp, wins, losses):
+    return dict(_row("RANKED_SOLO_5x5", "GOLD", "II", lp), wins=wins, losses=losses)
+
+
+def test_process_rank_cycle_edits_lp_into_pending_recap(monkeypatch):
+    from src import discord_rank_worker
+
+    heading = "❌ **Alpha** | `Mid` • **Ahri** (Loss)"
+    recap = FakeRecapMessage(77, f"\U0001F3AE **New Match Recap**\n\n{heading}\n   stats")
+    now = 1_000_000.0
+    monkeypatch.setattr(discord_rank_worker.time, "time", lambda: now)
+    bot_state = {
+        lp_pending_state_key("Alpha#EUW"): json.dumps(
+            [{"match_id": "EUW1_5", "queue_type": "RANKED_SOLO_5X5", "won": False,
+              "end_ts": now - 240, "heading": heading, "message_id": 77}]
+        )
+    }
+    riot = FakeRiotClient()
+    riot.by_player["Alpha#EUW"] = [
+        {"queueType": "RANKED_SOLO_5x5", "tier": "GOLD", "rank": "II", "leaguePoints": 22, "wins": 10, "losses": 10},
+    ]
+    upserts = []
+
+    asyncio.run(
+        process_rank_cycle(
+            friends=["Alpha#EUW"],
+            channel=FakeChannel(),
+            riot_client=riot,
+            db_load_ranked_state=lambda _riot_id: [_ranked_row(40, 10, 9)],
+            db_upsert_ranked_state=lambda riot_id, queue_type, _entry: upserts.append((riot_id, queue_type)),
+            db_delete_ranked_state_queue=lambda _riot_id, _queue_type: None,
+            log=lambda _msg: None,
+            recap_channel=FakeRecapChannel(recap),
+            db_get_state=bot_state.get,
+            db_set_state=bot_state.__setitem__,
+        )
+    )
+
+    assert f"{heading} | `Gold II | -18LP → 22LP`\n" in recap.content
+    assert json.loads(bot_state[lp_pending_state_key("Alpha#EUW")]) == []
+    assert upserts == [("Alpha#EUW", "RANKED_SOLO_5X5")]
+
+
+def test_process_rank_cycle_lp_failure_does_not_block_rank_state():
+    riot = FakeRiotClient()
+    riot.by_player["Alpha#EUW"] = [
+        {"queueType": "RANKED_SOLO_5x5", "tier": "GOLD", "rank": "II", "leaguePoints": 60, "wins": 11, "losses": 9},
+    ]
+    upserts = []
+    logs = []
+
+    def broken_get_state(_key):
+        raise RuntimeError("db down")
+
+    asyncio.run(
+        process_rank_cycle(
+            friends=["Alpha#EUW"],
+            channel=FakeChannel(),
+            riot_client=riot,
+            db_load_ranked_state=lambda _riot_id: [_ranked_row(40, 10, 9)],
+            db_upsert_ranked_state=lambda riot_id, queue_type, _entry: upserts.append((riot_id, queue_type)),
+            db_delete_ranked_state_queue=lambda _riot_id, _queue_type: None,
+            log=logs.append,
+            recap_channel=None,
+            db_get_state=broken_get_state,
+            db_set_state=lambda _key, _value: None,
+        )
+    )
+
+    assert upserts == [("Alpha#EUW", "RANKED_SOLO_5X5")]
+    assert any("Could not record LP change" in line for line in logs)

@@ -1,10 +1,13 @@
 import asyncio
+import json
+import time
 from datetime import datetime, timezone
 
 import pytest
 import requests
 
 from src.discord_recap_worker import process_recap_cycle
+from src.recap_lp import handle_lp_event, lp_events_state_key, lp_pending_state_key
 
 
 def _state_key(riot_id):
@@ -768,4 +771,128 @@ def test_pack_sections_into_messages_graceful_split():
     assert len(messages) == 2
     assert messages[0] == "\n\n".join(p[:4])
     assert messages[1] == "\n\n".join(p[4:])
+
+
+class FakeSentMessage:
+    def __init__(self, message_id, content):
+        self.id = message_id
+        self.content = content
+
+    async def edit(self, *, content):
+        self.content = content
+        return self
+
+
+class MessageReturningChannel(FakeChannel):
+    def __init__(self):
+        super().__init__()
+        self.sent = []
+
+    async def send(self, message, tts=False):
+        await super().send(message, tts=tts)
+        sent = FakeSentMessage(len(self.sent) + 1, message)
+        self.sent.append(sent)
+        return sent
+
+    async def fetch_message(self, message_id):
+        return self.sent[message_id - 1]
+
+
+def _run_single_match_recap(channel, state, *, win, queue_id=420):
+    riot = FakeRiotClient()
+    end_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000) - 60_000
+    riot.puuid_by_riot_id = {"Alpha#NA1": "puuid-a"}
+    riot.recent_ids_by_puuid = {"puuid-a": ["NA1_2", "NA1_1"]}
+    riot.match_info_by_id = {
+        "NA1_2": {
+            "info": {
+                "queueId": queue_id,
+                "gameDuration": 1800,
+                "gameEndTimestamp": end_ms,
+                "participants": [_participant("puuid-a", win=win)],
+            }
+        }
+    }
+    riot.mode_records_by_riot_id = {"Alpha#NA1": ({}, {})}
+    state[_state_key("Alpha#NA1")] = "NA1_1"
+
+    async def edit_last_report_message(**_kwargs):
+        return None
+
+    asyncio.run(
+        process_recap_cycle(
+            friends=["Alpha#NA1"],
+            riot_client=riot,
+            poro_service=FakePoroService(),
+            report_timezone=timezone.utc,
+            match_recap_channel_id=123,
+            channel=channel,
+            db_enabled=True,
+            db_get_state=state.get,
+            db_set_state=state.__setitem__,
+            db_upsert_daily_stats=lambda *_args, **_kwargs: None,
+            edit_last_report_message=edit_last_report_message,
+            log=lambda _msg: None,
+        )
+    )
+    return end_ms / 1000
+
+
+def _lp_event(*, won, delta, league_points, observed_at):
+    return {
+        "queue_type": "RANKED_SOLO_5X5", "won": won, "delta": delta, "tier": "GOLD",
+        "rank": "II", "league_points": league_points, "observed_at": observed_at,
+    }
+
+
+def test_process_recap_cycle_includes_lp_when_rank_worker_saw_game_first():
+    state = {
+        lp_events_state_key("Alpha#NA1"): json.dumps(
+            [_lp_event(won=True, delta=21, league_points=56, observed_at=time.time() - 10)]
+        )
+    }
+    channel = MessageReturningChannel()
+
+    _run_single_match_recap(channel, state, win=True)
+
+    assert "(Win) | `Gold II | +21LP → 56LP`\n" in channel.messages[0]["content"]
+    assert json.loads(state[lp_events_state_key("Alpha#NA1")]) == []
+    assert lp_pending_state_key("Alpha#NA1") not in state
+
+
+def test_process_recap_cycle_tracks_recap_for_later_lp_edit():
+    state = {}
+    channel = MessageReturningChannel()
+
+    end_ts = _run_single_match_recap(channel, state, win=False)
+
+    assert "LP" not in channel.messages[0]["content"]
+    pending = json.loads(state[lp_pending_state_key("Alpha#NA1")])
+    assert [(p["match_id"], p["message_id"], p["won"]) for p in pending] == [("NA1_2", 1, False)]
+
+    handled = asyncio.run(
+        handle_lp_event(
+            riot_id="Alpha#NA1",
+            event=_lp_event(won=False, delta=-18, league_points=22, observed_at=end_ts + 120),
+            recap_channel=channel,
+            db_get_state=state.get,
+            db_set_state=state.__setitem__,
+            log=lambda _msg: None,
+            now=time.time(),
+        )
+    )
+
+    assert handled is True
+    assert "(Loss) | `Gold II | -18LP → 22LP`\n" in channel.sent[0].content
+
+
+def test_process_recap_cycle_skips_lp_for_non_ranked_queue():
+    state = {}
+    channel = MessageReturningChannel()
+
+    _run_single_match_recap(channel, state, win=True, queue_id=400)
+
+    assert len(channel.messages) == 1
+    assert lp_pending_state_key("Alpha#NA1") not in state
+    assert lp_events_state_key("Alpha#NA1") not in state
 

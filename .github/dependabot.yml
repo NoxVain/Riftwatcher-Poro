@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # requirements.txt / requirements-dev.txt (exact pins).
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # One PR per week for routine updates; major versions still get their own PR.
+      python-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions-minor-and-patch:
+        update-types: ["minor", "patch"]

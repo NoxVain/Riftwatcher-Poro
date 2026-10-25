@@ -6,7 +6,7 @@ Riftwatcher Poro is source-available for non-commercial use under the PolyForm N
 
 ## Before You Start
 
-- Python 3.11+
+- Python 3.14 (the version in `.python-version`, which Railway also uses)
 - A Discord server where you can manage channels and invite bots
 - A Discord Developer Portal application
 - A Riot Developer Portal API key

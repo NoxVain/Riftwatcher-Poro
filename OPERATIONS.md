@@ -167,7 +167,8 @@ Actions:
 ## CI & Deploy
 
 Current behavior:
-- GitHub Actions workflow `Python CI` (`.github/workflows/test.yml`) runs `python -m pytest -q` on Python 3.11 for pushes and pull requests to `main`.
+- GitHub Actions workflow `Python CI` (`.github/workflows/test.yml`) runs `python -m pytest -q` on the Python version in `.python-version` (same as Railway) for pushes and pull requests to `main`.
+- Dependencies are pinned exactly in `requirements.txt` (runtime, installed on Railway) and `requirements-dev.txt` (adds pytest). Dependabot opens weekly grouped PRs for pip and GitHub Actions updates; merge them once CI is green. Python upgrades are manual: change `.python-version`.
 - CI has no deploy job. Railway builds and deploys the service from the connected repository based on the Railway service settings.
 - Railway service settings (start command `python -m src.app`, restart policy `ALWAYS`) are managed as Infrastructure as Code in `.railway/railway.ts`. Railway stops reading `railway.json` (Config as Code) on 2026-12-01; this service was migrated off it on 2026-10-25. Service variables are `unmanaged`: they live only in Railway, never in the repo. `Procfile` (`worker: python -m src.app`) covers Procfile-based hosts.
 - Changing Railway settings: edit `.railway/railway.ts`, then run `railway config plan` and `railway config apply` from the repo root (Railway CLI 5.42.1+, linked with `railway link`). The TypeScript SDK must be installed locally first: `npm install railway --no-save` (`node_modules/` is git-ignored; don't commit a root `package.json`, which could make Railway's builder treat the repo as Node). Merging to `main` does not apply IaC changes by itself.

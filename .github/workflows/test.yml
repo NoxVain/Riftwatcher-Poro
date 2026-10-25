@@ -13,16 +13,19 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v5
+    - uses: actions/checkout@v7
+    - name: Set up Python (version from .python-version, same as Railway)
+      uses: actions/setup-python@v7
       with:
-        python-version: "3.11"
+        python-version-file: ".python-version"
         cache: 'pip'
+        cache-dependency-path: |
+          requirements.txt
+          requirements-dev.txt
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
     - name: Run tests with pytest
       run: |
         python -m pytest -q

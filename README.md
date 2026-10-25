@@ -277,10 +277,10 @@ python -m pytest -q
 On Windows, if `python` resolves to a WindowsApps alias, run tests with the Python launcher or an explicit interpreter path:
 
 ```powershell
-py -3.11 -m pytest -q
+py -3.14 -m pytest -q
 ```
 
-Tests need no Discord, Riot, or Postgres access (`tests/conftest.py` provides dummy environment values). GitHub Actions (`.github/workflows/test.yml`) runs the suite on Python 3.11 for pushes and pull requests to `main`.
+Tests need no Discord, Riot, or Postgres access (`tests/conftest.py` provides dummy environment values). GitHub Actions (`.github/workflows/test.yml`) runs the suite on the Python version in `.python-version` (the same one Railway builds with) for pushes and pull requests to `main`. Install test dependencies with `pip install -r requirements-dev.txt`. Dependabot (`.github/dependabot.yml`) opens weekly PRs for pinned dependency and GitHub Actions updates.
 
 ## Operations Notes
 

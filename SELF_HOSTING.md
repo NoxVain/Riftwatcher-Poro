@@ -103,7 +103,7 @@ See `README.md` for every variable and its default.
 5. Ensure `DATABASE_URL` points to the Railway Postgres service.
 6. Deploy.
 
-Railway uses `railway.json` (start command `python -m src.app`, restart policy `ALWAYS`). The `Procfile` provides the same command for Procfile-based hosts:
+In the service's **Settings**, set the start command to `python -m src.app` and the restart policy to `Always`. (The upstream deployment manages these through `.railway/railway.ts`, which names the upstream project and repository; to use it for your own deployment, change those names and run `railway config apply`. See `OPERATIONS.md` → CI & Deploy.) The `Procfile` provides the same command for Procfile-based hosts:
 
 ```text
 Procfile -> worker: python -m src.app

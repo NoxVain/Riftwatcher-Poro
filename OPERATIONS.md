@@ -169,7 +169,9 @@ Actions:
 Current behavior:
 - GitHub Actions workflow `Python CI` (`.github/workflows/test.yml`) runs `python -m pytest -q` on Python 3.11 for pushes and pull requests to `main`.
 - CI has no deploy job. Railway builds and deploys the service from the connected repository based on the Railway service settings.
-- Railway uses `railway.json`: start command `python -m src.app`, restart policy `ALWAYS` (max 10 retries). `Procfile` (`worker: python -m src.app`) covers Procfile-based hosts.
+- Railway service settings (start command `python -m src.app`, restart policy `ALWAYS`) are managed as Infrastructure as Code in `.railway/railway.ts`. Railway stops reading `railway.json` (Config as Code) on 2026-12-01; this service was migrated off it on 2026-10-25. Service variables are `unmanaged`: they live only in Railway, never in the repo. `Procfile` (`worker: python -m src.app`) covers Procfile-based hosts.
+- Changing Railway settings: edit `.railway/railway.ts`, then run `railway config plan` and `railway config apply` from the repo root (Railway CLI 5.42.1+, linked with `railway link`). The TypeScript SDK must be installed locally first: `npm install railway --no-save` (`node_modules/` is git-ignored; don't commit a root `package.json`, which could make Railway's builder treat the repo as Node). Merging to `main` does not apply IaC changes by itself.
+- Git Bash quirk: the SDK finds the CLI through the `_` environment variable, which Git Bash points at npm's wrapper script. Run `plan`/`apply` from PowerShell, or prefix with `env _="<path to railway.exe>"`.
 
 Implication:
 - Check that the CI run is green before merging to the branch Railway deploys from.

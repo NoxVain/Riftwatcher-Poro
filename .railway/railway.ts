@@ -9,7 +9,8 @@ export default defineRailway(() => {
     build: { buildEnvironment: "V3", builder: "RAILPACK" },
     start: "python -m src.app",
     // Carried over from railway.json; `railway config migrate` does not translate it.
-    deploy: { restartPolicyType: "ALWAYS", restartPolicyMaxRetries: 10 },
+    // No restartPolicyMaxRetries: Railway only keeps it for ON_FAILURE.
+    deploy: { restartPolicyType: "ALWAYS" },
     replicas: { "us-east4-eqdc4a": 1 },
     networking: { privateNetworkEndpoint: "riftwatcher-poro" },
   });

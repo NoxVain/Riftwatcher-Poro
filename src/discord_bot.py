@@ -441,7 +441,6 @@ async def background_match_recap_notifier():
         friends=FRIENDS,
         riot_client=riot_client,
         poro_service=poro_service,
-        report_timezone=REPORT_TIMEZONE,
         match_recap_channel_id=MATCH_RECAP_CHANNEL_ID,
         db_enabled=DB_ENABLED,
         db_get_state=db_get_state,

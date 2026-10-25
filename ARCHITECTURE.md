@@ -102,12 +102,12 @@ All workers run continuously while connected, each with startup jitter and cycle
   - posts recap messages in `MATCH_RECAP_CHANNEL_ID` (queue label, local end time, duration, per-player line items); remakes and matches without tracked players are skipped
   - labels ranked queues plus common non-ranked queues (normals, Swiftplay/Quickplay, ARAM, ARAM Mayhem, Clash, rotating modes, Co-op vs AI)
   - formats Arena (`1700`/`1710`/`1750`) recaps with placement/team, damage share, augments/items, and skillshot challenge stats
-  - posts each match as a card (`src/recap_cards.py`, Discord Components V2): one container per match with the plain-text header and player lines, result-coloured accent, one text component per player; packed within 40 components / 4000 characters per message (an LP reserve is kept per pending player; oversized text is shortened, never rejected), messages 3s apart
+  - posts each match as a card (`src/recap_cards.py`, Discord Components V2): one container per match with the compact header (`-# queue · **result** · game length`, from `match_result`) and player lines (`format_recap_player_line`), result-coloured accent, one text component per player; packed within 40 components / 4000 characters per message (an LP reserve is kept per pending player; oversized text is shortened, never rejected), messages 3s apart
   - if Discord rejects a card (`HTTPException`), the same batch is sent as plain text (2000-char messages split at player boundaries). The recap cursor is still saved before sending, so a failed send can't cause endless retries
   - pending LP stores the player's card component ID; the LP edit (`edit_recap_with_lp`) rebuilds the card with `LayoutView.from_message` and edits only that component. Plain-text recaps still match the player's heading line. Fetch-then-edit runs under `LP_EDIT_LOCK` so two players' edits on one message can't overwrite each other
   - posts ranked win/loss streak callouts in `MATCH_RECAP_CHANNEL_ID` as separate messages (wins: 3-4 Momentum, 5-7 Heater Alert, 8-9 LEGENDARY, 10+ FINAL BOSS UNLOCKED; losses: 3-4 Cold Streak, 5-7 Tilt Watch, 8-9 FULL TILT, 10-12 UNINSTALL PROTOCOL, 13+ BIOHAZARD IN THE LOBBY); deduped by `last_announced_streak::{riot_id}` token
   - streak callouts use Discord TTS by default; toggle with `!tts on|off|status`
-  - champion display per `!champdisplay name|icon|both` (default `name`); portrait modes fall back to the name, and a batch spends at most 15 seconds on new portrait lookups before using cached ones only. The LP edit matches the recap's first line as posted, so portraits don't affect it
+  - champion display per `!champdisplay name|icon|both` (default `icon`); portrait modes fall back to the name, and a batch spends at most 15 seconds on new portrait lookups before using cached ones only. The LP edit matches the recap's first line as posted, so portraits don't affect it
   - lookback window: 20 matches
   - a player's recap key only advances when all of their new matches fetched successfully (failed fetches retry next cycle)
   - Solo/Duo and Flex lines take a stored LP event if the rank worker saw the game first; otherwise, after sending, the line is registered as pending (message ID + heading line) for the rank worker to edit. A recap is skipped if its heading appears more than once in the batch. Pending lines and events expire after 30 minutes; a shared `asyncio.Lock` serializes both workers' updates
@@ -215,7 +215,7 @@ Badges (`report_builder.py`) are separate from the score: per-minute rates shrun
     - per-player cursors: `last_seen_match_id::`, `last_announced_match_id::`, `last_announced_streak::`, `backfill_offset::`
     - per-player LP joins (JSON lists, 30-minute expiry): `recap_lp_pending::` (posted recap lines awaiting LP), `recap_lp_events::` (LP changes awaiting a recap)
     - `streak_tts_enabled`
-    - `champion_display_mode` (`name` | `icon` | `both`; unset = `name`)
+    - `champion_display_mode` (`name` | `icon` | `both`; unset = `icon`)
     - alert dedupe flags: `riot_401_alert_sent`, `worker_stall_alert_sent::{worker}`, `esports_auth_alert_sent`
     - esports state: `esports_match_snapshot`, `esports_schedule_posted_cycle`, `esports_weekly_schedule_posted_week`
     - patch-notes state: `patch_notes_seen` (JSON list of posted article ids/URLs), `patch_notes_last_checked_at` (unix seconds)

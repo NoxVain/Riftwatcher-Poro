@@ -100,24 +100,26 @@ def build_lp_event(previous_entry, current_entry, observed_at):
 
 
 def format_lp_summary(event):
+    """Recap LP text; the resulting LP and change are bold and kept on one line."""
     rank = format_rank({"tier": event["tier"], "rank": event["rank"]})
     delta = int(event["delta"])
-    delta_text = f"{delta:+d}" if delta else "0"
     lp = int(event["league_points"])
+    # Non-breaking space: mobile Discord shouldn't wrap between the total and the change.
+    result_text = f"**{lp}LP\u00a0({delta:+d})**" if delta else f"**{lp}LP\u00a0(0)**"
     previous_lp = int(event.get("previous_league_points", lp - delta))
     previous_rank = format_rank({
         "tier": event.get("previous_tier", event["tier"]),
         "rank": event.get("previous_rank", event["rank"]),
     })
     if previous_rank != rank:
-        return f"{previous_rank} {previous_lp}LP → {rank} {lp}LP ({delta_text})"
+        return f"{previous_rank} {previous_lp}LP → {rank} {result_text}"
     # Events stored before this format change lack the old rank. Do not invent
     # a starting LP value across a division boundary.
     if "previous_league_points" not in event and (
         previous_lp < 0 or (event["tier"] not in APEX_TIERS and previous_lp >= 100)
     ):
-        return f"{rank} · {lp}LP ({delta_text})"
-    return f"{rank} · {previous_lp}LP → {lp}LP ({delta_text})"
+        return f"{rank} · {result_text}"
+    return f"{rank} · {previous_lp}LP → {result_text}"
 
 
 def add_lp_to_content(content, heading, summary):
@@ -125,7 +127,7 @@ def add_lp_to_content(content, heading, summary):
     marker = f"{heading}\n"
     if content.count(marker) != 1:
         return None
-    updated = content.replace(marker, f"{heading} | `{summary}`\n", 1)
+    updated = content.replace(marker, f"{heading} · {summary}\n", 1)
     if len(updated) > MAX_MESSAGE_LENGTH:
         return None
     return updated

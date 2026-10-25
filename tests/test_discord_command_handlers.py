@@ -1023,7 +1023,7 @@ def test_champdisplay_sets_each_mode_and_reports_status():
     channel = FakeChannel(channel_id=999)
     state = {}
 
-    assert "`name only`" in _champdisplay("!champdisplay status", channel, state)
+    assert "`portrait only`" in _champdisplay("!champdisplay status", channel, state)
     for mode, label in (("icon", "portrait only"), ("both", "portrait and name"), ("name", "name only")):
         assert f"`{label}`" in _champdisplay(f"!champdisplay {mode}", channel, state)
         assert state == {"champion_display_mode": mode}
@@ -1053,7 +1053,7 @@ def test_champdisplay_status_open_but_change_requires_permission():
     channel = FakeChannel(channel_id=999)
     state = {}
 
-    assert "`name only`" in _champdisplay("!champdisplay status", channel, state, admin=False)
+    assert "`portrait only`" in _champdisplay("!champdisplay status", channel, state, admin=False)
     reply = _champdisplay("!champdisplay icon", channel, state, admin=False)
 
     assert "requires the **Manage Server** permission" in reply

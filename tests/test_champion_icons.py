@@ -52,9 +52,9 @@ def _service(client, logs=None):
 
 @pytest.mark.parametrize(
     "raw,expected",
-    [(None, "name"), ("", "name"), ("garbage", "name"), ("name", "name"), ("ICON", "icon"), (" both ", "both")],
+    [(None, "icon"), ("", "icon"), ("garbage", "icon"), ("name", "name"), ("ICON", "icon"), (" both ", "both")],
 )
-def test_parse_champion_display_mode_defaults_to_name(raw, expected):
+def test_parse_champion_display_mode_defaults_to_icon(raw, expected):
     assert icons.parse_champion_display_mode(raw) == expected
 
 

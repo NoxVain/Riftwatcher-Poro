@@ -7,7 +7,15 @@ from src.discord_text import (
     format_recap_queue_name,
     format_streak_callout,
     format_user_error,
+    recap_queue_label,
 )
+
+
+def test_recap_queue_label_drops_the_leading_icon():
+    assert recap_queue_label(420) == "Ranked Solo/Duo"
+    assert recap_queue_label(1750) == "Arena 3x6"
+    assert recap_queue_label(450) == "ARAM"
+    assert recap_queue_label(9999) == "Queue 9999"
 
 
 def _http_error(status):
@@ -40,7 +48,7 @@ def test_format_user_error_appends_request_ref_when_available():
     assert format_user_error("Add failed", RuntimeError("x"), "cmd-1234") == "Add failed: internal error. (ref `cmd-1234`)"
 
 
-def test_format_recap_player_line_uses_bullet_separator():
+def test_format_recap_player_line_compact_layout():
     participant = {
         "win": True,
         "championName": "Ahri",
@@ -59,7 +67,12 @@ def test_format_recap_player_line_uses_bullet_separator():
 
     line = format_recap_player_line("Alpha#NA1", participant, 1800)
 
-    assert " • **Ahri**" in line
+    assert line.split("\n") == [
+        "\u2705 **Alpha** \u00b7 **Ahri** Mid",
+        "**1/2/3** KDA \u00b7 **4.7** CS/min \u00b7 **10** Vision",
+        "Damage **10,000** \u00b7 Objectives **2,000**",
+        "Taken **4,000** \u00b7 Healing **300**",
+    ]
     assert "â€¢" not in line
 
 
@@ -143,19 +156,16 @@ def test_format_recap_player_line_uses_arena_placement():
         item_names={"3157": "Zhonya's Hourglass", "3089": "Rabadon's Deathcap"},
     )
 
-    assert "**Alpha**" in line
-    assert "`Team 4`" in line
-    assert "**Sett** - **Place #2**" in line
-    assert "K/D/A 9/4/12" in line
-    assert "Damage 45,000 (32.1%)" in line
-    assert "🩸 `Taken 38,000`" in line
-    assert "Healing 9,000" in line
-    assert "Shielded 1,234" in line
-    assert "Skillshots hit 13" in line
-    assert "Dodged 42" in line
-    assert "Augments Warmup Routine, Scoped Weapons" in line
-    assert "Items Zhonya's Hourglass, Rabadon's Deathcap" in line
-    assert "`\n   🛒 `Items" in line
+    lines = line.split("\n")
+    assert lines[0].endswith("**Alpha** · **Sett** · Team 4 · **Place #2**")
+    assert lines[1:] == [
+        "**9/4/12** KDA · Gold **15,000**",
+        "Damage **45,000** (32.1% of team) · Taken **38,000**",
+        "Healing **9,000** · Shielded **1,234**",
+        "Skillshots hit **13** · Dodged **42**",
+        "Augments · Warmup Routine, Scoped Weapons",
+        "Items · Zhonya's Hourglass, Rabadon's Deathcap",
+    ]
     assert "Ã¢â‚¬Â¢" not in line
     assert "CS/min" not in line
     assert "Vision" not in line

@@ -5,11 +5,11 @@ from discord_fakes import ComponentMessage, view_text
 from src import recap_cards as cards
 from src.recap_lp import add_lp_to_content
 
-HEADER = "\U0001F3AE **New Match Recap**\n`Ranked Solo/Duo` - \U0001F552 `25.10.2026 20:31` - ⏱️ `30:00`"
+HEADER = "-# Ranked Solo/Duo · **Win** · 30:00"
 
 
 def _player(name, *, pending=False, extra=""):
-    heading = f"✅ **{name}** | `Mid` • **Ahri** (Win)"
+    heading = f"✅ **{name}** · **Ahri** Mid"
     text = f"{heading}\n   stats{extra}"
     return cards.CardPlayer(f"{name}#EUW", text, {"match_id": "EUW1_1", "heading": heading} if pending else None)
 
@@ -62,7 +62,7 @@ def test_single_match_card_keeps_recap_text_and_tracks_lp_components():
 
 
 def test_matches_pack_into_messages_within_text_limit_and_continue_headers():
-    long_extra = "x" * 1200
+    long_extra = "x" * 1400  # three players overflow one message, forcing a continuation
     matches = [
         cards.CardMatch(HEADER, cards.ACCENT_LOSS, [_player(f"P{m}{i}", pending=True, extra=long_extra) for i in range(3)])
         for m in range(3)
@@ -109,7 +109,7 @@ def test_add_lp_to_card_edits_only_the_target_player_and_keeps_style():
     view = cards.add_lp_to_card(sent, target["component_id"], target["heading"], "Gold II · 40LP → 61LP (+21)", add_lp_to_content)
 
     texts = _text_displays(view)
-    assert "Bravo** | `Mid` • **Ahri** (Win) | `Gold II · 40LP → 61LP (+21)`\n" in texts[2].content
+    assert "Bravo** · **Ahri** Mid · Gold II · 40LP → 61LP (+21)\n" in texts[2].content
     assert "Gold II" not in texts[1].content
     assert _accent(view.children[0]) == cards.ACCENT_WIN
 
@@ -122,3 +122,25 @@ def test_add_lp_to_card_refuses_unknown_component_or_changed_heading():
 
     assert cards.add_lp_to_card(sent, 999, pending["heading"], "x", add_lp_to_content) is None
     assert cards.add_lp_to_card(sent, pending["component_id"], "different heading", "x", add_lp_to_content) is None
+
+
+@pytest.mark.parametrize(
+    "queue_id,results,expected",
+    [
+        (420, [True, True], "Win"),
+        (440, [False], "Loss"),
+        (420, [True, False], "Mixed results"),
+        (420, [None], "No result"),
+        (1750, [False], "Placements"),
+    ],
+)
+def test_match_result_labels_match_accents(queue_id, results, expected):
+    participants = [{"win": result} for result in results]
+    assert cards.match_result(queue_id, participants) == expected
+    assert cards.match_accent(queue_id, participants) == cards.RESULT_ACCENTS[expected]
+
+
+def test_card_header_shows_queue_result_and_game_length_only():
+    assert cards.format_card_header(420, 1902, "Mixed results") == "-# Ranked Solo/Duo · **Mixed results** · 31:42"
+    assert cards.format_card_header(1750, 1200, "Placements") == "-# Arena 3x6 · **Placements** · 20:00"
+    assert cards.format_card_header(400, 600, "Win") == "-# Normal Draft · **Win** · 10:00"

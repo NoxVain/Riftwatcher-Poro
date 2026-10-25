@@ -1,7 +1,7 @@
 """Match recap cards (Discord Components V2): one container per match.
 
-The card wraps the same header and player text as the plain-text recap, adding a
-result-coloured accent and per-player components. Each player's text is its own
+The card wraps the same compact header and player text as the plain-text recap,
+adding a result-coloured accent and per-player components. Each player's text is its own
 TextDisplay with a stable component ID, so a later LP edit targets exactly that
 player. The plain-text sections are kept alongside, so a batch can still be sent as
 text if Discord rejects the card.
@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 import discord
 
-from src.discord_text import ARENA_QUEUE_IDS
+from src.discord_text import ARENA_QUEUE_IDS, format_match_duration, recap_queue_label
 
 # Discord limits for a Components V2 message: 40 components in total (containers and
 # their children count), 4000 characters of text across all text displays.
@@ -27,18 +27,37 @@ ACCENT_NEUTRAL = 0x949BA4
 ACCENT_ARENA = 0xF0B232
 
 
-def match_accent(queue_id, participants):
-    """Accent colour for a match card from the tracked players' results."""
+RESULT_ACCENTS = {
+    "Win": ACCENT_WIN,
+    "Loss": ACCENT_LOSS,
+    "Mixed results": ACCENT_MIXED,
+    "Placements": ACCENT_ARENA,
+    "No result": ACCENT_NEUTRAL,
+}
+
+
+def match_result(queue_id, participants):
+    """Result label for a match card from the tracked players' results."""
     if queue_id in ARENA_QUEUE_IDS:
-        return ACCENT_ARENA
+        return "Placements"
     results = [participant.get("win") for participant in participants]
     if not results or any(type(result) is not bool for result in results):
-        return ACCENT_NEUTRAL
+        return "No result"
     if all(results):
-        return ACCENT_WIN
+        return "Win"
     if not any(results):
-        return ACCENT_LOSS
-    return ACCENT_MIXED
+        return "Loss"
+    return "Mixed results"
+
+
+def match_accent(queue_id, participants):
+    """Accent colour for a match card from the tracked players' results."""
+    return RESULT_ACCENTS[match_result(queue_id, participants)]
+
+
+def format_card_header(queue_id, duration_seconds, result):
+    """Small grey header line: queue, result and game length (no date or clock)."""
+    return f"-# {recap_queue_label(queue_id)} · **{result}** · {format_match_duration(duration_seconds)}"
 
 
 @dataclass

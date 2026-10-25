@@ -1,7 +1,6 @@
 import asyncio
 import time
 from dataclasses import dataclass
-from datetime import datetime
 
 import discord
 import requests
@@ -16,18 +15,23 @@ from src.champion_icons import (
 )
 from src.discord_text import (
     ARENA_QUEUE_IDS,
-    format_match_duration,
     get_arena_placement,
     get_arena_subteam_id,
     format_recap_player_line,
-    format_recap_queue_name,
     format_streak_callout,
     parse_streak_tts_enabled,
     match_recap_state_key,
     streak_callout_state_key,
     streak_tts_enabled_state_key,
 )
-from src.recap_cards import CardMatch, CardPlayer, build_card_messages, match_accent
+from src.recap_cards import (
+    RESULT_ACCENTS,
+    CardMatch,
+    CardPlayer,
+    build_card_messages,
+    format_card_header,
+    match_result,
+)
 from src.recap_lp import (
     LP_EDIT_LOCK,
     QUEUE_TYPE_BY_QUEUE_ID,
@@ -258,7 +262,6 @@ async def process_recap_cycle(
     friends,
     riot_client,
     poro_service,
-    report_timezone,
     match_recap_channel_id,
     channel,
     db_enabled,
@@ -369,13 +372,9 @@ async def process_recap_cycle(
     card_matches = []
     arena_display_names = None
     for end_ts, match_id, queue_id, duration_seconds, tracked_participants in match_entries:
-        queue_name = format_recap_queue_name(queue_id)
-        end_local = datetime.fromtimestamp(end_ts, tz=report_timezone)
-        duration_label = format_match_duration(duration_seconds)
-        header = (
-            "\U0001F3AE **New Match Recap**\n"
-            f"`{queue_name}` - \U0001F552 `{end_local:%d.%m.%Y %H:%M}` - \u23F1\uFE0F `{duration_label}`"
-        )
+        participants = [participant for _riot_id, participant in tracked_participants]
+        result = match_result(queue_id, participants)
+        header = format_card_header(queue_id, duration_seconds, result)
         card_players = []
         if queue_id in ARENA_QUEUE_IDS and arena_display_names is None:
             arena_display_names = await asyncio.to_thread(load_arena_display_names)
@@ -384,7 +383,7 @@ async def process_recap_cycle(
         ordered_participants = sorted(tracked_participants, key=lambda row: _recap_participant_sort_key(queue_id, row))
         for riot_id, participant in ordered_participants:
             champion_icon = None
-            if champion_display_mode != "name":
+            if champion_icons is not None and champion_display_mode != "name":
                 champion_icon = await champion_icons.get(
                     participant.get("championId"),
                     cached_only=time.monotonic() >= icon_lookup_deadline,
@@ -421,7 +420,7 @@ async def process_recap_cycle(
         card_matches.append(
             CardMatch(
                 header=header,
-                accent=match_accent(queue_id, [participant for _riot_id, participant in tracked_participants]),
+                accent=RESULT_ACCENTS[result],
                 players=card_players,
             )
         )

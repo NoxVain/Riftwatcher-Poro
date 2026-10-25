@@ -157,7 +157,7 @@ def _ranked_row(lp, wins, losses):
 def test_process_rank_cycle_edits_lp_into_pending_recap(monkeypatch):
     from src import discord_rank_worker
 
-    heading = "❌ **Alpha** | `Mid` • **Ahri** (Loss)"
+    heading = "❌ **Alpha** · **Ahri** Mid"
     recap = FakeRecapMessage(77, f"\U0001F3AE **New Match Recap**\n\n{heading}\n   stats")
     now = 1_000_000.0
     monkeypatch.setattr(discord_rank_worker.time, "time", lambda: now)
@@ -188,7 +188,7 @@ def test_process_rank_cycle_edits_lp_into_pending_recap(monkeypatch):
         )
     )
 
-    assert f"{heading} | `Gold II · 40LP → 22LP (-18)`\n" in recap.content
+    assert f"{heading} · Gold II · 40LP → **22LP\u00a0(-18)**\n" in recap.content
     assert json.loads(bot_state[lp_pending_state_key("Alpha#EUW")]) == []
     assert upserts == [("Alpha#EUW", "RANKED_SOLO_5X5")]
 
@@ -196,7 +196,7 @@ def test_process_rank_cycle_edits_lp_into_pending_recap(monkeypatch):
 def test_process_rank_cycle_retries_lp_edit_after_recap_channel_was_missing(monkeypatch):
     from src import discord_rank_worker
 
-    heading = "✅ **Alpha** | `Mid` • **Ahri** (Win)"
+    heading = "✅ **Alpha** · **Ahri** Mid"
     recap = FakeRecapMessage(77, f"\U0001F3AE **New Match Recap**\n\n{heading}\n   stats")
     now = 1_000_000.0
     monkeypatch.setattr(discord_rank_worker.time, "time", lambda: now)
@@ -240,7 +240,7 @@ def test_process_rank_cycle_retries_lp_edit_after_recap_channel_was_missing(monk
     # Next poll: counters are unchanged, but the stored change is paired with the recap.
     now += 300
     run_cycle(FakeRecapChannel(recap))
-    assert f"{heading} | `Gold II · 40LP → 61LP (+21)`\n" in recap.content
+    assert f"{heading} · Gold II · 40LP → **61LP\u00a0(+21)**\n" in recap.content
     assert json.loads(bot_state[lp_pending_state_key("Alpha#EUW")]) == []
 
 

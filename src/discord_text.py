@@ -134,6 +134,13 @@ def format_recap_queue_name(queue_id):
     return f"\U0001F3AF Queue {queue_id}"
 
 
+def recap_queue_label(queue_id):
+    """Queue name without its leading icon, for the compact recap header."""
+    name = format_recap_queue_name(queue_id)
+    icon, _space, label = name.partition(" ")
+    return label if label and not any(char.isalnum() for char in icon) else name
+
+
 RECAP_QUEUE_LABELS = {
     400: "\U0001F3AF Normal Draft",
     430: "\U0001F3AF Normal Blind",
@@ -281,29 +288,25 @@ def format_recap_player_line(
         team_label = f"Team {subteam_id}" if subteam_id is not None else "Team ?"
         gold_earned = int(participant.get("goldEarned", 0) or 0)
         damage_share = get_arena_team_damage_percentage(participant)
-        if damage_share is not None:
-            damage_text = f"Damage {player_damage:,} ({damage_share:.1f}%)"
-        else:
-            damage_text = f"Damage {player_damage:,}"
+        share_text = f" ({damage_share:.1f}% of team)" if damage_share is not None else ""
         lines = [
-            f"{result_emoji} **{lol_name}** | `{team_label}` \u2022 {champion_display} - **Place {placement_label}**\n"
-            f"   \u2694\uFE0F `K/D/A {kills}/{deaths}/{assists}`  \U0001F4A5 `{damage_text}`\n"
-            f"   \U0001FA78 `Taken {damage_taken:,}`  \u2764\uFE0F `Healing {healing:,}`  \U0001F6E1\uFE0F `Shielded {shielded:,}`\n"
-            f"   \U0001FA99 `Gold {gold_earned:,}`"
+            f"{result_emoji} **{lol_name}** \u00B7 {champion_display} \u00B7 {team_label} \u00B7 **Place {placement_label}**",
+            f"**{kills}/{deaths}/{assists}** KDA \u00B7 Gold **{gold_earned:,}**",
+            f"Damage **{player_damage:,}**{share_text} \u00B7 Taken **{damage_taken:,}**",
+            f"Healing **{healing:,}** \u00B7 Shielded **{shielded:,}**",
         ]
         augments = get_arena_augments(participant, augment_names=augment_names)
         items = get_participant_items(participant, item_names=item_names)
         skillshots_hit, skillshots_dodged = get_arena_skillshot_stats(participant)
         if skillshots_hit or skillshots_dodged:
-            lines.append(f"   \U0001F3AF `Skillshots hit {skillshots_hit}`  \U0001F483 `Dodged {skillshots_dodged}`")
+            lines.append(f"Skillshots hit **{skillshots_hit}** \u00B7 Dodged **{skillshots_dodged}**")
         if augments:
-            lines.append(f"   \U0001F52E `Augments {', '.join(augments)}`")
+            lines.append(f"Augments \u00B7 {', '.join(augments)}")
         if items:
-            lines.append(f"   \U0001F6D2 `Items {', '.join(items)}`")
+            lines.append(f"Items \u00B7 {', '.join(items)}")
         return "\n".join(lines)
 
     won = bool(participant.get("win"))
-    result_label = "Win" if won else "Loss"
     result_emoji = "\u2705" if won else "\u274C"
     role_name = format_recap_role(participant)
     cs = int(participant.get("totalMinionsKilled", 0) or 0) + int(participant.get("neutralMinionsKilled", 0) or 0)
@@ -311,11 +314,12 @@ def format_recap_player_line(
     cs_per_min = cs / minutes
     objective_damage = int(participant.get("damageDealtToObjectives", 0) or 0)
     vision_score = int(participant.get("visionScore", 0) or 0)
+    # The first line is the player's heading: LP is appended to it later (recap_lp).
     return (
-        f"{result_emoji} **{lol_name}** | `{role_name}` • {champion_display} ({result_label})\n"
-        f"   \u2694\uFE0F `K/D/A {kills}/{deaths}/{assists}`  \U0001F33E `CS/min {cs_per_min:.1f}`\n"
-        f"   \U0001F4A5 `Damage {player_damage:,}`  \U0001F3F0 `Objectives {objective_damage:,}`  \U0001F6E1\uFE0F `Taken {damage_taken:,}`\n"
-        f"   \u2764\uFE0F `Healing {healing:,}`  \U0001F441\uFE0F `Vision {vision_score}`"
+        f"{result_emoji} **{lol_name}** \u00B7 {champion_display} {role_name}\n"
+        f"**{kills}/{deaths}/{assists}** KDA \u00B7 **{cs_per_min:.1f}** CS/min \u00B7 **{vision_score}** Vision\n"
+        f"Damage **{player_damage:,}** \u00B7 Objectives **{objective_damage:,}**\n"
+        f"Taken **{damage_taken:,}** \u00B7 Healing **{healing:,}**"
     )
 
 

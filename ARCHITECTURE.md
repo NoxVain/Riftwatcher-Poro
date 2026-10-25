@@ -76,7 +76,7 @@ Riftwatcher Poro is a Discord worker service that tracks ranked League results f
 - `src/arena_static.py`
   - Arena augment (CommunityDragon) and item (Data Dragon) display names; successful loads are cached per process, failed sources retry after 10 minutes; recaps fall back to raw IDs
 - `src/champion_icons.py`
-  - recap champion display mode (`name`/`icon`/`both`) and portrait emojis: Data Dragon portraits uploaded once as application-owned emojis `rw_champ_<championId>`; serialized lookups, 5-minute emoji cache and failure backoff, daily catalog cache, 10-second lookup timeout, bounded downloads
+  - recap champion display mode (`name`/`icon`/`both`) and portrait emojis: Data Dragon portraits uploaded once as application-owned emojis named after the champion (`:Ahri:`, `:KaiSa:`; punctuation/spaces dropped), mapped from the numeric champion ID via the Data Dragon catalog; emojis from the earlier `rw_champ_<championId>` naming are renamed in place, not re-uploaded; serialized lookups, 5-minute emoji cache and failure backoff, daily catalog cache, 10-second lookup timeout, bounded downloads
 
 ## Worker Model
 

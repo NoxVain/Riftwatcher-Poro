@@ -1,8 +1,9 @@
 """Champion display in recaps: name, portrait (application-owned Discord emoji), or both.
 
-Portraits come from Riot Data Dragon and are uploaded once as application emojis
-named `rw_champ_<championId>`, then reused across restarts. Any failure falls back to
-the champion name, so a recap is never blocked or lost.
+Portraits come from Riot Data Dragon and are uploaded once as application emojis named
+after the champion (`:Ahri:`, `:KaiSa:`), then reused across restarts. Emojis uploaded
+under the earlier `rw_champ_<championId>` names are renamed in place. Any failure falls
+back to the champion name, so a recap is never blocked or lost.
 """
 
 import asyncio
@@ -44,6 +45,16 @@ def format_champion_display(champion_name, mode, icon=None):
     return f"{icon} {name}"
 
 
+def emoji_name_for_champion(champion_name, champion_id):
+    """Discord emoji name (2-32 chars of A-Z, a-z, 0-9, _): "Kai'Sa" -> "KaiSa"."""
+    name = re.sub(r"[^A-Za-z0-9_]", "", str(champion_name or ""))[:32]
+    return name if len(name) >= 2 else f"champ_{int(champion_id)}"
+
+
+def _legacy_emoji_name(champion_id):
+    return f"rw_champ_{champion_id}"
+
+
 def _download(url, limit):
     with requests.get(url, timeout=(3, 8), stream=True) as response:
         response.raise_for_status()
@@ -61,14 +72,18 @@ def _load_catalog():
     if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", version):
         raise ValueError("Invalid Data Dragon version")
     data = json.loads(_download(f"{CDN}/cdn/{version}/data/en_US/champion.json", 2 * 1024 * 1024))
-    icons = {}
+    catalog = {}
     for champion in data["data"].values():
         filename = champion["image"]["full"]
         if not re.fullmatch(r"[A-Za-z0-9_]+\.png", filename):
             continue
-        # Numeric IDs avoid name mismatches such as FiddleSticks vs Fiddlesticks.
-        icons[int(champion["key"])] = f"{CDN}/cdn/{version}/img/champion/{filename}"
-    return icons
+        # Keyed by numeric ID (what match data carries); names avoid FiddleSticks-style mismatches.
+        champion_id = int(champion["key"])
+        catalog[champion_id] = {
+            "emoji_name": emoji_name_for_champion(champion.get("name"), champion_id),
+            "url": f"{CDN}/cdn/{version}/img/champion/{filename}",
+        }
+    return catalog
 
 
 class ChampionIcons:
@@ -76,7 +91,8 @@ class ChampionIcons:
         self.client = client
         self.log = log
         self._lock = asyncio.Lock()
-        self._emojis = {}
+        self._emojis = {}  # emoji name -> application emoji (all of this app's emojis)
+        self._markup_by_id = {}  # champion ID -> "<:Ahri:123>", valid until _emoji_expires
         self._emoji_expires = 0
         self._catalog = {}
         self._catalog_expires = 0
@@ -93,15 +109,14 @@ class ChampionIcons:
             return None
         if champion_id <= 0:
             return None
-        name = f"rw_champ_{champion_id}"
         async with self._lock:
             now = time.monotonic()
-            if now < self._emoji_expires and name in self._emojis:
-                return self._emojis[name]
+            if now < self._emoji_expires and champion_id in self._markup_by_id:
+                return self._markup_by_id[champion_id]
             if cached_only or now < self._retry_at:
                 return None
             try:
-                return await asyncio.wait_for(self._resolve(champion_id, name), timeout=LOOKUP_TIMEOUT_SECONDS)
+                return await asyncio.wait_for(self._resolve(champion_id), timeout=LOOKUP_TIMEOUT_SECONDS)
             except (discord.HTTPException, requests.RequestException, TimeoutError,
                     ValueError, TypeError, KeyError, IndexError, AttributeError) as exc:
                 # A timed-out upload may still succeed remotely; re-fetch the emoji list
@@ -111,20 +126,30 @@ class ChampionIcons:
                 self.log(f"[champicons] Using champion names; retry in {RETRY_SECONDS}s: {type(exc).__name__}")
                 return None
 
-    async def _resolve(self, champion_id, name):
+    async def _resolve(self, champion_id):
         if time.monotonic() >= self._emoji_expires:
             emojis = await self.client.fetch_application_emojis()
-            self._emojis = {emoji.name: str(emoji) for emoji in emojis if emoji.name.startswith("rw_champ_")}
+            self._emojis = {emoji.name: emoji for emoji in emojis}
+            self._markup_by_id = {}
             self._emoji_expires = time.monotonic() + EMOJI_CACHE_SECONDS
-        if name in self._emojis:
-            return self._emojis[name]
+        # The catalog maps the numeric ID from match data to the champion's emoji name.
         if time.monotonic() >= self._catalog_expires:
             self._catalog = await asyncio.to_thread(_load_catalog)
             self._catalog_expires = time.monotonic() + CATALOG_CACHE_SECONDS
-        url = self._catalog.get(champion_id)
-        if url is None:
+        entry = self._catalog.get(champion_id)
+        if entry is None:
             return None
-        image = await asyncio.to_thread(_download, url, MAX_PORTRAIT_BYTES)
-        emoji = await self.client.create_application_emoji(name=name, image=image)
-        self._emojis[name] = str(emoji)
-        return self._emojis[name]
+        name = entry["emoji_name"]
+        emoji = self._emojis.get(name)
+        if emoji is None:
+            legacy = self._emojis.pop(_legacy_emoji_name(champion_id), None)
+            if legacy is not None:
+                # Uploaded before emojis were named after champions: rename, don't re-upload.
+                emoji = await legacy.edit(name=name)
+                self.log(f"[champicons] Renamed {legacy.name} to {name}.")
+            else:
+                image = await asyncio.to_thread(_download, entry["url"], MAX_PORTRAIT_BYTES)
+                emoji = await self.client.create_application_emoji(name=name, image=image)
+            self._emojis[name] = emoji
+        self._markup_by_id[champion_id] = str(emoji)
+        return self._markup_by_id[champion_id]

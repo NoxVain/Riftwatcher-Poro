@@ -96,7 +96,7 @@ Start with:
     - recaps are left alone if no LP arrives within 30 minutes
   - champion display, set with `!champdisplay name|icon|both|status` (default `name`):
     - `name`: champion name (`**Ahri**`); `icon`: portrait only; `both`: portrait then name
-    - portraits come from Riot Data Dragon and are uploaded once as application-owned Discord emojis (`rw_champ_<championId>`), reused across restarts
+    - portraits come from Riot Data Dragon and are uploaded once as application-owned Discord emojis named after the champion (e.g. `:Ahri:`, `:KaiSa:`), reused across restarts; portraits uploaded under the earlier `rw_champ_<id>` names are renamed automatically
     - a missing portrait, Discord/Data Dragon failure, or timeout falls back to the name; failures pause new lookups for 5 minutes
     - one recap batch spends at most 15 seconds fetching new portraits; after that it uses cached portraits only
 - Ranked win/loss streak callouts post in `MATCH_RECAP_CHANNEL_ID` as separate messages:

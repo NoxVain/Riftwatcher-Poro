@@ -900,7 +900,7 @@ def test_process_recap_cycle_skips_lp_for_non_ranked_queue():
 
 
 class FakeChampionIcons:
-    def __init__(self, icon="<:rw_champ_103:1>"):
+    def __init__(self, icon="<:Ahri:1>"):
         self.icon = icon
         self.calls = []
 
@@ -914,8 +914,8 @@ class FakeChampionIcons:
     [
         (None, "• **Ahri** (Win)"),
         ("name", "• **Ahri** (Win)"),
-        ("icon", "• <:rw_champ_103:1> (Win)"),
-        ("both", "• <:rw_champ_103:1> **Ahri** (Win)"),
+        ("icon", "• <:Ahri:1> (Win)"),
+        ("both", "• <:Ahri:1> **Ahri** (Win)"),
     ],
 )
 def test_process_recap_cycle_champion_display_modes(mode, expected):
@@ -969,5 +969,5 @@ def test_process_recap_cycle_lp_edit_still_matches_portrait_heading():
     )
 
     assert handled is True
-    assert "<:rw_champ_103:1> **Ahri** (Loss) | `Gold II" in channel.sent[0].content
+    assert "<:Ahri:1> **Ahri** (Loss) | `Gold II" in channel.sent[0].content
 

@@ -57,6 +57,7 @@ Start with:
 - `src/report_logic.py` - pure ranking/window helpers
 - `src/rank_logic.py` - rank queue normalization and rank-change message formatting
 - `src/recap_lp.py` - LP gain/loss for ranked recaps from the rank worker's polls
+- `src/recap_cards.py` - compact Components V2 containers, result labels, stat rows, and bounded message packing
 - `src/arena_static.py` - Arena augment/item display-name loader (CommunityDragon/Data Dragon)
 - `src/champion_icons.py` - recap champion display mode and portrait emojis (Data Dragon -> Discord application emojis)
 - `tests/` - unit tests
@@ -81,20 +82,23 @@ Start with:
   - falls back to pure Wilson when no baseline or role is available yet
   - `!score` shows the breakdown per player
 - Match recap posts in `MATCH_RECAP_CHANNEL_ID` for any queue a tracked player finishes (remakes are skipped):
-  - queue label + end time + match duration
+  - compact Components V2 cards: queue + Win/Loss + match duration, with green/red accents; no match date/time (Discord's message timestamp provides that)
   - ranked labels for Solo/Duo, Flex and Ranked 5s; named labels for common non-ranked queues (Normal Draft/Blind, Swiftplay, Quickplay, ARAM, ARAM Mayhem, Clash, ARAM Clash, ARURF, URF, One for All, Nexus Blitz, Co-op vs AI); other queues show `Queue <id>`
   - champion/role, W/L, K/D/A, CS/min
   - player/objective damage, damage taken, healing, vision
+  - compact player/LP heading; bold KDA, CS/min and vision; Damage/Objectives and Taken/Healing on separate rows
+  - a shared result appears once in the card header; opposing tracked players use a neutral `Mixed results` card with individual Win/Loss labels
+  - explicit draw results and games without a confirmed winner use neutral `Draw`/`No result` cards and are not assigned LP; Arena uses placements rather than team win flags
   - Arena (`1700`/`1710`/`1750`, with `1750` shown as `Arena 3x6`): placement/team ordering, damage + team damage share, taken/healing/shielded, gold
   - Arena augments and items by name when static data is available (raw IDs otherwise)
   - Arena skillshots hit/dodged from match challenge stats
-  - large batches are split across messages at player boundaries
+  - large batches are split across messages at player boundaries, within Discord's 40-component/4000-character limits with room reserved for pending LP updates
   - Solo/Duo and Flex lines show rank and LP change, e.g. `Gold II · 40LP → 22LP (-18)`:
     - no extra Riot requests: the rank worker's existing poll supplies the before/after rank
     - if the rank worker sees the game first, LP is in the recap when it posts; otherwise the recap is edited when the next rank poll sees it (usually within `DAILY_REFRESH_SECONDS`)
     - LP is only shown when exactly one game in that queue happened between two rank polls with a matching result; otherwise (two quick games, season reset, dodges/decay) the line stays without LP
     - recaps are left alone if no LP arrives within 30 minutes
-  - champion display, set with `!champdisplay name|icon|both|status` (default `name`):
+  - champion display, set with `!champdisplay name|icon|both|status` (default `icon`; explicitly saved choices still apply):
     - `name`: champion name (`**Ahri**`); `icon`: portrait only; `both`: portrait then name
     - portraits come from Riot Data Dragon and are uploaded once as application-owned Discord emojis named after the champion (e.g. `:Ahri:`, `:KaiSa:`), reused across restarts; portraits uploaded under the earlier `rw_champ_<id>` names are renamed automatically
     - a missing portrait, Discord/Data Dragon failure, or timeout falls back to the name; failures pause new lookups for 5 minutes

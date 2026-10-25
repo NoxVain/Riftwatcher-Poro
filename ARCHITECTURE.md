@@ -73,6 +73,8 @@ Riftwatcher Poro is a Discord worker service that tracks ranked League results f
   - rank normalization/comparison and rank-message text
 - `src/recap_lp.py`
   - LP events from rank-worker polls, LP math/formatting, and the pending-recap/event join state
+- `src/recap_cards.py`
+  - compact Components V2 containers with per-match results/accents, formatted stat rows, stable player text component IDs, and size-aware packing with reserved LP space
 - `src/arena_static.py`
   - Arena augment (CommunityDragon) and item (Data Dragon) display names; successful loads are cached per process, failed sources retry after 10 minutes; recaps fall back to raw IDs
 - `src/champion_icons.py`
@@ -97,16 +99,17 @@ All workers run continuously while connected, each with startup jitter and cycle
 - Recap worker
   - interval: `max(30, MATCH_RECAP_POLL_SECONDS)`
   - finds new matches using persisted per-player recap key (`last_announced_match_id::{riot_id}`); a player's first observation is baseline only
-  - posts recap messages in `MATCH_RECAP_CHANNEL_ID` (queue label, local end time, duration, per-player line items); remakes and matches without tracked players are skipped
+  - posts Components V2 containers in `MATCH_RECAP_CHANNEL_ID` (queue label, result, duration, per-player line items); no date/time in cards; remakes and matches without tracked players are skipped
   - labels ranked queues plus common non-ranked queues (normals, Swiftplay/Quickplay, ARAM, ARAM Mayhem, Clash, rotating modes, Co-op vs AI)
   - formats Arena (`1700`/`1710`/`1750`) recaps with placement/team, damage share, augments/items, and skillshot challenge stats
-  - packs recaps into 2000-char messages, splitting at player boundaries, 3s apart
+  - packs within 40 total components and 4000 text characters, reserves 160 characters per pending LP update, splits at player boundaries, repeats metadata on continued cards, sends 3s apart
   - posts ranked win/loss streak callouts in `MATCH_RECAP_CHANNEL_ID` as separate messages (wins: 3-4 Momentum, 5-7 Heater Alert, 8-9 LEGENDARY, 10+ FINAL BOSS UNLOCKED; losses: 3-4 Cold Streak, 5-7 Tilt Watch, 8-9 FULL TILT, 10-12 UNINSTALL PROTOCOL, 13+ BIOHAZARD IN THE LOBBY); deduped by `last_announced_streak::{riot_id}` token
   - streak callouts use Discord TTS by default; toggle with `!tts on|off|status`
-  - champion display per `!champdisplay name|icon|both` (default `name`); portrait modes fall back to the name, and a batch spends at most 15 seconds on new portrait lookups before using cached ones only. The LP edit matches the recap's first line as posted, so portraits don't affect it
+  - champion display per `!champdisplay name|icon|both` (default `icon`, preserving explicit settings); portrait modes fall back to the name, and a batch spends at most 15 seconds on new portrait lookups before using cached ones only
   - lookback window: 20 matches
-  - a player's recap key only advances when all of their new matches fetched successfully (failed fetches retry next cycle)
-  - Solo/Duo and Flex lines take a stored LP event if the rank worker saw the game first; otherwise, after sending, the line is registered as pending (message ID + heading line) for the rank worker to edit. A recap is skipped if its heading appears more than once in the batch. Pending lines and events expire after 30 minutes; a shared `asyncio.Lock` serializes both workers' updates
+  - a player's recap key only advances after sends succeed and all of their new matches fetched successfully; consumed LP events are restored after a failed send
+  - Solo/Duo and Flex lines take a stored LP event if the rank worker saw the game first; otherwise each line is registered as pending (message ID + component ID + heading), distinguishing repeated player/champion headings. The LP worker reconstructs a LayoutView to update the matching text component. Legacy pending messages still use text edits. Pending data expires after 30 minutes; state and fetch/edit locks protect joins and concurrent edits; failed edits retain retry data
+  - green/red accents denote shared wins/losses; mixed tracked results use a neutral card with each player's result labeled. Explicit draws and unconfirmed winners use neutral cards with no LP attribution; Arena uses placements
   - refreshes affected players' daily stats and forces daily + weekly scoreboard update
 - Backfill worker
   - interval: `max(120, DAILY_REFRESH_SECONDS * 2)`

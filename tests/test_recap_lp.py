@@ -276,3 +276,5 @@ def test_edit_failure_is_logged_not_raised():
     )
     assert handled is False
     assert any("Could not add LP" in line for line in logs)
+    assert len(json.loads(state[lp_pending_state_key("Alpha#EUW")])) == 1
+    assert len(json.loads(state[lp_events_state_key("Alpha#EUW")])) == 1

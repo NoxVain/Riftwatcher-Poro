@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 import pytest
 import requests
+from card_fakes import ComponentMessage, view_text
 
 from src.champion_icons import CHAMPION_DISPLAY_STATE_KEY
 from src.discord_recap_worker import process_recap_cycle
@@ -38,8 +39,9 @@ class FakeChannel:
     def __init__(self):
         self.messages = []
 
-    async def send(self, message, tts=False):
-        self.messages.append({"content": message, "tts": bool(tts)})
+    async def send(self, message=None, tts=False, *, view=None, allowed_mentions=None):
+        self.messages.append({"content": view_text(view) if view else message,
+                              "view": view, "tts": bool(tts)})
 
 
 class FakeRiotClient:
@@ -161,9 +163,9 @@ def test_process_recap_cycle_posts_recap_and_syncs_affected_players():
     )
 
     assert len(channel.messages) == 1
-    assert "New Match Recap" in channel.messages[0]["content"]
-    assert "`30:00`" in channel.messages[0]["content"]
-    assert "\n\n❌ **Bravo**" in channel.messages[0]["content"]
+    assert "Ranked Solo/Duo" in channel.messages[0]["content"]
+    assert "30:00" in channel.messages[0]["content"]
+    assert "**Bravo**" in channel.messages[0]["content"]
     assert channel.messages[0]["tts"] is False
     assert state[_state_key("Alpha#NA1")] == "EUW1_2"
     assert state[_state_key("Bravo#NA1")] == "EUW1_2"
@@ -239,7 +241,7 @@ def test_process_recap_cycle_posts_streak_callout_when_threshold_crossed():
     )
 
     assert len(channel.messages) == 2
-    assert "New Match Recap" in channel.messages[0]["content"]
+    assert "Ranked Solo/Duo" in channel.messages[0]["content"]
     assert channel.messages[0]["tts"] is False
     assert "Heater Alert" in channel.messages[1]["content"] or "Momentum" in channel.messages[1]["content"]
     assert channel.messages[1]["tts"] is True
@@ -491,8 +493,9 @@ def test_process_recap_cycle_batches_multiple_matches_into_single_post():
     )
 
     assert len(channel.messages) == 1
-    assert channel.messages[0]["content"].count("New Match Recap") == 2
-    assert "\n\n---\n\n" in channel.messages[0]["content"]
+    assert "Ranked Solo/Duo" in channel.messages[0]["content"]
+    assert "Ranked Flex" in channel.messages[0]["content"]
+    assert len(channel.messages[0]["view"].children) == 2
     assert channel.messages[0]["tts"] is False
     assert edit_calls == [{"bypass_cache": True}]
 
@@ -590,17 +593,17 @@ def test_process_recap_cycle_formats_arena_3x6_by_placement():
     assert "**Alpha**" in content
     assert "**Bravo**" in content
     assert content.index("**Alpha**") < content.index("**Bravo**")
-    assert "Place #1" in content
-    assert "Place #4" in content
-    assert "Damage 21,000 (45.6%)" in content
-    assert "🩸 `Taken 18,000`" in content
-    assert "Healing 1,200" in content
-    assert "Shielded 2,345" in content
-    assert "Skillshots hit 13" in content
-    assert "Dodged 42" in content
-    assert "Augments Warmup Routine, Scoped Weapons" in content
-    assert "Items Zhonya's Hourglass, Rabadon's Deathcap" in content
-    assert "`\n   🛒 `Items" in content
+    assert "**#1**" in content
+    assert "**#4**" in content
+    assert "Damage **21,000** (45.6% of team)" in content
+    assert "Taken **18,000**" in content
+    assert "Healing **1,200**" in content
+    assert "Shielded **2,345**" in content
+    assert "Skillshots hit **13**" in content
+    assert "Dodged **42**" in content
+    assert "Augments · Warmup Routine, Scoped Weapons" in content
+    assert "Items · Zhonya's Hourglass, Rabadon's Deathcap" in content
+    assert "\nItems ·" in content
     assert "CS/min" not in content
 
 
@@ -728,13 +731,13 @@ def test_process_recap_cycle_keeps_recap_and_streak_separate_with_tts_toggle(tts
     recap_msg = channel.messages[0]
     streak_msg = channel.messages[1]
 
-    assert "New Match Recap" in recap_msg["content"]
-    assert recap_msg["content"].count("New Match Recap") == 2
+    assert "Ranked Solo/Duo" in recap_msg["content"]
+    assert recap_msg["content"].count("Ranked Solo/Duo") == 2
     assert "Momentum" not in recap_msg["content"]
     assert "Heater Alert" not in recap_msg["content"]
     assert recap_msg["tts"] is False
 
-    assert "New Match Recap" not in streak_msg["content"]
+    assert "Ranked Solo/Duo" not in streak_msg["content"]
     assert ("Momentum" in streak_msg["content"]) or ("Heater Alert" in streak_msg["content"])
     assert streak_msg["tts"] is expected_tts
 
@@ -774,14 +777,8 @@ def test_pack_sections_into_messages_graceful_split():
     assert messages[1] == "\n\n".join(p[4:])
 
 
-class FakeSentMessage:
-    def __init__(self, message_id, content):
-        self.id = message_id
-        self.content = content
-
-    async def edit(self, *, content):
-        self.content = content
-        return self
+class FakeSentMessage(ComponentMessage):
+    pass
 
 
 class MessageReturningChannel(FakeChannel):
@@ -789,9 +786,9 @@ class MessageReturningChannel(FakeChannel):
         super().__init__()
         self.sent = []
 
-    async def send(self, message, tts=False):
-        await super().send(message, tts=tts)
-        sent = FakeSentMessage(len(self.sent) + 1, message)
+    async def send(self, message=None, tts=False, *, view=None, allowed_mentions=None):
+        await super().send(message, tts=tts, view=view, allowed_mentions=allowed_mentions)
+        sent = FakeSentMessage(len(self.sent) + 1, message, view=view)
         self.sent.append(sent)
         return sent
 
@@ -799,7 +796,7 @@ class MessageReturningChannel(FakeChannel):
         return self.sent[message_id - 1]
 
 
-def _run_single_match_recap(channel, state, *, win, queue_id=420, champion_icons=None, champion_id=103):
+def _run_single_match_recap(channel, state, *, win, queue_id=420, champion_icons=None, champion_id=103, info_extra=None):
     riot = FakeRiotClient()
     end_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000) - 60_000
     riot.puuid_by_riot_id = {"Alpha#NA1": "puuid-a"}
@@ -814,6 +811,7 @@ def _run_single_match_recap(channel, state, *, win, queue_id=420, champion_icons
             }
         }
     }
+    riot.match_info_by_id["NA1_2"]["info"].update(info_extra or {})
     riot.mode_records_by_riot_id = {"Alpha#NA1": ({}, {})}
     state[_state_key("Alpha#NA1")] = "NA1_1"
 
@@ -857,7 +855,7 @@ def test_process_recap_cycle_includes_lp_when_rank_worker_saw_game_first():
 
     _run_single_match_recap(channel, state, win=True)
 
-    assert "(Win) | `Gold II · 35LP → 56LP (+21)`\n" in channel.messages[0]["content"]
+    assert "| Gold II · 35LP → **56LP\u00a0(+21)**\n" in channel.messages[0]["content"]
     assert json.loads(state[lp_events_state_key("Alpha#NA1")]) == []
     assert lp_pending_state_key("Alpha#NA1") not in state
 
@@ -885,7 +883,7 @@ def test_process_recap_cycle_tracks_recap_for_later_lp_edit():
     )
 
     assert handled is True
-    assert "(Loss) | `Gold II · 40LP → 22LP (-18)`\n" in channel.sent[0].content
+    assert "| Gold II · 40LP → **22LP\u00a0(-18)**\n" in channel.sent[0].display
 
 
 def test_process_recap_cycle_skips_lp_for_non_ranked_queue():
@@ -897,6 +895,66 @@ def test_process_recap_cycle_skips_lp_for_non_ranked_queue():
     assert len(channel.messages) == 1
     assert lp_pending_state_key("Alpha#NA1") not in state
     assert lp_events_state_key("Alpha#NA1") not in state
+
+
+@pytest.mark.parametrize("extra,result", [
+    ({"endOfGameResult": "Draw"}, "Draw"),
+    ({"teams": [{"win": False}, {"win": False}]}, "No result"),
+])
+def test_neutral_results_do_not_consume_or_wait_for_lp(extra, result):
+    from src.recap_cards import ACCENTS
+
+    state = {lp_events_state_key("Alpha#NA1"): json.dumps([
+        _lp_event(won=False, delta=-18, league_points=22, observed_at=time.time())
+    ])}
+    channel = MessageReturningChannel()
+    _run_single_match_recap(channel, state, win=False, info_extra=extra)
+    assert f"**{result}**" in channel.sent[0].display
+    assert channel.messages[0]["view"].to_components()[0]["accent_color"] == ACCENTS[result]
+    assert "LP" not in channel.sent[0].display
+    assert len(json.loads(state[lp_events_state_key("Alpha#NA1")])) == 1
+    assert lp_pending_state_key("Alpha#NA1") not in state
+
+
+def test_failed_send_preserves_cursor_and_consumed_lp_for_retry():
+    class FailingChannel(MessageReturningChannel):
+        fail = True
+
+        async def send(self, *args, **kwargs):
+            if self.fail:
+                raise RuntimeError("Discord unavailable")
+            return await super().send(*args, **kwargs)
+
+    state = {lp_events_state_key("Alpha#NA1"): json.dumps([
+        _lp_event(won=False, delta=-18, league_points=22, observed_at=time.time())
+    ])}
+    channel = FailingChannel()
+    with pytest.raises(RuntimeError, match="Discord unavailable"):
+        _run_single_match_recap(channel, state, win=False)
+    assert state[_state_key("Alpha#NA1")] == "NA1_1"
+    assert len(json.loads(state[lp_events_state_key("Alpha#NA1")])) == 1
+    channel.fail = False
+    _run_single_match_recap(channel, state, win=False)
+    assert "**22LP\u00a0(-18)**" in channel.sent[0].display
+    assert state[_state_key("Alpha#NA1")] == "NA1_2"
+
+
+def test_lp_arriving_during_send_is_applied_to_the_new_card():
+    state = {}
+
+    class RacingChannel(MessageReturningChannel):
+        async def send(self, *args, **kwargs):
+            sent = await super().send(*args, **kwargs)
+            await handle_lp_event(
+                riot_id="Alpha#NA1", event=_lp_event(won=False, delta=-18, league_points=22, observed_at=time.time()),
+                recap_channel=self, db_get_state=state.get, db_set_state=state.__setitem__,
+                log=lambda _msg: None, now=time.time(),
+            )
+            return sent
+
+    channel = RacingChannel()
+    _run_single_match_recap(channel, state, win=False)
+    assert "**22LP\u00a0(-18)**" in channel.sent[0].display
 
 
 class FakeChampionIcons:
@@ -912,10 +970,10 @@ class FakeChampionIcons:
 @pytest.mark.parametrize(
     "mode,expected",
     [
-        (None, "• **Ahri** (Win)"),
-        ("name", "• **Ahri** (Win)"),
-        ("icon", "• <:Ahri:1> (Win)"),
-        ("both", "• <:Ahri:1> **Ahri** (Win)"),
+        (None, "· <:Ahri:1> Mid"),
+        ("name", "· **Ahri** Mid"),
+        ("icon", "· <:Ahri:1> Mid"),
+        ("both", "· <:Ahri:1> **Ahri** Mid"),
     ],
 )
 def test_process_recap_cycle_champion_display_modes(mode, expected):
@@ -926,8 +984,8 @@ def test_process_recap_cycle_champion_display_modes(mode, expected):
     _run_single_match_recap(channel, state, win=True, champion_icons=icons)
 
     assert expected in channel.messages[0]["content"]
-    # Name mode (the default) never looks up portraits.
-    assert icons.calls == ([] if mode in (None, "name") else [(103, False)])
+    # An explicitly saved name preference never looks up portraits.
+    assert icons.calls == ([] if mode == "name" else [(103, False)])
 
 
 def test_process_recap_cycle_portrait_modes_fall_back_to_name():
@@ -936,7 +994,7 @@ def test_process_recap_cycle_portrait_modes_fall_back_to_name():
 
     _run_single_match_recap(channel, state, win=False, champion_icons=FakeChampionIcons(icon=None))
 
-    assert "• **Ahri** (Loss)" in channel.messages[0]["content"]
+    assert "· **Ahri** Mid" in channel.messages[0]["content"]
 
 
 def test_process_recap_cycle_uses_cached_portraits_only_after_budget(monkeypatch):
@@ -969,5 +1027,5 @@ def test_process_recap_cycle_lp_edit_still_matches_portrait_heading():
     )
 
     assert handled is True
-    assert "<:Ahri:1> **Ahri** (Loss) | `Gold II" in channel.sent[0].content
+    assert "<:Ahri:1> **Ahri** Mid | Gold II" in channel.sent[0].display
 

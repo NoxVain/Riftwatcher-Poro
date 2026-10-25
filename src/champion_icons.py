@@ -17,7 +17,7 @@ import requests
 
 CHAMPION_DISPLAY_STATE_KEY = "champion_display_mode"
 CHAMPION_DISPLAY_MODES = ("name", "icon", "both")
-DEFAULT_CHAMPION_DISPLAY_MODE = "name"
+DEFAULT_CHAMPION_DISPLAY_MODE = "icon"
 
 CDN = "https://ddragon.leagueoflegends.com"
 EMOJI_CACHE_SECONDS = 300

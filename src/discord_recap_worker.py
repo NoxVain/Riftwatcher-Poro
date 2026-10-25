@@ -5,6 +5,13 @@ from datetime import datetime
 import requests
 
 from src.arena_static import load_arena_display_names
+from src.champion_icons import (
+    CHAMPION_DISPLAY_STATE_KEY,
+    DEFAULT_CHAMPION_DISPLAY_MODE,
+    RECAP_LOOKUP_BUDGET_SECONDS,
+    format_champion_display,
+    parse_champion_display_mode,
+)
 from src.discord_text import (
     ARENA_QUEUE_IDS,
     format_match_duration,
@@ -214,6 +221,7 @@ async def process_recap_cycle(
     db_upsert_daily_stats,
     edit_last_report_message,
     edit_last_weekly_report_message=None,
+    champion_icons=None,
     log,
 ):
     recap_split_spacing_seconds = 3.0
@@ -302,6 +310,15 @@ async def process_recap_cycle(
     )
 
     match_entries.sort(key=lambda row: row[0])
+    champion_display_mode = DEFAULT_CHAMPION_DISPLAY_MODE
+    if champion_icons is not None:
+        try:
+            champion_display_mode = parse_champion_display_mode(
+                await asyncio.to_thread(db_get_state, CHAMPION_DISPLAY_STATE_KEY)
+            )
+        except Exception as exc:
+            log(f"[recap] Could not read champion display setting: {exc}")
+    icon_lookup_deadline = time.monotonic() + RECAP_LOOKUP_BUDGET_SECONDS
     lp_waiting = []
     recap_sections = []
     arena_display_names = None
@@ -320,6 +337,12 @@ async def process_recap_cycle(
         item_names = (arena_display_names or {}).get("item_names", {})
         ordered_participants = sorted(tracked_participants, key=lambda row: _recap_participant_sort_key(queue_id, row))
         for index, (riot_id, participant) in enumerate(ordered_participants):
+            champion_icon = None
+            if champion_display_mode != "name":
+                champion_icon = await champion_icons.get(
+                    participant.get("championId"),
+                    cached_only=time.monotonic() >= icon_lookup_deadline,
+                )
             player_line = format_recap_player_line(
                 riot_id,
                 participant,
@@ -327,6 +350,9 @@ async def process_recap_cycle(
                 queue_id=queue_id,
                 augment_names=augment_names,
                 item_names=item_names,
+                champion_display=format_champion_display(
+                    participant.get("championName", "Unknown"), champion_display_mode, champion_icon
+                ),
             )
             lp_queue_type = QUEUE_TYPE_BY_QUEUE_ID.get(queue_id)
             if lp_queue_type is not None and db_enabled:

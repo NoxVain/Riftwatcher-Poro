@@ -3,9 +3,11 @@ from datetime import datetime
 
 import requests
 
+from src.champion_icons import CHAMPION_DISPLAY_MODES, CHAMPION_DISPLAY_STATE_KEY, parse_champion_display_mode
 from src.constants import (
     ADD_COMMAND,
     BACKFILL_COMMAND,
+    CHAMPION_DISPLAY_COMMAND,
     HEALTH_COMMAND,
     HELP_COMMAND,
     RIOT_TEST_COMMAND,
@@ -19,6 +21,9 @@ from src.discord_text import (
     parse_streak_tts_enabled,
     streak_tts_enabled_state_key,
 )
+
+CHAMPION_DISPLAY_LABELS = {"name": "name only", "icon": "portrait only", "both": "portrait and name"}
+CHAMPION_DISPLAY_USAGE = f"Usage: `{CHAMPION_DISPLAY_COMMAND} name|icon|both|status`"
 
 
 async def handle_ops_commands(ctx):
@@ -165,6 +170,34 @@ async def handle_ops_commands(ctx):
             f"Streak alert TTS is now `{'ON' if enabled else 'OFF'}`."
         )
         ctx.log(f"[tts] Streak alert TTS set to {'ON' if enabled else 'OFF'}.")
+        return True
+
+    if content_lower == CHAMPION_DISPLAY_COMMAND.casefold():
+        await ctx.message.channel.send(CHAMPION_DISPLAY_USAGE)
+        return True
+
+    if content_lower.startswith(f"{CHAMPION_DISPLAY_COMMAND.casefold()} "):
+        arg = content[len(CHAMPION_DISPLAY_COMMAND):].strip().lower()
+        if arg == "status":
+            raw_value = None
+            if ctx.db_get_state is not None:
+                raw_value = await asyncio.to_thread(ctx.db_get_state, CHAMPION_DISPLAY_STATE_KEY)
+            mode = parse_champion_display_mode(raw_value)
+            await ctx.message.channel.send(f"Recap champions are shown as: `{CHAMPION_DISPLAY_LABELS[mode]}`.")
+            return True
+        if arg not in CHAMPION_DISPLAY_MODES:
+            await ctx.message.channel.send(CHAMPION_DISPLAY_USAGE)
+            return True
+        if not ctx.db_enabled or ctx.db_set_state is None:
+            await ctx.message.channel.send("Champion display settings require postgres-backed mode.")
+            return True
+
+        await asyncio.to_thread(ctx.db_set_state, CHAMPION_DISPLAY_STATE_KEY, arg)
+        note = "" if arg == "name" else " Missing portraits fall back to the champion name."
+        await ctx.message.channel.send(
+            f"New recaps will show champions as: `{CHAMPION_DISPLAY_LABELS[arg]}`.{note}"
+        )
+        ctx.log(f"[champdisplay] Champion display set to {arg}.")
         return True
 
     return False

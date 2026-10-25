@@ -259,9 +259,12 @@ def format_recap_player_line(
     queue_id=None,
     augment_names=None,
     item_names=None,
+    champion_display=None,
 ):
     lol_name = riot_id.split("#", 1)[0]
     champion = participant.get("championName", "Unknown")
+    # Pre-rendered by the recap worker (name, portrait, or both); defaults to the bold name.
+    champion_display = champion_display or f"**{champion}**"
     kills = int(participant.get("kills", 0) or 0)
     deaths = int(participant.get("deaths", 0) or 0)
     assists = int(participant.get("assists", 0) or 0)
@@ -283,7 +286,7 @@ def format_recap_player_line(
         else:
             damage_text = f"Damage {player_damage:,}"
         lines = [
-            f"{result_emoji} **{lol_name}** | `{team_label}` \u2022 **{champion}** - **Place {placement_label}**\n"
+            f"{result_emoji} **{lol_name}** | `{team_label}` \u2022 {champion_display} - **Place {placement_label}**\n"
             f"   \u2694\uFE0F `K/D/A {kills}/{deaths}/{assists}`  \U0001F4A5 `{damage_text}`\n"
             f"   \U0001FA78 `Taken {damage_taken:,}`  \u2764\uFE0F `Healing {healing:,}`  \U0001F6E1\uFE0F `Shielded {shielded:,}`\n"
             f"   \U0001FA99 `Gold {gold_earned:,}`"
@@ -309,7 +312,7 @@ def format_recap_player_line(
     objective_damage = int(participant.get("damageDealtToObjectives", 0) or 0)
     vision_score = int(participant.get("visionScore", 0) or 0)
     return (
-        f"{result_emoji} **{lol_name}** | `{role_name}` • **{champion}** ({result_label})\n"
+        f"{result_emoji} **{lol_name}** | `{role_name}` • {champion_display} ({result_label})\n"
         f"   \u2694\uFE0F `K/D/A {kills}/{deaths}/{assists}`  \U0001F33E `CS/min {cs_per_min:.1f}`\n"
         f"   \U0001F4A5 `Damage {player_damage:,}`  \U0001F3F0 `Objectives {objective_damage:,}`  \U0001F6E1\uFE0F `Taken {damage_taken:,}`\n"
         f"   \u2764\uFE0F `Healing {healing:,}`  \U0001F441\uFE0F `Vision {vision_score}`"

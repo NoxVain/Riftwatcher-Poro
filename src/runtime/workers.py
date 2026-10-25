@@ -4,6 +4,7 @@ import time
 
 import discord
 
+from src.champion_icons import ChampionIcons
 from src.discord_backfill_worker import process_backfill_cycle
 from src.discord_esports_worker import process_esports_cycle
 from src.discord_patch_worker import get_last_checked_unix, process_patch_notes_cycle
@@ -130,6 +131,8 @@ async def background_match_recap_notifier(
     log,
 ):
     sleep_seconds = max(30, match_recap_poll_seconds)
+    # Lives as long as the worker so portrait lookups stay cached between cycles.
+    champion_icons = ChampionIcons(client, log)
     initial_jitter = random.uniform(0.0, min(30.0, sleep_seconds / 2))
     if initial_jitter > 0:
         log(f"[recap] Startup jitter sleep={initial_jitter:.1f}s")
@@ -151,6 +154,7 @@ async def background_match_recap_notifier(
                 report_timezone=report_timezone,
                 match_recap_channel_id=match_recap_channel_id,
                 channel=channel,
+                champion_icons=champion_icons,
                 db_enabled=db_enabled,
                 db_get_state=db_get_state,
                 db_set_state=db_set_state,

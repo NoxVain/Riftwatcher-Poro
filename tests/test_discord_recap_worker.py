@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import pytest
 import requests
 
+from src.champion_icons import CHAMPION_DISPLAY_STATE_KEY
 from src.discord_recap_worker import process_recap_cycle
 from src.recap_lp import handle_lp_event, lp_events_state_key, lp_pending_state_key
 
@@ -798,7 +799,7 @@ class MessageReturningChannel(FakeChannel):
         return self.sent[message_id - 1]
 
 
-def _run_single_match_recap(channel, state, *, win, queue_id=420):
+def _run_single_match_recap(channel, state, *, win, queue_id=420, champion_icons=None, champion_id=103):
     riot = FakeRiotClient()
     end_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000) - 60_000
     riot.puuid_by_riot_id = {"Alpha#NA1": "puuid-a"}
@@ -809,7 +810,7 @@ def _run_single_match_recap(channel, state, *, win, queue_id=420):
                 "queueId": queue_id,
                 "gameDuration": 1800,
                 "gameEndTimestamp": end_ms,
-                "participants": [_participant("puuid-a", win=win)],
+                "participants": [dict(_participant("puuid-a", win=win), championId=champion_id)],
             }
         }
     }
@@ -832,6 +833,7 @@ def _run_single_match_recap(channel, state, *, win, queue_id=420):
             db_set_state=state.__setitem__,
             db_upsert_daily_stats=lambda *_args, **_kwargs: None,
             edit_last_report_message=edit_last_report_message,
+            champion_icons=champion_icons,
             log=lambda _msg: None,
         )
     )
@@ -895,4 +897,77 @@ def test_process_recap_cycle_skips_lp_for_non_ranked_queue():
     assert len(channel.messages) == 1
     assert lp_pending_state_key("Alpha#NA1") not in state
     assert lp_events_state_key("Alpha#NA1") not in state
+
+
+class FakeChampionIcons:
+    def __init__(self, icon="<:rw_champ_103:1>"):
+        self.icon = icon
+        self.calls = []
+
+    async def get(self, champion_id, *, cached_only=False):
+        self.calls.append((champion_id, cached_only))
+        return self.icon
+
+
+@pytest.mark.parametrize(
+    "mode,expected",
+    [
+        (None, "• **Ahri** (Win)"),
+        ("name", "• **Ahri** (Win)"),
+        ("icon", "• <:rw_champ_103:1> (Win)"),
+        ("both", "• <:rw_champ_103:1> **Ahri** (Win)"),
+    ],
+)
+def test_process_recap_cycle_champion_display_modes(mode, expected):
+    state = {} if mode is None else {CHAMPION_DISPLAY_STATE_KEY: mode}
+    channel = MessageReturningChannel()
+    icons = FakeChampionIcons()
+
+    _run_single_match_recap(channel, state, win=True, champion_icons=icons)
+
+    assert expected in channel.messages[0]["content"]
+    # Name mode (the default) never looks up portraits.
+    assert icons.calls == ([] if mode in (None, "name") else [(103, False)])
+
+
+def test_process_recap_cycle_portrait_modes_fall_back_to_name():
+    state = {CHAMPION_DISPLAY_STATE_KEY: "icon"}
+    channel = MessageReturningChannel()
+
+    _run_single_match_recap(channel, state, win=False, champion_icons=FakeChampionIcons(icon=None))
+
+    assert "• **Ahri** (Loss)" in channel.messages[0]["content"]
+
+
+def test_process_recap_cycle_uses_cached_portraits_only_after_budget(monkeypatch):
+    from src import discord_recap_worker
+
+    monkeypatch.setattr(discord_recap_worker, "RECAP_LOOKUP_BUDGET_SECONDS", -1)
+    state = {CHAMPION_DISPLAY_STATE_KEY: "both"}
+    icons = FakeChampionIcons()
+
+    _run_single_match_recap(MessageReturningChannel(), state, win=True, champion_icons=icons)
+
+    assert icons.calls == [(103, True)]
+
+
+def test_process_recap_cycle_lp_edit_still_matches_portrait_heading():
+    state = {CHAMPION_DISPLAY_STATE_KEY: "both"}
+    channel = MessageReturningChannel()
+
+    end_ts = _run_single_match_recap(channel, state, win=False, champion_icons=FakeChampionIcons())
+    handled = asyncio.run(
+        handle_lp_event(
+            riot_id="Alpha#NA1",
+            event=_lp_event(won=False, delta=-18, league_points=22, observed_at=end_ts + 120),
+            recap_channel=channel,
+            db_get_state=state.get,
+            db_set_state=state.__setitem__,
+            log=lambda _msg: None,
+            now=time.time(),
+        )
+    )
+
+    assert handled is True
+    assert "<:rw_champ_103:1> **Ahri** (Loss) | `Gold II" in channel.sent[0].content
 

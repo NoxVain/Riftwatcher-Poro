@@ -42,6 +42,8 @@ class FakeContext:
         ("!profile alpha#na1", True),
         ("!tts", True),
         ("!tts on", True),
+        ("!champdisplay", True),
+        ("!champdisplay both", True),
         ("!add", True),
         ("!add alpha#na1", True),
         ("!remove", True),
@@ -74,6 +76,12 @@ def test_command_channel_id_matrix_with_recap_channel():
 def test_command_channel_id_fallbacks_without_recap_channel():
     assert command_channel_id("!streak", daily_channel_id=101, weekly_channel_id=202, events_channel_id=303, match_recap_channel_id=None) == 303
     assert command_channel_id("!tts", daily_channel_id=101, weekly_channel_id=202, events_channel_id=303, match_recap_channel_id=None) == (303,)
+
+
+def test_champdisplay_runs_in_events_or_recap_channel():
+    for content in ("!champdisplay", "!champdisplay icon"):
+        assert command_channel_id(content, daily_channel_id=101, weekly_channel_id=202, events_channel_id=303, match_recap_channel_id=404) == (303, 404)
+        assert command_channel_id(content, daily_channel_id=101, weekly_channel_id=202, events_channel_id=303, match_recap_channel_id=None) == (303,)
 
 
 def test_enforce_command_channel_allows_right_channel():

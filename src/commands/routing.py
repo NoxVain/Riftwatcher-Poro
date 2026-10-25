@@ -1,6 +1,7 @@
 from src.constants import (
     ADD_COMMAND,
     BACKFILL_COMMAND,
+    CHAMPION_DISPLAY_COMMAND,
     DEBUG_PLAYER_COMMAND,
     HEALTH_COMMAND,
     HELP_COMMAND,
@@ -36,6 +37,7 @@ def format_help_text(*, report_day_start_hour, daily_channel_id, weekly_channel_
         f"- `{TEST_COMMAND}`: Verify Discord send permissions (run in {events_channel_ref}).\n"
         f"- `{STREAK_COMMAND} Name#Tag`: Manually post current win/loss streak callout (run in {f'<#{match_recap_channel_id}>' if match_recap_channel_id else events_channel_ref}).\n"
         f"- `{TTS_COMMAND} on|off|status`: Toggle streak alert TTS (run in {events_channel_ref} or {f'<#{match_recap_channel_id}>' if match_recap_channel_id else events_channel_ref}).\n"
+        f"- `{CHAMPION_DISPLAY_COMMAND} name|icon|both|status`: Show recap champions as name, portrait, or both (run in {events_channel_ref} or {f'<#{match_recap_channel_id}>' if match_recap_channel_id else events_channel_ref}).\n"
         f"- `{HELP_COMMAND}`: Show this help (run in {events_channel_ref})."
     )
 
@@ -56,6 +58,7 @@ def is_supported_command(content_lower):
         SCORE_COMMAND.casefold(),
         PROFILE_COMMAND.casefold(),
         TTS_COMMAND.casefold(),
+        CHAMPION_DISPLAY_COMMAND.casefold(),
     }
     if content_lower in known_exact:
         return True
@@ -67,6 +70,7 @@ def is_supported_command(content_lower):
         or content_lower.startswith(f"{PROFILE_COMMAND.casefold()} ")
         or content_lower.startswith(f"{STREAK_COMMAND.casefold()} ")
         or content_lower.startswith(f"{TTS_COMMAND.casefold()} ")
+        or content_lower.startswith(f"{CHAMPION_DISPLAY_COMMAND.casefold()} ")
     )
 
 
@@ -83,6 +87,8 @@ def command_channel_id(content_lower, *, daily_channel_id, weekly_channel_id, ev
     if (
         content_lower == TTS_COMMAND.casefold()
         or content_lower.startswith(f"{TTS_COMMAND.casefold()} ")
+        or content_lower == CHAMPION_DISPLAY_COMMAND.casefold()
+        or content_lower.startswith(f"{CHAMPION_DISPLAY_COMMAND.casefold()} ")
     ):
         allowed = [events_channel_id]
         if match_recap_channel_id and match_recap_channel_id != events_channel_id:

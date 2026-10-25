@@ -1001,3 +1001,70 @@ def test_add_persist_failure_does_not_leak_db_details():
     assert "(ref `streak-1234`)" in text
     assert "db.internal" not in text
     assert 'user "poro"' not in text
+
+
+def _champdisplay(content, channel, state, *, admin=True, **overrides):
+    message = FakeIncomingMessage(content, channel)
+    if not admin:
+        message.author = FakeAuthor(manage_guild=False)
+    asyncio.run(
+        handle_incoming_message(
+            message=message,
+            riot_client=FakeRiotClient(),
+            db_get_state=lambda key: state.get(key),
+            db_set_state=lambda key, value: state.update({key: value}),
+            **{**_base_streak_kwargs(channel), **overrides},
+        )
+    )
+    return channel.sent_messages[-1].content
+
+
+def test_champdisplay_sets_each_mode_and_reports_status():
+    channel = FakeChannel(channel_id=999)
+    state = {}
+
+    assert "`name only`" in _champdisplay("!champdisplay status", channel, state)
+    for mode, label in (("icon", "portrait only"), ("both", "portrait and name"), ("name", "name only")):
+        assert f"`{label}`" in _champdisplay(f"!champdisplay {mode}", channel, state)
+        assert state == {"champion_display_mode": mode}
+        assert f"`{label}`" in _champdisplay("!ChampDisplay STATUS", channel, state)
+
+
+def test_champdisplay_usage_for_bare_or_unknown_argument():
+    channel = FakeChannel(channel_id=999)
+    state = {}
+
+    assert "name|icon|both|status" in _champdisplay("!champdisplay", channel, state)
+    assert "name|icon|both|status" in _champdisplay("!champdisplay on", channel, state)
+    assert state == {}
+
+
+def test_champdisplay_allowed_in_match_recap_channel():
+    channel = FakeChannel(channel_id=555)
+    state = {}
+
+    reply = _champdisplay("!champdisplay both", channel, state, events_channel_id=999, match_recap_channel_id=555)
+
+    assert "`portrait and name`" in reply
+    assert state == {"champion_display_mode": "both"}
+
+
+def test_champdisplay_status_open_but_change_requires_permission():
+    channel = FakeChannel(channel_id=999)
+    state = {}
+
+    assert "`name only`" in _champdisplay("!champdisplay status", channel, state, admin=False)
+    reply = _champdisplay("!champdisplay icon", channel, state, admin=False)
+
+    assert "requires the **Manage Server** permission" in reply
+    assert state == {}
+
+
+def test_champdisplay_change_requires_postgres():
+    channel = FakeChannel(channel_id=999)
+    state = {}
+
+    reply = _champdisplay("!champdisplay icon", channel, state, db_enabled=False)
+
+    assert "postgres" in reply
+    assert state == {}

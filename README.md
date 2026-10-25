@@ -58,6 +58,7 @@ Start with:
 - `src/rank_logic.py` - rank queue normalization and rank-change message formatting
 - `src/recap_lp.py` - LP gain/loss for ranked recaps from the rank worker's polls
 - `src/arena_static.py` - Arena augment/item display-name loader (CommunityDragon/Data Dragon)
+- `src/champion_icons.py` - recap champion display mode and portrait emojis (Data Dragon -> Discord application emojis)
 - `tests/` - unit tests
 
 ## Features
@@ -93,6 +94,11 @@ Start with:
     - if the rank worker sees the game first, LP is in the recap when it posts; otherwise the recap is edited when the next rank poll sees it (usually within `DAILY_REFRESH_SECONDS`)
     - LP is only shown when exactly one game in that queue happened between two rank polls with a matching result; otherwise (two quick games, season reset, dodges/decay) the line stays without LP
     - recaps are left alone if no LP arrives within 30 minutes
+  - champion display, set with `!champdisplay name|icon|both|status` (default `name`):
+    - `name`: champion name (`**Ahri**`); `icon`: portrait only; `both`: portrait then name
+    - portraits come from Riot Data Dragon and are uploaded once as application-owned Discord emojis (`rw_champ_<championId>`), reused across restarts
+    - a missing portrait, Discord/Data Dragon failure, or timeout falls back to the name; failures pause new lookups for 5 minutes
+    - one recap batch spends at most 15 seconds fetching new portraits; after that it uses cached portraits only
 - Ranked win/loss streak callouts post in `MATCH_RECAP_CHANNEL_ID` as separate messages:
   - 3-4 wins: Momentum
   - 5-7 wins: Heater Alert
@@ -174,6 +180,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 - `!score`
 - `!streak Name#Tag`
 - `!tts on|off|status`
+- `!champdisplay name|icon|both|status`
 - `!Add Name#Tag`
 - `!remove Name#Tag`
 - `!profile Name#Tag`
@@ -198,12 +205,13 @@ Command routing:
 - `!Weekly` in `WEEKLY_REPORT_CHANNEL_ID`
 - `!streak` in `MATCH_RECAP_CHANNEL_ID`
 - `!tts` in `EVENTS_CHANNEL_ID` or `MATCH_RECAP_CHANNEL_ID`
+- `!champdisplay` in `EVENTS_CHANNEL_ID` or `MATCH_RECAP_CHANNEL_ID`
 - `!sync` in any server channel
 - all other commands (and `/health`) in `EVENTS_CHANNEL_ID`
 
 Permissions:
-- `!Add`, `!remove`, `!backfill`, and `!tts on|off` change shared state and require the **Manage Server** permission (or Administrator), or the optional `ADMIN_ROLE_ID` role
-- usage hints (e.g. bare `!Add`) and `!tts status` stay open to everyone
+- `!Add`, `!remove`, `!backfill`, `!tts on|off`, and `!champdisplay name|icon|both` change shared state and require the **Manage Server** permission (or Administrator), or the optional `ADMIN_ROLE_ID` role
+- usage hints (e.g. bare `!Add`) `!tts status`, and `!champdisplay status` stay open to everyone
 - the bot never pings: all outgoing messages suppress `@everyone`, role, and user mentions
 - command errors show a short, safe reason plus a `ref` ID; full details are only in the bot logs (search for the ref)
 
@@ -236,7 +244,7 @@ Optional (with defaults):
 - `RIOT_PLATFORM_ROUTING` (`euw1`)
 - `RIOT_REGIONAL_ROUTING` (`europe`) - regional host for account/match-v5 API calls (`europe`, `americas`, `asia`)
 - `BACKFILL_STALE_THRESHOLD_SECONDS` (`0` = auto: `max(300, backfill interval * 6)`) - stall watchdog threshold for the backfill worker
-- `ADMIN_ROLE_ID` (unset = permission-only) - role allowed to run `!Add`/`!remove`/`!backfill`/`!tts on|off` in addition to Manage Server/Administrator
+- `ADMIN_ROLE_ID` (unset = permission-only) - role allowed to run `!Add`/`!remove`/`!backfill`/`!tts on|off`/`!champdisplay name|icon|both` in addition to Manage Server/Administrator
 
 Low-resource hosting (NAS/IoT), all optional:
 

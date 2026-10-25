@@ -4,7 +4,7 @@ Channel routing (`routing.py`) decides *where* a command may run; this module de
 may run commands that change shared state (tracked players, historical stats, bot settings).
 """
 
-from src.constants import ADD_COMMAND, BACKFILL_COMMAND, REMOVE_COMMAND, TTS_COMMAND
+from src.constants import ADD_COMMAND, BACKFILL_COMMAND, CHAMPION_DISPLAY_COMMAND, REMOVE_COMMAND, TTS_COMMAND
 
 
 def is_admin_command(content_lower: str) -> bool:
@@ -21,6 +21,9 @@ def is_admin_command(content_lower: str) -> bool:
         return True
     if content_lower.startswith(f"{TTS_COMMAND.casefold()} "):
         arg = content_lower[len(TTS_COMMAND):].strip()
+        return arg != "status"
+    if content_lower.startswith(f"{CHAMPION_DISPLAY_COMMAND.casefold()} "):
+        arg = content_lower[len(CHAMPION_DISPLAY_COMMAND):].strip()
         return arg != "status"
     return False
 

@@ -164,6 +164,16 @@ Actions:
 2. Search logs for `[<worker>] Unexpected` errors.
 3. A recovery message posts automatically after the next successful cycle. Alert state is persisted as `worker_stall_alert_sent::<worker>`, so restarts don't repeat alerts.
 
+## Memory & Hosting Cost
+
+On Railway, memory is almost the whole bill (Sep-Oct 2026: memory ~97% of project cost; CPU and egress are cents).
+
+- Role baselines (every 12h) and `!backfill` stream cached match payloads from Postgres through a server-side cursor in batches of 200 (`MATCH_PAYLOAD_BATCH_SIZE` in `src/db/cache.py`) and keep only the per-minute numbers they need. Loading all 5000 payloads at once used to peak at ~1.2 GB of Python objects (synthetic benchmark: 1247 MB -> 41 MB for 5000 matches, identical baselines).
+- Both run in a worker thread, so the event loop (recaps, scoreboards, commands) isn't blocked.
+- After each baseline rebuild or backfill, `src/runtime/memory.release_freed_memory()` runs `gc.collect()` and glibc `malloc_trim(0)` so freed memory goes back to the OS instead of staying resident (and billed).
+- Railway variable `MALLOC_ARENA_MAX=2` limits glibc per-thread arenas (less fragmentation from `asyncio.to_thread` workers).
+- Check usage with `railway usage projects --project "Riftwatcher Poro"` and `railway metrics --since 7d --memory`. A per-service memory limit is a later option once the new steady state is known.
+
 ## CI & Deploy
 
 Current behavior:

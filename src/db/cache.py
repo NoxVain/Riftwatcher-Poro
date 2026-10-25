@@ -1,6 +1,6 @@
 import json
 
-from src.db.pool import db_execute
+from src.db.pool import db_acquire_connection, db_execute, db_release_connection
 from src import config as cfg
 
 
@@ -53,25 +53,45 @@ def db_health_stats():
     return {"db_ok": bool(ping and ping[0] == 1), "match_cache_entries": count}
 
 
-def db_load_match_payloads_for_baseline(limit=cfg.BASELINE_MATCH_LIMIT):
+MATCH_PAYLOAD_BATCH_SIZE = 200
+
+
+def db_load_match_payloads_for_baseline(limit=cfg.BASELINE_MATCH_LIMIT, batch_size=MATCH_PAYLOAD_BATCH_SIZE):
+    """Yield cached match payloads, newest first; limit <= 0 means all.
+
+    Streams through a server-side cursor in batches so only one batch of payloads is
+    in memory at a time (loading thousands at once cost GBs of RAM). This does
+    blocking DB I/O while iterated, so consume it in a worker thread.
+    """
     safe_limit = int(limit)
+    query = "SELECT payload FROM match_info_cache ORDER BY updated_at DESC"
+    params = ()
     if safe_limit > 0:
-        rows = db_execute(
-            "SELECT payload FROM match_info_cache ORDER BY updated_at DESC LIMIT %s;",
-            (safe_limit,),
-            fetch=True,
-        ) or []
-    else:
-        rows = db_execute(
-            "SELECT payload FROM match_info_cache ORDER BY updated_at DESC;",
-            fetch=True,
-        ) or []
-    result = []
-    for (payload_text,) in rows:
-        if not payload_text:
-            continue
+        query += " LIMIT %s"
+        params = (safe_limit,)
+    conn = db_acquire_connection()
+    discard_conn = False
+    try:
+        # A named cursor is server-side: rows arrive itersize at a time.
+        with conn.cursor(name="match_payload_scan") as cur:
+            cur.itersize = max(1, int(batch_size))
+            cur.execute(query, params)
+            for (payload_text,) in cur:
+                if not payload_text:
+                    continue
+                try:
+                    yield json.loads(payload_text)
+                except json.JSONDecodeError:
+                    continue
+        conn.commit()
+    except BaseException as exc:
+        # GeneratorExit (caller stopped early) is not a DB fault: roll back and reuse the
+        # connection. Anything else is treated like db_execute does: discard it.
+        discard_conn = not isinstance(exc, GeneratorExit)
         try:
-            result.append(json.loads(payload_text))
-        except json.JSONDecodeError:
-            continue
-    return result
+            conn.rollback()
+        except Exception:
+            discard_conn = True
+        raise
+    finally:
+        db_release_connection(conn, discard=discard_conn)

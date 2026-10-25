@@ -249,7 +249,7 @@ Optional (with defaults):
 Low-resource hosting (NAS/IoT), all optional:
 
 - `STARTUP_PREFER_SNAPSHOT` (`false`) - build the startup scoreboard from stored stats instead of live Riot calls
-- `BASELINE_MATCH_LIMIT` (`5000`, `0` = no limit) - max cached matches loaded to build Gamer Score baselines
+- `BASELINE_MATCH_LIMIT` (`5000`, `0` = no limit) - max cached matches scanned to build Gamer Score baselines (streamed in batches, so memory stays flat regardless of the limit)
 - `RIOT_REQUEST_YIELD_SECONDS` (`0.0`) - pause between Riot requests to reduce CPU/network bursts
 - `WORKER_STAGGER_SECONDS` (`0`) - extra startup offset between background workers
 - `ASYNCIO_THREAD_POOL_SIZE` (`0` = Python default) - size of the default thread pool used for DB calls

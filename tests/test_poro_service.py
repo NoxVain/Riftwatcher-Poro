@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from datetime import datetime, timedelta, timezone
 
 from src.poro_service import PoroService
@@ -573,6 +574,13 @@ def test_backfill_daily_stats_from_cache_rebuilds_range_from_cached_payloads():
     ]
 
     upserts = []
+    loader_threads = []
+
+    def stream_payloads(_limit):
+        # The real loader streams from Postgres; it must be consumed off the event loop.
+        loader_threads.append(threading.get_ident())
+        yield from payloads
+
     service = PoroService(
         log=lambda _msg: None,
         friends=["Alpha#NA1"],
@@ -591,7 +599,7 @@ def test_backfill_daily_stats_from_cache_rebuilds_range_from_cached_payloads():
         db_get_last_seen_match_id=lambda _riot_id: None,
         db_set_last_seen_match_id=lambda _riot_id, _match_id: None,
         db_health_stats=lambda: {"db_ok": True, "match_cache_entries": 1},
-        db_load_match_payloads_for_baseline=lambda _limit: payloads,
+        db_load_match_payloads_for_baseline=stream_payloads,
     )
 
     result = asyncio.run(
@@ -615,3 +623,4 @@ def test_backfill_daily_stats_from_cache_rebuilds_range_from_cached_payloads():
     assert performance_totals["gold_earned"] == 12000
     assert performance_totals["kill_participation_num"] == 10
     assert performance_totals["kill_participation_den"] == 14
+    assert loader_threads and threading.get_ident() not in loader_threads

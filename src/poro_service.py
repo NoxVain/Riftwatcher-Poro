@@ -19,6 +19,7 @@ from src.report_logic import (
     rank_sort_key,
 )
 from src.riot_api import get_lol_name
+from src.runtime.memory import release_freed_memory
 from src.services.baselines import ensure_role_baselines
 from src.services.refresh import (
     get_players_ordered_by_oldest_stats as service_get_players_ordered_by_oldest_stats,
@@ -355,7 +356,6 @@ class PoroService:
         if self.db_load_match_payloads_for_baseline is None:
             return {"error": "cache_loader_unavailable"}
 
-        payloads = await asyncio.to_thread(self.db_load_match_payloads_for_baseline, int(max_payloads))
         puuid_to_riot_id = {}
         missing_puuid = []
         for riot_id in self.friends:
@@ -368,63 +368,74 @@ class PoroService:
                 continue
             puuid_to_riot_id[str(puuid)] = riot_id
 
-        per_day_player = {}
-        scanned_payloads = 0
-        matched_matches = 0
-        matched_participants = 0
+        # Runs in a worker thread: the loader streams payloads (DB I/O while iterating),
+        # so only one batch is in memory and the event loop stays free for posts.
+        def scan_cached_payloads():
+            per_day_player = {}
+            scanned_payloads = 0
+            matched_matches = 0
+            matched_participants = 0
 
-        for match_info in payloads:
-            scanned_payloads += 1
-            if not isinstance(match_info, dict):
-                continue
-            info = match_info.get("info", {}) or {}
-            queue_id = int(info.get("queueId", -1) or -1)
-            bucket_name = get_mode_bucket(queue_id)
-            if bucket_name is None:
-                continue
-            if is_remake_match(match_info):
-                continue
-
-            match_end_ts = get_match_end_unix_seconds(match_info)
-            match_end_utc = datetime.fromtimestamp(match_end_ts, tz=timezone.utc)
-            cycle_key = get_report_cycle_key(
-                self.report_timezone,
-                day_start_hour=self.report_day_start_hour,
-                now_utc=match_end_utc,
-            )
-            cycle_day = datetime.fromisoformat(cycle_key).date()
-            if cycle_day < start_day_date or cycle_day > end_day_date:
-                continue
-
-            participants = info.get("participants", []) or []
-            duration_seconds = get_match_duration_seconds(match_info)
-            touched = False
-            for participant in participants:
-                riot_id = puuid_to_riot_id.get(str(participant.get("puuid", "")))
-                if riot_id is None:
+            for match_info in self.db_load_match_payloads_for_baseline(int(max_payloads)):
+                scanned_payloads += 1
+                if not isinstance(match_info, dict):
                     continue
-                day_entry = per_day_player.setdefault(cycle_day, {}).setdefault(
-                    riot_id,
-                    {
-                        "mode_records": create_mode_records(),
-                        "performance_totals": create_performance_totals(),
-                    },
+                info = match_info.get("info", {}) or {}
+                queue_id = int(info.get("queueId", -1) or -1)
+                bucket_name = get_mode_bucket(queue_id)
+                if bucket_name is None:
+                    continue
+                if is_remake_match(match_info):
+                    continue
+
+                match_end_ts = get_match_end_unix_seconds(match_info)
+                match_end_utc = datetime.fromtimestamp(match_end_ts, tz=timezone.utc)
+                cycle_key = get_report_cycle_key(
+                    self.report_timezone,
+                    day_start_hour=self.report_day_start_hour,
+                    now_utc=match_end_utc,
                 )
-                result = participant.get("win")
-                if result is True:
-                    day_entry["mode_records"][bucket_name]["wins"] += 1
-                elif result is False:
-                    day_entry["mode_records"][bucket_name]["losses"] += 1
-                accumulate_participant_performance(
-                    day_entry["performance_totals"],
-                    participant,
-                    duration_seconds,
-                    match_info=match_info,
-                )
-                matched_participants += 1
-                touched = True
-            if touched:
-                matched_matches += 1
+                cycle_day = datetime.fromisoformat(cycle_key).date()
+                if cycle_day < start_day_date or cycle_day > end_day_date:
+                    continue
+
+                participants = info.get("participants", []) or []
+                duration_seconds = get_match_duration_seconds(match_info)
+                touched = False
+                for participant in participants:
+                    riot_id = puuid_to_riot_id.get(str(participant.get("puuid", "")))
+                    if riot_id is None:
+                        continue
+                    day_entry = per_day_player.setdefault(cycle_day, {}).setdefault(
+                        riot_id,
+                        {
+                            "mode_records": create_mode_records(),
+                            "performance_totals": create_performance_totals(),
+                        },
+                    )
+                    result = participant.get("win")
+                    if result is True:
+                        day_entry["mode_records"][bucket_name]["wins"] += 1
+                    elif result is False:
+                        day_entry["mode_records"][bucket_name]["losses"] += 1
+                    accumulate_participant_performance(
+                        day_entry["performance_totals"],
+                        participant,
+                        duration_seconds,
+                        match_info=match_info,
+                    )
+                    matched_participants += 1
+                    touched = True
+                if touched:
+                    matched_matches += 1
+            return per_day_player, scanned_payloads, matched_matches, matched_participants
+
+        try:
+            per_day_player, scanned_payloads, matched_matches, matched_participants = await asyncio.to_thread(
+                scan_cached_payloads
+            )
+        finally:
+            await asyncio.to_thread(release_freed_memory)
 
         upserts = 0
         for cycle_day, players in sorted(per_day_player.items(), key=lambda row: row[0]):

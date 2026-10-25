@@ -15,3 +15,6 @@ bot.env
 AGENTS.md
 .claude/
 .idea
+
+# Railway IaC SDK (installed locally for `railway config plan/apply`; not part of the bot)
+node_modules/

@@ -4,7 +4,7 @@ import time
 import requests
 
 from src.rank_logic import format_rank_change_message, normalize_queue_type
-from src.recap_lp import build_lp_event, handle_lp_event
+from src.recap_lp import build_lp_event, handle_lp_event, retry_stored_lp_events
 
 
 async def process_rank_cycle(
@@ -80,6 +80,17 @@ async def process_rank_cycle(
 
 async def _record_lp_events(riot_id, previous_by_queue, current_by_queue, *, recap_channel, db_get_state, db_set_state, log):
     now = time.time()
+    try:
+        await retry_stored_lp_events(
+            riot_id=riot_id,
+            recap_channel=recap_channel,
+            db_get_state=db_get_state,
+            db_set_state=db_set_state,
+            log=log,
+            now=now,
+        )
+    except Exception as exc:
+        log(f"[rank] Could not retry stored LP changes for {riot_id}: {exc}")
     for queue_type, current_entry in current_by_queue.items():
         event = build_lp_event(previous_by_queue.get(queue_type), current_entry, now)
         if event is None:

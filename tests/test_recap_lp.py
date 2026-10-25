@@ -13,6 +13,7 @@ from src.recap_lp import (
     lp_pending_state_key,
     rank_points,
     register_pending_recap,
+    retry_stored_lp_events,
     take_lp_event_for_game,
 )
 
@@ -200,6 +201,54 @@ def test_stale_pending_and_events_are_pruned():
     )
     assert handled is False
     assert len(json.loads(state[lp_events_state_key("Alpha#EUW")])) == 1
+
+
+def test_missing_recap_channel_keeps_pending_and_retry_edits_later():
+    state, get, put = _state_store()
+    message = FakeMessage(55, RECAP)
+    pending = {"match_id": "EUW1_9", "queue_type": "RANKED_SOLO_5X5", "won": True, "end_ts": 900, "heading": HEADING, "message_id": 55}
+    put(lp_pending_state_key("Alpha#EUW"), json.dumps([pending]))
+
+    handled = asyncio.run(
+        handle_lp_event(
+            riot_id="Alpha#EUW", event=_event(observed_at=1000.0), recap_channel=None,
+            db_get_state=get, db_set_state=put, log=lambda _m: None, now=1000.0,
+        )
+    )
+    assert handled is False
+    assert len(json.loads(state[lp_pending_state_key("Alpha#EUW")])) == 1
+    assert len(json.loads(state[lp_events_state_key("Alpha#EUW")])) == 1
+    assert asyncio.run(
+        retry_stored_lp_events(
+            riot_id="Alpha#EUW", recap_channel=None, db_get_state=get, db_set_state=put,
+            log=lambda _m: None, now=1100.0,
+        )
+    ) == 0
+
+    edited = asyncio.run(
+        retry_stored_lp_events(
+            riot_id="Alpha#EUW", recap_channel=FakeRecapChannel([message]), db_get_state=get, db_set_state=put,
+            log=lambda _m: None, now=1300.0,
+        )
+    )
+    assert edited == 1
+    assert "+21LP → 56LP" in message.content
+    assert json.loads(state[lp_pending_state_key("Alpha#EUW")]) == []
+    assert json.loads(state[lp_events_state_key("Alpha#EUW")]) == []
+
+
+def test_retry_leaves_unmatched_events_for_the_recap_worker():
+    state, get, put = _state_store()
+    put(lp_events_state_key("Alpha#EUW"), json.dumps([_event(observed_at=1000.0)]))
+    edited = asyncio.run(
+        retry_stored_lp_events(
+            riot_id="Alpha#EUW", recap_channel=FakeRecapChannel(), db_get_state=get, db_set_state=put,
+            log=lambda _m: None, now=1010.0,
+        )
+    )
+    assert edited == 0
+    assert len(json.loads(state[lp_events_state_key("Alpha#EUW")])) == 1
+    assert lp_pending_state_key("Alpha#EUW") not in state
 
 
 def test_edit_failure_is_logged_not_raised():

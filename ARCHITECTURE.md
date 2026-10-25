@@ -91,7 +91,7 @@ All workers run continuously while connected, each with startup jitter and cycle
   - compares current ranked entries with `player_ranked_state`
   - sends rank up/down messages to `EVENTS_CHANNEL_ID`
   - first observation is baseline only (no alert); queues that disappear from Riot's response are removed from the baseline
-  - LP for recaps (`src/recap_lp.py`): when a Solo/Duo or Flex queue's counters moved by exactly one game with a consistent LP change (wins gain LP; losses lose LP or stay at 0), it builds an LP event (100 LP per division, shared Master+ ladder). It edits the matching pending recap in `MATCH_RECAP_CHANNEL_ID` (same queue and result, game ended up to 30 minutes before the poll, newest first) or stores the event for the recap worker. No extra Riot requests; LP failures are logged and never block rank-state persistence
+  - LP for recaps (`src/recap_lp.py`): when a Solo/Duo or Flex queue's counters moved by exactly one game with a consistent LP change (wins gain LP; losses lose LP or stay at 0), it builds an LP event (100 LP per division, shared Master+ ladder). It edits the matching pending recap in `MATCH_RECAP_CHANNEL_ID` (same queue and result, game ended up to 30 minutes before the poll, newest first) or stores the event for the recap worker. If the recap channel can't be resolved, the pending recap is kept and the event stored; each poll retries pairing stored events with pending recaps. No extra Riot requests; LP failures are logged and never block rank-state persistence
 - Recap worker
   - interval: `max(30, MATCH_RECAP_POLL_SECONDS)`
   - finds new matches using persisted per-player recap key (`last_announced_match_id::{riot_id}`); a player's first observation is baseline only

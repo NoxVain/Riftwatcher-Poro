@@ -193,6 +193,57 @@ def test_process_rank_cycle_edits_lp_into_pending_recap(monkeypatch):
     assert upserts == [("Alpha#EUW", "RANKED_SOLO_5X5")]
 
 
+def test_process_rank_cycle_retries_lp_edit_after_recap_channel_was_missing(monkeypatch):
+    from src import discord_rank_worker
+
+    heading = "✅ **Alpha** | `Mid` • **Ahri** (Win)"
+    recap = FakeRecapMessage(77, f"\U0001F3AE **New Match Recap**\n\n{heading}\n   stats")
+    now = 1_000_000.0
+    monkeypatch.setattr(discord_rank_worker.time, "time", lambda: now)
+    bot_state = {
+        lp_pending_state_key("Alpha#EUW"): json.dumps(
+            [{"match_id": "EUW1_5", "queue_type": "RANKED_SOLO_5X5", "won": True,
+              "end_ts": now - 240, "heading": heading, "message_id": 77}]
+        )
+    }
+    stored_rows = {"Alpha#EUW": [_ranked_row(40, 10, 9)]}
+
+    def db_upsert_ranked_state(riot_id, _queue_type, entry):
+        stored_rows[riot_id] = [_ranked_row(entry["leaguePoints"], entry["wins"], entry["losses"])]
+
+    riot = FakeRiotClient()
+    riot.by_player["Alpha#EUW"] = [
+        {"queueType": "RANKED_SOLO_5x5", "tier": "GOLD", "rank": "II", "leaguePoints": 61, "wins": 11, "losses": 9},
+    ]
+
+    def run_cycle(recap_channel):
+        asyncio.run(
+            process_rank_cycle(
+                friends=["Alpha#EUW"],
+                channel=FakeChannel(),
+                riot_client=riot,
+                db_load_ranked_state=lambda riot_id: stored_rows[riot_id],
+                db_upsert_ranked_state=db_upsert_ranked_state,
+                db_delete_ranked_state_queue=lambda _riot_id, _queue_type: None,
+                log=lambda _msg: None,
+                recap_channel=recap_channel,
+                db_get_state=bot_state.get,
+                db_set_state=bot_state.__setitem__,
+            )
+        )
+
+    # Recap channel unavailable: the game is detected but the recap can't be edited yet.
+    run_cycle(None)
+    assert "LP" not in recap.content
+    assert len(json.loads(bot_state[lp_pending_state_key("Alpha#EUW")])) == 1
+
+    # Next poll: counters are unchanged, but the stored change is paired with the recap.
+    now += 300
+    run_cycle(FakeRecapChannel(recap))
+    assert f"{heading} | `Gold II | +21LP → 61LP`\n" in recap.content
+    assert json.loads(bot_state[lp_pending_state_key("Alpha#EUW")]) == []
+
+
 def test_process_rank_cycle_lp_failure_does_not_block_rank_state():
     riot = FakeRiotClient()
     riot.by_player["Alpha#EUW"] = [

@@ -199,28 +199,69 @@ async def edit_recap_with_lp(message, heading, summary):
     return edited if edited is not None else message
 
 
+def _pending_for_event(event, pending_items):
+    matches = [
+        item for item in pending_items
+        if event_matches_game(event, queue_type=item.get("queue_type"), won=item.get("won"), end_ts=item.get("end_ts"))
+    ]
+    if not matches:
+        return None
+    # Counters moved by exactly one game, so the newest finished game is the one counted.
+    return max(matches, key=lambda item: float(item["end_ts"]))
+
+
 async def handle_lp_event(*, riot_id, event, recap_channel, db_get_state, db_set_state, log, now):
-    """Attach an LP event to its already-posted recap, or store it for the next recap."""
+    """Attach an LP event to its already-posted recap, or store it for later."""
     pending_key = lp_pending_state_key(riot_id)
     events_key = lp_events_state_key(riot_id)
     async with LP_STATE_LOCK:
         pending_items = await _load(db_get_state, pending_key, "end_ts", now)
-        matches = [
-            item for item in pending_items
-            if event_matches_game(event, queue_type=item.get("queue_type"), won=item.get("won"), end_ts=item.get("end_ts"))
-        ]
-        if not matches:
+        pending = _pending_for_event(event, pending_items)
+        # Without the recap channel the edit can't happen now; keep both sides so
+        # retry_stored_lp_events can pair them once the channel resolves again.
+        if pending is None or recap_channel is None:
             events = await _load(db_get_state, events_key, "observed_at", now)
             events.append(event)
             await _save(db_set_state, events_key, events)
             return False
-        # Counters moved by exactly one game, so the newest finished game is the one counted.
-        pending = max(matches, key=lambda item: float(item["end_ts"]))
         pending_items.remove(pending)
         await _save(db_set_state, pending_key, pending_items)
 
+    return await _edit_pending_recap(riot_id, pending, event, recap_channel, log)
+
+
+async def retry_stored_lp_events(*, riot_id, recap_channel, db_get_state, db_set_state, log, now):
+    """Pair stored LP events with pending recaps (e.g. after the recap channel was unavailable)."""
     if recap_channel is None:
-        return False
+        return 0
+    pending_key = lp_pending_state_key(riot_id)
+    events_key = lp_events_state_key(riot_id)
+    pairs = []
+    async with LP_STATE_LOCK:
+        events = await _load(db_get_state, events_key, "observed_at", now)
+        if not events:
+            return 0
+        pending_items = await _load(db_get_state, pending_key, "end_ts", now)
+        for event in sorted(events, key=lambda e: float(e["observed_at"])):
+            pending = _pending_for_event(event, pending_items)
+            if pending is None:
+                continue
+            pending_items.remove(pending)
+            events.remove(event)
+            pairs.append((pending, event))
+        if not pairs:
+            return 0
+        await _save(db_set_state, pending_key, pending_items)
+        await _save(db_set_state, events_key, events)
+
+    edited = 0
+    for pending, event in pairs:
+        if await _edit_pending_recap(riot_id, pending, event, recap_channel, log):
+            edited += 1
+    return edited
+
+
+async def _edit_pending_recap(riot_id, pending, event, recap_channel, log):
     try:
         message = await recap_channel.fetch_message(int(pending["message_id"]))
         edited = await edit_recap_with_lp(message, pending["heading"], format_lp_summary(event))

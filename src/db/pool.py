@@ -24,8 +24,21 @@ def init_db_pool():
         DB_POOL = queue.LifoQueue(maxsize=max(1, DB_POOL_SIZE))
 
 
+# Without these, a stuck connect or a dead socket blocks the calling thread forever.
+DB_CONNECT_TIMEOUT_SECONDS = 10
+DB_POOL_WAIT_SECONDS = 30
+
+
 def create_db_connection():
-    return psycopg.connect(DATABASE_URL)
+    return psycopg.connect(
+        DATABASE_URL,
+        connect_timeout=DB_CONNECT_TIMEOUT_SECONDS,
+        # Detect dead connections (e.g. after a container restart) within ~1 minute.
+        keepalives=1,
+        keepalives_idle=30,
+        keepalives_interval=10,
+        keepalives_count=3,
+    )
 
 
 def db_acquire_connection():
@@ -51,7 +64,12 @@ def db_acquire_connection():
                 DB_POOL_TOTAL = max(0, DB_POOL_TOTAL - 1)
             raise
 
-    return DB_POOL.get()
+    try:
+        return DB_POOL.get(timeout=DB_POOL_WAIT_SECONDS)
+    except queue.Empty:
+        raise RuntimeError(
+            f"Timed out after {DB_POOL_WAIT_SECONDS}s waiting for a database connection (pool size {DB_POOL_SIZE})."
+        ) from None
 
 
 def db_release_connection(conn, discard=False):

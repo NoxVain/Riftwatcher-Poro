@@ -14,7 +14,6 @@ from src.discord_text import (
 from src.report_logic import (
     compute_gamer_score,
     derive_primary_role,
-    get_match_duration_seconds,
     get_mode_bucket,
     get_mode_totals,
     is_remake_match,

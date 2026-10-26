@@ -151,6 +151,7 @@ class ChampionIcons:
             else:
                 image = await asyncio.to_thread(_download, entry["url"], MAX_PORTRAIT_BYTES)
                 emoji = await self.client.create_application_emoji(name=name, image=image)
+                self.log(f"[champicons] Uploaded portrait for {name}.")
             self._emojis[name] = emoji
         self._markup_by_id[champion_id] = str(emoji)
         return self._markup_by_id[champion_id]

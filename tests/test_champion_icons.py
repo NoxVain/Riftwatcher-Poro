@@ -99,8 +99,10 @@ def test_new_portraits_are_named_after_the_champion(monkeypatch):
     monkeypatch.setattr(icons, "_load_catalog", lambda: CATALOG)
     monkeypatch.setattr(icons, "_download", lambda url, limit: b"png")
     client = Client()
-    assert asyncio.run(_service(client).get(145)) == "<:KaiSa:123>"
+    logs = []
+    assert asyncio.run(_service(client, logs).get(145)) == "<:KaiSa:123>"
     assert client.uploads == [("KaiSa", b"png")]
+    assert logs == ["[champicons] Uploaded portrait for KaiSa."]
 
 
 def test_legacy_rw_champ_emoji_is_renamed_not_reuploaded(monkeypatch):

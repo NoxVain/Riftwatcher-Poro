@@ -1,6 +1,6 @@
 # Improvement Backlog
 
-This backlog tracks work not yet implemented as of 2026-10-23.
+This backlog tracks work not yet implemented as of 2026-10-26.
 
 ## Source docs reviewed
 
@@ -8,7 +8,7 @@ This backlog tracks work not yet implemented as of 2026-10-23.
 - `ARCHITECTURE.md`
 - `OPERATIONS.md`
 - `SELF_HOSTING.md`
-- git history through `150263a` (2026-10-22)
+- git history through PR #18 (2026-10-26)
 
 ## Feature Backlog
 
@@ -22,6 +22,21 @@ This backlog tracks work not yet implemented as of 2026-10-23.
 8. Weekly boss challenge mode with success/fail announcement
 
 ## Recently Completed (Removed From Backlog)
+
+### 2026-10-25 to 2026-10-26
+
+- Match recaps:
+  - LP gain/loss on Solo/Duo and Flex lines from the rank worker's existing polls (no extra Riot requests); edited into posted recaps; before-and-after LP and both ranks on promotions/demotions.
+  - Components V2 cards: one card per match with a result-coloured edge, compact header (queue, result, game length) and bold stat lines; plain-text fallback if Discord rejects a card; LP edits target the player's card component under an edit lock.
+  - Champion portraits as application emojis named after the champion (`!champdisplay name|icon|both`, default portraits, name fallback); per-player result only in mixed-result games.
+- Memory and reliability:
+  - Baseline/backfill payloads read in pages (bot memory ~75-140 MB, down from 1.2-4.8 GB); freed memory returned to the OS; `MALLOC_ARENA_MAX=2`.
+  - Baselines never block scoreboards or recaps (background rebuild, 120 s limit); one build at startup.
+  - DB connect timeout, keepalives and pool wait limit; stall alerts log stack dumps and also catch workers stuck in their first cycle.
+- Platform:
+  - Python 3.14 (Railway and CI via `.python-version`), exact dependency pins with `requirements-dev.txt`, Dependabot for pip and GitHub Actions, actions v7.
+  - Railway settings moved from `railway.json` to Infrastructure as Code (`.railway/railway.ts`).
+  - `main` protected by a ruleset (PR + passing `test` check; admin bypass).
 
 ### 2026-06 to 2026-10
 

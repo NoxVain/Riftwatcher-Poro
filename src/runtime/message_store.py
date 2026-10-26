@@ -9,6 +9,18 @@ PREVIOUS_REPORT_CHANNEL_STATE_KEY = "previous_report_channel_id"
 PREVIOUS_REPORT_MESSAGE_STATE_KEY = "previous_report_message_id"
 PREVIOUS_REPORT_CYCLE_STATE_KEY = "previous_report_cycle_key"
 
+# The event loop only keeps weak references to tasks: a fire-and-forget task with no
+# other reference can be garbage-collected before it finishes, silently dropping the
+# DB write (and the bot would then post a duplicate scoreboard after a restart).
+_BACKGROUND_TASKS = set()
+
+
+def _run_in_background(loop, func, *args):
+    task = loop.create_task(asyncio.to_thread(func, *args))
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
+    return task
+
 
 class TrackedMessageReference:
     def __init__(self, *, channel, message_id, content_hint=""):
@@ -37,7 +49,7 @@ def remember_report_message(*, state, message, db_enabled, db_set_last_report_me
     if db_enabled:
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(asyncio.to_thread(db_set_last_report_message, message.channel.id, message.id))
+            _run_in_background(loop, db_set_last_report_message, message.channel.id, message.id)
         except RuntimeError:
             db_set_last_report_message(message.channel.id, message.id)
 
@@ -50,10 +62,10 @@ def remember_previous_report_message(*, state, message, db_enabled, db_set_state
     if db_enabled:
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(asyncio.to_thread(db_set_state, PREVIOUS_REPORT_CHANNEL_STATE_KEY, str(message.channel.id)))
-            loop.create_task(asyncio.to_thread(db_set_state, PREVIOUS_REPORT_MESSAGE_STATE_KEY, str(message.id)))
+            _run_in_background(loop, db_set_state, PREVIOUS_REPORT_CHANNEL_STATE_KEY, str(message.channel.id))
+            _run_in_background(loop, db_set_state, PREVIOUS_REPORT_MESSAGE_STATE_KEY, str(message.id))
             if cycle_key is not None:
-                loop.create_task(asyncio.to_thread(db_set_state, PREVIOUS_REPORT_CYCLE_STATE_KEY, str(cycle_key)))
+                _run_in_background(loop, db_set_state, PREVIOUS_REPORT_CYCLE_STATE_KEY, str(cycle_key))
         except RuntimeError:
             db_set_state(PREVIOUS_REPORT_CHANNEL_STATE_KEY, str(message.channel.id))
             db_set_state(PREVIOUS_REPORT_MESSAGE_STATE_KEY, str(message.id))
@@ -68,7 +80,7 @@ def remember_weekly_report_message(*, state, message, db_enabled, db_set_last_we
     if db_enabled:
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(asyncio.to_thread(db_set_last_weekly_report_message, message.channel.id, message.id))
+            _run_in_background(loop, db_set_last_weekly_report_message, message.channel.id, message.id)
         except RuntimeError:
             db_set_last_weekly_report_message(message.channel.id, message.id)
 

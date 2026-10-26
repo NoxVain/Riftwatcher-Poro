@@ -89,6 +89,38 @@ def test_remember_report_message_updates_state_without_db():
     assert state["last_report_message"]["message_id"] == 222
 
 
+def test_background_db_writes_are_held_until_done():
+    import asyncio
+    import threading
+
+    from src.runtime import message_store
+
+    writes = []
+    release = threading.Event()
+
+    def slow_db_write(channel_id, message_id):
+        release.wait(2)
+        writes.append((channel_id, message_id))
+
+    async def run():
+        message_store.remember_report_message(
+            state=create_message_state(),
+            message=FakeMessage(channel_id=111, message_id=222),
+            db_enabled=True,
+            db_set_last_report_message=slow_db_write,
+        )
+        # The only strong reference to the pending write is the module's task set.
+        [task] = list(message_store._BACKGROUND_TASKS)
+        release.set()
+        await task
+        await asyncio.sleep(0)  # let the done-callback run
+
+    asyncio.run(run())
+
+    assert writes == [(111, 222)]
+    assert message_store._BACKGROUND_TASKS == set()
+
+
 def test_remember_previous_report_message_updates_state_and_cycle_without_db():
     state = create_message_state()
     message = FakeMessage(channel_id=333, message_id=444)

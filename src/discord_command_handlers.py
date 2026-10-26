@@ -3,7 +3,7 @@ from src.commands.ops_handlers import handle_ops_commands
 from src.commands.permissions import enforce_admin_permission
 from src.commands.player_handlers import handle_player_commands
 from src.commands.report_handlers import handle_report_commands
-from src.commands.routing import command_channel_id, enforce_command_channel, format_help_text, is_supported_command
+from src.commands.routing import enforce_command_channel, is_supported_command
 
 
 async def handle_incoming_message(

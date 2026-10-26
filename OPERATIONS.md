@@ -171,13 +171,13 @@ Known incident (2026-10-26): the role-baseline rebuild's server-side cursor stal
 
 ## Memory & Hosting Cost
 
-On Railway, memory is almost the whole bill (Sep-Oct 2026: memory ~97% of project cost; CPU and egress are cents).
+On Railway, memory is almost the whole bill (Sep-Oct 2026: memory ~97% of project cost; CPU and egress are cents). Since the fixes below (2026-10-26) the bot runs at ~75-140 MB (previously 1.2-4.8 GB); Postgres (~600-735 MB) is now the larger share.
 
-- Role baselines (every 12h) and `!backfill` stream cached match payloads from Postgres through a server-side cursor in batches of 200 (`MATCH_PAYLOAD_BATCH_SIZE` in `src/db/cache.py`) and keep only the per-minute numbers they need. Loading all 5000 payloads at once used to peak at ~1.2 GB of Python objects (synthetic benchmark: 1247 MB -> 41 MB for 5000 matches, identical baselines).
+- Role baselines (every 12h) and `!backfill` read cached match payloads in pages: the newest match IDs first, then `MATCH_PAYLOAD_BATCH_SIZE` (50) payloads per short primary-key query (`src/db/cache.py`), keeping only the per-minute numbers they need. (A server-side cursor did this until #17; it stalled mid-FETCH in production on 2026-10-26.) Loading all 5000 payloads at once used to peak at ~1.2 GB of Python objects (synthetic benchmark: 1247 MB -> 41 MB for 5000 matches, identical baselines).
 - Both run in a worker thread, so the event loop (recaps, scoreboards, commands) isn't blocked.
 - After each baseline rebuild or backfill, `src/runtime/memory.release_freed_memory()` runs `gc.collect()` and glibc `malloc_trim(0)` so freed memory goes back to the OS instead of staying resident (and billed).
 - Railway variable `MALLOC_ARENA_MAX=2` limits glibc per-thread arenas (less fragmentation from `asyncio.to_thread` workers).
-- Check usage with `railway usage projects --project "Riftwatcher Poro"` and `railway metrics --since 7d --memory`. A per-service memory limit is a later option once the new steady state is known.
+- Check usage with `railway usage projects --project "Riftwatcher Poro"` and `railway metrics --since 7d --memory`. A per-service memory limit (e.g. 512 MB, well above the ~140 MB steady state) is an option to cap surprises.
 
 ## CI & Deploy
 

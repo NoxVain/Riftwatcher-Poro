@@ -2,6 +2,8 @@ import asyncio
 import threading
 import time
 
+from src.runtime.diagnostics import log_stack_dump
+
 RIOT_KEY_ALERT_STATE_KEY = "riot_401_alert_sent"  # Name kept for existing deployments; also covers 403.
 RIOT_KEY_STATUS_LABELS = {401: "401 Unauthorized", 403: "403 Forbidden"}
 RIOT_KEY_RECOVERED_TEXT = "\u2705 Riot API key is working again; Riot requests are succeeding."
@@ -194,10 +196,8 @@ async def check_and_notify_worker_stalls(
 
     for worker_name, threshold_seconds in stale_thresholds_seconds.items():
         entry = worker_stats.get(worker_name) or {}
-        runs = int(entry.get("runs", 0) or 0)
-        if runs <= 0:
-            continue
-
+        # Workers that never finished a cycle still count: their clock starts at process
+        # start (last_success_at), so a worker stuck in its first cycle also alerts.
         last_success_at = float(entry.get("last_success_at", 0.0) or 0.0)
         if last_success_at <= 0:
             continue
@@ -225,6 +225,8 @@ async def check_and_notify_worker_stalls(
                 f"[health] Worker stall alert sent for {worker_name}: "
                 f"stale_for={int(stale_for)}s threshold={int(threshold_seconds)}s"
             )
+            # Show where everything is waiting, so a hang can be diagnosed from the logs.
+            log_stack_dump(log, reason=f"{worker_name} stalled")
             continue
 
         if (not is_stale) and alerted:

@@ -349,3 +349,33 @@ def test_check_and_notify_worker_stalls_sends_stale_and_recovery_messages():
     assert "recovered" in channel.sent[1]
     assert state["alerted_by_worker"]["refresh"] is False
     assert db["worker_stall_alert_sent::refresh"] == "0"
+
+
+def test_worker_stuck_in_first_cycle_alerts_with_stack_dump():
+    channel = FakeChannel()
+    logs = []
+
+    async def resolve_channel(_channel_id):
+        return channel
+
+    # Never finished a cycle (runs=0); its clock starts at process start (10.0).
+    worker_stats = {
+        "refresh": {"runs": 0, "last_success_at": 10.0},
+        "unknown": {"runs": 0, "last_success_at": 0.0},  # no start time: skipped
+    }
+
+    asyncio.run(
+        check_and_notify_worker_stalls(
+            state={"alerted_by_worker": {}},
+            resolve_channel=resolve_channel,
+            events_channel_id=123,
+            worker_stats=worker_stats,
+            stale_thresholds_seconds={"refresh": 30, "unknown": 30},
+            now_monotonic=50.0,
+            log=logs.append,
+        )
+    )
+
+    assert len(channel.sent) == 1
+    assert "`refresh` appears stalled" in channel.sent[0]
+    assert any(line.startswith("[diag] Stack dump (refresh stalled)") for line in logs)

@@ -159,10 +159,15 @@ Thresholds (no successful cycle for):
 - `esports`: `max(300, max(30, ESPORTS_POLL_SECONDS) * 5)` seconds
 - `patch`: `PATCH_NOTES_POLL_SECONDS * 4` seconds (24h by default)
 
+A worker that never finished a cycle is measured from process start, so one stuck in its first cycle also alerts.
+
 Actions:
-1. Check `!health` for that worker's error count and latency.
-2. Search logs for `[<worker>] Unexpected` errors.
-3. A recovery message posts automatically after the next successful cycle. Alert state is persisted as `worker_stall_alert_sent::<worker>`, so restarts don't repeat alerts.
+1. Search the logs for `[diag]` lines right after `[health] Worker stall alert sent for <worker>`: every alert logs a stack dump of all threads and asyncio tasks, showing the line each one is waiting on (e.g. a DB call or a `wait_for`).
+2. Check `!health` for that worker's error count and latency.
+3. Search logs for `[<worker>] Unexpected` errors.
+4. A recovery message posts automatically after the next successful cycle. Alert state is persisted as `worker_stall_alert_sent::<worker>`, so restarts don't repeat alerts.
+
+Known incident (2026-10-26): the role-baseline rebuild's server-side cursor stalled mid-FETCH and, behind a rebuild lock, froze every scoreboard build and the recap worker's post-recap sync. Fixed in #17: paged reads, baselines never block callers (120 s rebuild limit), DB connect/pool timeouts.
 
 ## Memory & Hosting Cost
 

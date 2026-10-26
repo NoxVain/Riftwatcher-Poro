@@ -60,6 +60,7 @@ Start with:
 - `src/arena_static.py` - Arena augment/item display-name loader (CommunityDragon/Data Dragon)
 - `src/recap_cards.py` - match recap cards (Components V2): packing within Discord limits, per-player components for LP edits
 - `src/champion_icons.py` - recap champion display mode and portrait emojis (Data Dragon -> Discord application emojis)
+- `src/puuid_remap.py` - one-off background rewrite of old (pre key-change) PUUIDs in cached matches
 - `tests/` - unit tests
 
 ## Features

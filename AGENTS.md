@@ -41,6 +41,7 @@ This repository is a modular Python Discord bot.
 - `src/recap_lp.py`: LP gain/loss for ranked recaps, built from the rank worker's polls (no extra Riot requests) and edited into posted recaps; also builds `lp_history` rows.
 - `src/arena_static.py`: Arena augment/item display-name loader (CommunityDragon/Data Dragon, cached per process).
 - `src/champion_icons.py`: Recap champion display mode (`!champdisplay name|icon|both`) and Data Dragon portraits uploaded as Discord application emojis.
+- `src/puuid_remap.py`: Background rewrite of old PUUIDs in cached match payloads after a Riot API key change (PUUIDs are encrypted per key project), matched by Riot ID.
 - `tests/`: Unit tests for pure logic, command routing/handlers, workers, and runtime helpers.
 - `README.md`, `ARCHITECTURE.md`, `OPERATIONS.md`, `SELF_HOSTING.md`: Runtime, design, runbook, and deployment documentation. `IMPROVEMENT_BACKLOG.md`: planned features and recently shipped work.
 - `.github/workflows/test.yml`: GitHub Actions CI (pytest on the `.python-version` Python for pushes/PRs to `main`); `.github/dependabot.yml`: weekly pip and GitHub Actions update PRs.

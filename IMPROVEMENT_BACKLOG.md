@@ -37,6 +37,9 @@ This backlog tracks work not yet implemented as of 2026-10-26.
   - Python 3.14 (Railway and CI via `.python-version`), exact dependency pins with `requirements-dev.txt`, Dependabot for pip and GitHub Actions, actions v7.
   - Railway settings moved from `railway.json` to Infrastructure as Code (`.railway/railway.ts`).
   - `main` protected by a ruleset (PR + passing `test` check; admin bypass).
+- Data:
+  - `lp_history` table records every observed LP change for later analysis.
+  - Old PUUIDs (from before the Feb 2026 Riot key change) in cached matches are rewritten to current ones by Riot ID, so all cached games are found by PUUID again.
 
 ### 2026-06 to 2026-10
 

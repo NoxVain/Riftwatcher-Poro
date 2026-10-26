@@ -31,6 +31,11 @@ def db_load_tracked_players():
     return [row[0] for row in rows]
 
 
+def db_load_tracked_puuids():
+    rows = db_execute("SELECT riot_id, puuid FROM tracked_players ORDER BY riot_id;", fetch=True) or []
+    return [(row[0], row[1]) for row in rows]
+
+
 def db_remove_player(riot_id):
     riot_key = str(riot_id).strip().casefold()
     db_execute("DELETE FROM tracked_players WHERE lower(riot_id) = %s;", (riot_key,))

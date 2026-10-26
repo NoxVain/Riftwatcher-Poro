@@ -97,6 +97,8 @@ These are the priorities behind most decisions in this repo. New changes should 
   - match recap cards (Components V2): accent by result, packing within Discord limits with LP reserve, per-player text components, LP edit by component ID
 - `src/champion_icons.py`
   - recap champion display mode (`name`/`icon`/`both`) and portrait emojis: Data Dragon portraits uploaded once as application-owned emojis named after the champion (`:Ahri:`, `:KaiSa:`; punctuation/spaces dropped), mapped from the numeric champion ID via the Data Dragon catalog; emojis from the earlier `rw_champ_<championId>` naming are renamed in place, not re-uploaded; serialized lookups, 5-minute emoji cache and failure backoff, daily catalog cache, 10-second lookup timeout, bounded downloads
+- `src/puuid_remap.py`
+  - rewrites old PUUIDs in `match_info_cache` to the tracked players' current ones. Riot encrypts PUUIDs per API key project, so payloads cached before the Feb 2026 key change named players by PUUIDs that lookups no longer match. Old→current pairs come from participants whose Riot ID matches a tracked player; ambiguous cases are skipped. The rewrite runs in Postgres on the payload text (pages of 500 match IDs, `updated_at` untouched). Runs as a background task 5 minutes after startup, once per set of tracked players (`puuid_remap_fingerprint`); a new player or a future key change triggers it again
 
 ## Worker Model
 
@@ -235,6 +237,7 @@ Badges (`report_builder.py`) are separate from the score: per-minute rates shrun
     - per-player LP joins (JSON lists, 30-minute expiry): `recap_lp_pending::` (posted recap lines awaiting LP), `recap_lp_events::` (LP changes awaiting a recap)
     - `streak_tts_enabled`
     - `champion_display_mode` (`name` | `icon` | `both`; unset = `icon`)
+    - `puuid_remap_fingerprint` (hash of tracked Riot IDs + PUUIDs the cache was last remapped for)
     - alert dedupe flags: `riot_401_alert_sent`, `worker_stall_alert_sent::{worker}`, `esports_auth_alert_sent`
     - esports state: `esports_match_snapshot`, `esports_schedule_posted_cycle`, `esports_weekly_schedule_posted_week`
     - patch-notes state: `patch_notes_seen` (JSON list of posted article ids/URLs), `patch_notes_last_checked_at` (unix seconds)

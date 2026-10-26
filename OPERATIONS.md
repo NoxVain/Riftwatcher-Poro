@@ -182,6 +182,18 @@ WHERE lower(riot_id) = lower('NoxVain#EUW')
 GROUP BY 1, 2 ORDER BY 1, 2;
 ```
 
+## PUUIDs After a Riot API Key Change
+
+Riot encrypts PUUIDs per API key project. A new key project (as in Feb 2026) gives every player a new PUUID, while cached match payloads keep the old ones, so lookups by PUUID miss older games. `src/puuid_remap.py` fixes this in the background 5 minutes after startup:
+
+- It scans the cache (paged), maps each tracked player's old PUUID to the current one by Riot ID, and rewrites the payload text in Postgres.
+- It logs `[puuid] Remapped old PUUIDs: players=… rewritten=… scanned=…`, or `[puuid] Skipping <riot id>: …` for ambiguous players (more than one old PUUID, or an old PUUID shared by two tracked players). Those players are left as they are.
+- Afterwards it stores `puuid_remap_fingerprint` in `bot_state` and doesn't run again until the tracked players or their PUUIDs change.
+- On failure (`[puuid] PUUID remap failed; will retry on next startup`), it retries on the next restart. Re-running the rewrite is safe.
+- To force a re-run, delete the `puuid_remap_fingerprint` row and restart.
+
+The first run on 2026-10-26 data: 12,415 cached matches, one old PUUID for each of the 18 tracked players, no ambiguities. Rewriting about 12k payloads creates dead tuples in Postgres that autovacuum reclaims.
+
 ## Memory & Hosting Cost
 
 On Railway, memory is almost the whole bill (Sep-Oct 2026: memory ~97% of project cost; CPU and egress are cents). Since the fixes below (2026-10-26) the bot runs at ~75-140 MB (previously 1.2-4.8 GB); Postgres (~600-735 MB) is now the larger share.

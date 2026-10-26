@@ -17,6 +17,7 @@ from src.constants import ADD_COMMAND, BACKFILL_COMMAND, DEBUG_PLAYER_COMMAND, H
 from src.esports_api import EsportsApiClient
 from src.patch_notes_api import PatchNotesClient
 from src.poro_service import PoroService
+from src.puuid_remap import run_puuid_remap_once
 from src.riot_api import RiotApiClient
 from src.runtime.alerts import RiotAlertState, trigger_riot_key_alert as runtime_trigger_riot_key_alert
 from src.runtime.alerts import trigger_riot_key_recovered as runtime_trigger_riot_key_recovered
@@ -93,6 +94,7 @@ db_load_backfill_offsets = dbm.db_load_backfill_offsets
 db_load_match_payloads_for_baseline = dbm.db_load_match_payloads_for_baseline
 db_load_ranked_state = dbm.db_load_ranked_state
 db_load_tracked_players = dbm.db_load_tracked_players
+db_load_tracked_puuids = dbm.db_load_tracked_puuids
 db_delete_ranked_state_queue = dbm.db_delete_ranked_state_queue
 db_insert_lp_change = dbm.db_insert_lp_change
 db_set_last_report_message = dbm.db_set_last_report_message
@@ -104,6 +106,7 @@ db_upsert_daily_stats = dbm.db_upsert_daily_stats
 db_upsert_match_info = dbm.db_upsert_match_info
 db_upsert_player = dbm.db_upsert_player
 db_remove_player = dbm.db_remove_player
+db_rewrite_cached_puuids = dbm.db_rewrite_cached_puuids
 db_upsert_ranked_state = dbm.db_upsert_ranked_state
 init_db = dbm.init_db
 
@@ -187,6 +190,7 @@ BACKGROUND_BACKFILL_TASK = None
 BACKGROUND_STALL_TASK = None
 BACKGROUND_ESPORTS_TASK = None
 BACKGROUND_PATCH_TASK = None
+BACKGROUND_PUUID_REMAP_TASK = None
 
 
 def trigger_riot_key_alert(status_code=401):
@@ -475,6 +479,17 @@ async def background_match_cache_backfiller():
     )
 
 
+async def background_puuid_remap():
+    return await run_puuid_remap_once(
+        db_load_tracked_puuids=db_load_tracked_puuids,
+        db_load_match_payloads=db_load_match_payloads_for_baseline,
+        db_rewrite_cached_puuids=db_rewrite_cached_puuids,
+        db_get_state=db_get_state,
+        db_set_state=db_set_state,
+        log=log,
+    )
+
+
 async def background_daily_refresher():
     await runtime_background_daily_refresher(
         db_enabled=DB_ENABLED,
@@ -561,7 +576,7 @@ async def background_worker_stall_notifier():
 
 @client.event
 async def on_ready():
-    global BACKGROUND_REFRESH_TASK, BACKGROUND_RECAP_TASK, BACKGROUND_RANK_TASK, BACKGROUND_BACKFILL_TASK, BACKGROUND_STALL_TASK, BACKGROUND_ESPORTS_TASK, BACKGROUND_PATCH_TASK, STARTUP_SCOREBOARD_INIT_DONE, DEFAULT_EXECUTOR_CONFIGURED
+    global BACKGROUND_REFRESH_TASK, BACKGROUND_RECAP_TASK, BACKGROUND_RANK_TASK, BACKGROUND_BACKFILL_TASK, BACKGROUND_STALL_TASK, BACKGROUND_ESPORTS_TASK, BACKGROUND_PATCH_TASK, BACKGROUND_PUUID_REMAP_TASK, STARTUP_SCOREBOARD_INIT_DONE, DEFAULT_EXECUTOR_CONFIGURED
     # on_ready fires again after every reconnect; only install the custom executor once.
     if cfg.ASYNCIO_THREAD_POOL_SIZE > 0 and not DEFAULT_EXECUTOR_CONFIGURED:
         loop = asyncio.get_running_loop()
@@ -618,6 +633,9 @@ async def on_ready():
             BACKGROUND_BACKFILL_TASK = client.loop.create_task(background_match_cache_backfiller())
         if BACKGROUND_STALL_TASK is None or BACKGROUND_STALL_TASK.done():
             BACKGROUND_STALL_TASK = client.loop.create_task(background_worker_stall_notifier())
+        if BACKGROUND_PUUID_REMAP_TASK is None:
+            # One-off per startup; it no-ops once the cache matches the tracked PUUIDs.
+            BACKGROUND_PUUID_REMAP_TASK = client.loop.create_task(background_puuid_remap())
         if ESPORTS_ENABLED:
             log(
                 f"[startup] Esports news enabled: NEWS_CHANNEL_ID={NEWS_CHANNEL_ID} "

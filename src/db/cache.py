@@ -91,3 +91,41 @@ def db_load_match_payloads_for_baseline(limit=cfg.BASELINE_MATCH_LIMIT, batch_si
                 yield json.loads(payload_text)
             except json.JSONDecodeError:
                 continue
+
+
+PUUID_REWRITE_BATCH_SIZE = 500
+
+
+def db_rewrite_cached_puuids(remap, batch_size=PUUID_REWRITE_BATCH_SIZE):
+    """Replace PUUIDs in cached payloads ({old: new}); returns the number of rows changed.
+
+    The replacement runs in Postgres on the payload text (quoted, so only whole PUUID
+    values match), so payloads never pass through the bot's memory. Short updates by
+    pages of match IDs keep each transaction brief. `updated_at` is left alone: it
+    drives cache retention and baseline ordering.
+    """
+    if not remap:
+        return 0
+    pairs = [(f'"{old}"', f'"{new}"') for old, new in remap.items()]
+    expression = "payload"
+    replace_params = []
+    for old, new in pairs:
+        expression = f"replace({expression}, %s, %s)"
+        replace_params.extend((old, new))
+    condition = " OR ".join("strpos(payload, %s) > 0" for _ in pairs)
+    condition_params = [old for old, _ in pairs]
+    query = (
+        f"UPDATE match_info_cache SET payload = {expression} "
+        f"WHERE match_id = ANY(%s) AND ({condition}) RETURNING match_id;"
+    )
+    match_ids = [row[0] for row in (db_execute("SELECT match_id FROM match_info_cache;", fetch=True) or [])]
+    page_size = max(1, int(batch_size))
+    changed = 0
+    for start in range(0, len(match_ids), page_size):
+        rows = db_execute(
+            query,
+            (*replace_params, match_ids[start:start + page_size], *condition_params),
+            fetch=True,
+        ) or []
+        changed += len(rows)
+    return changed

@@ -12,7 +12,6 @@ pytest-cache-files-*/
 build/
 dist/
 bot.env
-AGENTS.md
 .claude/
 .idea
 

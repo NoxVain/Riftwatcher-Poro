@@ -13,6 +13,24 @@ Riftwatcher Poro is a Discord worker service that tracks ranked League results f
 - optional esports news (schedules, live/game/series results)
 - League patch-notes announcements
 
+## Design Principles
+
+These are the priorities behind most decisions in this repo. New changes should follow them; when one has to give, the order below is the order of importance.
+
+1. **Core posts never get lost or stuck.** Recaps and scoreboards are the product. Everything optional around them must degrade, never block:
+   - the recap cursor is saved *before* sending, so a bad message can't cause endless retries;
+   - a rejected card falls back to plain text, a missing portrait to the champion name, missing baselines to pure Wilson scoring, missing LP to no LP;
+   - optional work (LP, portraits, baselines, LP history) runs with timeouts and logs its failures instead of raising.
+
+   The 2026-10-26 incident (OPERATIONS.md) is the cautionary example: one stalled optional read froze scoreboards and recaps.
+2. **The Riot rate limit is fixed and shared.** A personal key allows 20 requests/1 s and 100/120 s for *all* workers combined. New features reuse data the bot already fetches; LP, for example, comes from the rank worker's existing poll. Backfill is lowest priority and backs off first.
+3. **Memory is money.** On Railway, resident memory is ~97% of the bill. Never hold many match payloads at once: page through DB reads, keep only the numbers needed, and return freed memory to the OS (`src/runtime/memory.py`). Check with `railway metrics --memory` after deploys.
+4. **Pure logic, thin wiring, offline tests.** Parsing, formatting, scoring and LP math live in plain modules (`*_logic.py`, `discord_text.py`, `recap_cards.py`, `recap_lp.py`) that are unit-tested without Discord, Riot or Postgres. Workers receive their dependencies (`db_get_state`, `riot_client`, …) as parameters so tests can pass fakes. `discord_bot.py` only wires things together.
+5. **Observable by default.** Every worker logs a cycle line; important events log one line each (recap posted, LP added, portrait uploaded, card rejected). The stall watchdog alerts in Discord and logs a stack dump of every thread and task. Every deploy is checked in the Railway logs, and a deploy isn't "done" until the workers cycle cleanly.
+6. **What users see is the maintainer's call.** Defaults and visible layout (champion display, recap format, what a recap shows) change only when the maintainer agrees, ideally after an issue or a mockup. Contributor PRs that change them get reworked in a separate PR rather than merged as-is. Old messages and stored state keep working after a format change (e.g. pending LP edits on older recaps).
+7. **Safe by construction.** No secrets in the repo (environment variables only, Railway variables stay unmanaged by IaC). The client sends no pings (`AllowedMentions.none()`), user-facing text is escaped, mutating commands need admin rights, and data analysis against production uses read-only sessions.
+8. **Small, reviewed, verified changes.** Branch, then a PR (purpose, changes, test evidence, config impact), then CI on the `.python-version` Python, then squash-merge (`main` is protected), then verify the Railway deploy. Docs change in the same PR as the behaviour. Contributors whose work is reused get `Co-authored-by` credit, and a thank-you when their PR is superseded.
+
 ## Runtime Layers
 
 - `src/app.py`
@@ -62,7 +80,7 @@ Riftwatcher Poro is a Discord worker service that tracks ranked League results f
 - `src/patch_notes_logic.py`
   - pure parsing of the embedded Next.js page data (`__NEXT_DATA__`) and article `<h2>`/`<h3 class="change-title">` structure, message formatting, seen-state and scheduling helpers
 - `src/runtime/`
-  - shared runtime worker loops, message-store helpers, and alert helpers
+  - shared runtime worker loops (`workers.py`), message-store helpers (`message_store.py`), alerts and the stall watchdog (`alerts.py`), returning freed memory to the OS (`memory.py`), and stack dumps for stall alerts (`diagnostics.py`)
 - `src/db/`
   - connection pool (`pool.py`)
   - schema creation/migrations (`schema.py`)

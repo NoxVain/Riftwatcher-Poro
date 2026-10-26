@@ -52,7 +52,7 @@ Start with:
 - `src/esports_api.py` / `src/esports_logic.py` - LoL Esports API client and pure parsing/diff/format helpers
 - `src/discord_patch_worker.py` - patch-notes cycle (new article detection and posting)
 - `src/patch_notes_api.py` / `src/patch_notes_logic.py` - leagueoflegends.com patch-notes client and pure parsing/format helpers
-- `src/runtime/` - shared runtime worker/message/alert helpers
+- `src/runtime/` - shared worker loops, tracked-message persistence, alerts and stall watchdog, memory release (`memory.py`), stack dumps (`diagnostics.py`)
 - `src/db/` - Postgres pool, schema, and persistence helpers
 - `src/report_logic.py` - pure ranking/window helpers
 - `src/rank_logic.py` - rank queue normalization and rank-change message formatting
@@ -279,6 +279,7 @@ Patch notes, all optional:
 - `match_info_cache` - cached match payload JSON
 - `bot_state` - generic state keys (message ids, last seen ids, flags, patch-notes seen articles)
 - `player_ranked_state` - last known rank state per player/queue
+- `lp_history` - every rank/LP change the rank worker observes (LP delta, result, rank before/after), for analysis; see OPERATIONS.md
 
 ## Testing
 
@@ -312,6 +313,7 @@ If you find Riftwatcher Poro useful and would like to support its development, y
 
 ## Additional Documentation
 
-- `ARCHITECTURE.md` for module/runtime structure.
+- `AGENTS.md` for contributor and coding-agent guidelines (structure, conventions, workflow).
+- `ARCHITECTURE.md` for design principles and module/runtime structure.
 - `OPERATIONS.md` for incident response and runbook steps.
 - `IMPROVEMENT_BACKLOG.md` for prioritized future work.

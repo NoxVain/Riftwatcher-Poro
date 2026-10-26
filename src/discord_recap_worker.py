@@ -398,6 +398,7 @@ async def process_recap_cycle(
                 champion_display=format_champion_display(
                     participant.get("championName", "Unknown"), champion_display_mode, champion_icon
                 ),
+                show_result=result == "Mixed results",
             )
             waiting_before = len(lp_waiting)
             lp_queue_type = QUEUE_TYPE_BY_QUEUE_ID.get(queue_id)

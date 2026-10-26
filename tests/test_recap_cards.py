@@ -9,7 +9,7 @@ HEADER = "-# Ranked Solo/Duo · **Win** · 30:00"
 
 
 def _player(name, *, pending=False, extra=""):
-    heading = f"✅ **{name}** · **Ahri** Mid"
+    heading = f"**{name}** · **Ahri** Mid"
     text = f"{heading}\n   stats{extra}"
     return cards.CardPlayer(f"{name}#EUW", text, {"match_id": "EUW1_1", "heading": heading} if pending else None)
 

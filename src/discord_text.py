@@ -267,6 +267,7 @@ def format_recap_player_line(
     augment_names=None,
     item_names=None,
     champion_display=None,
+    show_result=False,
 ):
     lol_name = riot_id.split("#", 1)[0]
     champion = participant.get("championName", "Unknown")
@@ -307,7 +308,8 @@ def format_recap_player_line(
         return "\n".join(lines)
 
     won = bool(participant.get("win"))
-    result_emoji = "\u2705" if won else "\u274C"
+    # The card edge shows a shared win/loss; only mixed games name each player's result.
+    result_text = f" \u00B7 **{'Win' if won else 'Loss'}**" if show_result else ""
     role_name = format_recap_role(participant)
     cs = int(participant.get("totalMinionsKilled", 0) or 0) + int(participant.get("neutralMinionsKilled", 0) or 0)
     minutes = max(1.0, float(match_duration_seconds) / 60.0)
@@ -316,7 +318,7 @@ def format_recap_player_line(
     vision_score = int(participant.get("visionScore", 0) or 0)
     # The first line is the player's heading: LP is appended to it later (recap_lp).
     return (
-        f"{result_emoji} **{lol_name}** \u00B7 {champion_display} {role_name}\n"
+        f"**{lol_name}** \u00B7 {champion_display} {role_name}{result_text}\n"
         f"**{kills}/{deaths}/{assists}** KDA \u00B7 **{cs_per_min:.1f}** CS/min \u00B7 **{vision_score}** Vision\n"
         f"Damage **{player_damage:,}** \u00B7 Objectives **{objective_damage:,}**\n"
         f"Taken **{damage_taken:,}** \u00B7 Healing **{healing:,}**"

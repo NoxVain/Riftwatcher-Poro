@@ -84,7 +84,7 @@ Start with:
 - Match recap posts in `MATCH_RECAP_CHANNEL_ID` for any queue a tracked player finishes (remakes are skipped):
   - small header line: queue, result (`Win`, `Loss`, `Mixed results`, `Placements`, `No result`) and game length (no date or clock)
   - ranked labels for Solo/Duo, Flex and Ranked 5s; named labels for common non-ranked queues (Normal Draft/Blind, Swiftplay, Quickplay, ARAM, ARAM Mayhem, Clash, ARAM Clash, ARURF, URF, One for All, Nexus Blitz, Co-op vs AI); other queues show `Queue <id>`
-  - per player: ✅/❌ result mark, name, champion (portrait by default), role, LP
+  - per player: name, champion (portrait by default), role, LP; no result mark, since the card edge and header show a shared win/loss. In mixed-result games each player line adds · **Win** or · **Loss**
   - compact bold stats: KDA, CS/min and vision; damage and objectives; damage taken and healing
   - Arena (`1700`/`1710`/`1750`, with `1750` shown as `Arena 3x6`): placement/team ordering, damage + team damage share, taken/healing/shielded, gold
   - Arena augments and items by name when static data is available (raw IDs otherwise)

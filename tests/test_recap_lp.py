@@ -18,7 +18,7 @@ from src.recap_lp import (
 )
 
 
-HEADING = "✅ **Alpha** · **Ahri** Mid"
+HEADING = "**Alpha** · **Ahri** Mid"
 RECAP = f"\U0001F3AE **New Match Recap**\n\n{HEADING}\n   stats line"
 
 

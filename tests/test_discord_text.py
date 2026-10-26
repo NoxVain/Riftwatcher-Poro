@@ -68,7 +68,7 @@ def test_format_recap_player_line_compact_layout():
     line = format_recap_player_line("Alpha#NA1", participant, 1800)
 
     assert line.split("\n") == [
-        "\u2705 **Alpha** \u00b7 **Ahri** Mid",
+        "**Alpha** \u00b7 **Ahri** Mid",
         "**1/2/3** KDA \u00b7 **4.7** CS/min \u00b7 **10** Vision",
         "Damage **10,000** \u00b7 Objectives **2,000**",
         "Taken **4,000** \u00b7 Healing **300**",
@@ -174,3 +174,14 @@ def test_format_recap_player_line_uses_arena_placement():
 def test_format_match_duration_renders_mm_ss():
     assert format_match_duration(1800) == "30:00"
     assert format_match_duration(1831) == "30:31"
+
+
+def test_format_recap_player_line_names_result_only_when_asked():
+    participant = {"win": False, "championName": "Ahri", "teamPosition": "MIDDLE"}
+
+    plain = format_recap_player_line("Alpha#NA1", participant, 1800)
+    mixed = format_recap_player_line("Alpha#NA1", participant, 1800, show_result=True)
+
+    assert plain.split("\n")[0] == "**Alpha** · **Ahri** Mid"
+    assert mixed.split("\n")[0] == "**Alpha** · **Ahri** Mid · **Loss**"
+    assert "✅" not in plain + mixed and "❌" not in plain + mixed

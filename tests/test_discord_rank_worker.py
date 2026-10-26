@@ -157,7 +157,7 @@ def _ranked_row(lp, wins, losses):
 def test_process_rank_cycle_edits_lp_into_pending_recap(monkeypatch):
     from src import discord_rank_worker
 
-    heading = "❌ **Alpha** · **Ahri** Mid"
+    heading = "**Alpha** · **Ahri** Mid · **Loss**"
     recap = FakeRecapMessage(77, f"\U0001F3AE **New Match Recap**\n\n{heading}\n   stats")
     now = 1_000_000.0
     monkeypatch.setattr(discord_rank_worker.time, "time", lambda: now)
@@ -196,7 +196,7 @@ def test_process_rank_cycle_edits_lp_into_pending_recap(monkeypatch):
 def test_process_rank_cycle_retries_lp_edit_after_recap_channel_was_missing(monkeypatch):
     from src import discord_rank_worker
 
-    heading = "✅ **Alpha** · **Ahri** Mid"
+    heading = "**Alpha** · **Ahri** Mid"
     recap = FakeRecapMessage(77, f"\U0001F3AE **New Match Recap**\n\n{heading}\n   stats")
     now = 1_000_000.0
     monkeypatch.setattr(discord_rank_worker.time, "time", lambda: now)

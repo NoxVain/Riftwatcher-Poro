@@ -168,7 +168,9 @@ def test_process_recap_cycle_posts_recap_and_syncs_affected_players():
     assert len(channel.messages) == 1
     assert "-# " in channel.messages[0]["content"]
     assert " · 30:00\n" in channel.messages[0]["content"]
-    assert "\n\n❌ **Bravo**" in channel.messages[0]["content"]
+    # Mixed result: the card edge can't say who won, so each player names their result.
+    assert "**Alpha** · **Ahri** Mid · **Win**\n" in channel.messages[0]["content"]
+    assert "\n\n**Bravo** · **Ahri** Mid · **Loss**\n" in channel.messages[0]["content"]
     assert channel.messages[0]["tts"] is False
     assert state[_state_key("Alpha#NA1")] == "EUW1_2"
     assert state[_state_key("Bravo#NA1")] == "EUW1_2"
@@ -966,7 +968,8 @@ def test_process_recap_cycle_sends_coloured_compact_card():
     text = channel.messages[0]["content"]
     assert text.startswith("-# Ranked Solo/Duo · **Win** · 30:00\n\n")  # game length, no date or clock
     # No portrait cache in this run: the default portrait mode falls back to the name.
-    assert "✅ **Alpha** · **Ahri** Mid\n**5/2/6** KDA" in text
+    # Shared win: the green edge and header carry the result, so the player line has no mark.
+    assert "\n\n**Alpha** · **Ahri** Mid\n**5/2/6** KDA" in text
 
 
 def test_card_pending_lp_targets_the_player_component():

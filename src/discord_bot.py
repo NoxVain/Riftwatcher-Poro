@@ -94,6 +94,7 @@ db_load_match_payloads_for_baseline = dbm.db_load_match_payloads_for_baseline
 db_load_ranked_state = dbm.db_load_ranked_state
 db_load_tracked_players = dbm.db_load_tracked_players
 db_delete_ranked_state_queue = dbm.db_delete_ranked_state_queue
+db_insert_lp_change = dbm.db_insert_lp_change
 db_set_last_report_message = dbm.db_set_last_report_message
 db_set_last_weekly_report_message = dbm.db_set_last_weekly_report_message
 db_set_last_seen_match_id = dbm.db_set_last_seen_match_id
@@ -414,6 +415,7 @@ async def evaluate_rank_changes_and_notify():
         match_recap_channel_id=MATCH_RECAP_CHANNEL_ID,
         db_get_state=db_get_state,
         db_set_state=db_set_state,
+        db_insert_lp_change=db_insert_lp_change,
     )
 
 

@@ -99,6 +99,61 @@ def build_lp_event(previous_entry, current_entry, observed_at):
     }
 
 
+def build_lp_history_row(riot_id, queue_type, previous_entry, current_entry):
+    """Row for lp_history when a queue's rank, LP or win/loss counts changed, else None.
+
+    Unlike build_lp_event this keeps changes that aren't one clean game (dodge/decay
+    LP with no game, several games between polls, season resets) so they can be
+    analysed or filtered later: `won` is only set for exactly one game.
+    previous_entry uses the player_ranked_state row shape; current_entry is a raw
+    League-V4 entry.
+    """
+    if not previous_entry or not current_entry:
+        return None
+
+    def as_int(value):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    wins, losses = as_int(current_entry.get("wins")), as_int(current_entry.get("losses"))
+    previous_wins, previous_losses = as_int(previous_entry.get("wins")), as_int(previous_entry.get("losses"))
+    if None in (wins, losses, previous_wins, previous_losses):
+        return None
+    wins_delta, losses_delta = wins - previous_wins, losses - previous_losses
+    tier = str(current_entry.get("tier") or "").upper() or None
+    division = str(current_entry.get("rank") or "").upper() or None
+    previous_tier = str(previous_entry.get("tier") or "").upper() or None
+    previous_division = str(previous_entry.get("rank_division") or "").upper() or None
+    old_points = rank_points(previous_tier, previous_division, previous_entry.get("league_points"))
+    new_points = rank_points(tier, division, current_entry.get("leaguePoints"))
+    lp_delta = new_points - old_points if old_points is not None and new_points is not None else None
+    unchanged = (
+        wins_delta == 0 and losses_delta == 0 and lp_delta == 0
+        and (tier, division) == (previous_tier, previous_division)
+    )
+    if unchanged:
+        return None
+    won = {(1, 0): True, (0, 1): False}.get((wins_delta, losses_delta))
+    return {
+        "riot_id": riot_id,
+        "queue_type": queue_type,
+        "won": won,
+        "wins_delta": wins_delta,
+        "losses_delta": losses_delta,
+        "lp_delta": lp_delta,
+        "previous_tier": previous_tier,
+        "previous_rank_division": previous_division,
+        "previous_league_points": as_int(previous_entry.get("league_points")),
+        "tier": tier,
+        "rank_division": division,
+        "league_points": as_int(current_entry.get("leaguePoints")),
+        "wins": wins,
+        "losses": losses,
+    }
+
+
 def format_lp_summary(event):
     """Recap LP text; the resulting LP and change are bold and kept on one line."""
     rank = format_rank({"tier": event["tier"], "rank": event["rank"]})

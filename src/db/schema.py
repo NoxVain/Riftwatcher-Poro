@@ -116,3 +116,34 @@ def init_db():
         ON player_ranked_state (lower(riot_id), queue_type);
         """
     )
+    # One row per rank/LP change the rank worker observes, for later analysis
+    # (Riot exposes no LP history). game_count = wins_delta + losses_delta; `won` is
+    # set only when exactly one game happened (otherwise NULL: dodge/decay, several games).
+    db_execute(
+        """
+        CREATE TABLE IF NOT EXISTS lp_history (
+            id BIGSERIAL PRIMARY KEY,
+            riot_id TEXT NOT NULL,
+            queue_type TEXT NOT NULL,
+            observed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            won BOOLEAN NULL,
+            wins_delta INTEGER NOT NULL,
+            losses_delta INTEGER NOT NULL,
+            lp_delta INTEGER NULL,
+            previous_tier TEXT NULL,
+            previous_rank_division TEXT NULL,
+            previous_league_points INTEGER NULL,
+            tier TEXT NULL,
+            rank_division TEXT NULL,
+            league_points INTEGER NULL,
+            wins INTEGER NULL,
+            losses INTEGER NULL
+        );
+        """
+    )
+    db_execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_lp_history_riot_queue_time
+        ON lp_history (lower(riot_id), queue_type, observed_at);
+        """
+    )

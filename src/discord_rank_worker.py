@@ -4,7 +4,7 @@ import time
 import requests
 
 from src.rank_logic import format_rank_change_message, normalize_queue_type
-from src.recap_lp import build_lp_event, handle_lp_event, retry_stored_lp_events
+from src.recap_lp import build_lp_event, build_lp_history_row, handle_lp_event, retry_stored_lp_events
 
 
 async def process_rank_cycle(
@@ -19,6 +19,7 @@ async def process_rank_cycle(
     recap_channel=None,
     db_get_state=None,
     db_set_state=None,
+    db_insert_lp_change=None,
 ):
     lp_enabled = db_get_state is not None and db_set_state is not None
     for riot_id in friends:
@@ -66,6 +67,8 @@ async def process_rank_cycle(
                     riot_id, previous_by_queue, current_by_queue,
                     recap_channel=recap_channel, db_get_state=db_get_state, db_set_state=db_set_state, log=log,
                 )
+            if db_insert_lp_change is not None:
+                await _record_lp_history(riot_id, previous_by_queue, current_by_queue, db_insert_lp_change, log)
 
             for queue_type, entry in current_by_queue.items():
                 await asyncio.to_thread(db_upsert_ranked_state, riot_id, queue_type, entry)
@@ -108,3 +111,15 @@ async def _record_lp_events(riot_id, previous_by_queue, current_by_queue, *, rec
         except Exception as exc:
             # LP is cosmetic; never let it block rank-state persistence.
             log(f"[rank] Could not record LP change for {riot_id} ({queue_type}): {exc}")
+
+
+async def _record_lp_history(riot_id, previous_by_queue, current_by_queue, db_insert_lp_change, log):
+    for queue_type, current_entry in current_by_queue.items():
+        row = build_lp_history_row(riot_id, queue_type, previous_by_queue.get(queue_type), current_entry)
+        if row is None:
+            continue
+        try:
+            await asyncio.to_thread(db_insert_lp_change, row)
+        except Exception as exc:
+            # History is for analysis only; never let it block rank alerts or state.
+            log(f"[rank] Could not store LP history for {riot_id} ({queue_type}): {exc}")

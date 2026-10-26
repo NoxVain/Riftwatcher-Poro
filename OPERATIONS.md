@@ -169,6 +169,19 @@ Actions:
 
 Known incident (2026-10-26): the role-baseline rebuild's server-side cursor stalled mid-FETCH and, behind a rebuild lock, froze every scoreboard build and the recap worker's post-recap sync. Fixed in #17: paged reads, baselines never block callers (120 s rebuild limit), DB connect/pool timeouts.
 
+## LP History Analysis
+
+`lp_history` stores every rank/LP change the rank worker sees (one row per change; history starts with the deploy that added it). Single games have `won` set; rows with `won IS NULL` are dodges/decay (`wins_delta = losses_delta = 0`), several games between polls, or season resets. Example: average LP per win and loss by month for one player (run read-only):
+
+```sql
+SELECT date_trunc('month', observed_at) AS month, queue_type,
+       count(*) FILTER (WHERE won) AS wins, round(avg(lp_delta) FILTER (WHERE won), 1) AS avg_lp_win,
+       count(*) FILTER (WHERE won = false) AS losses, round(avg(lp_delta) FILTER (WHERE won = false), 1) AS avg_lp_loss
+FROM lp_history
+WHERE lower(riot_id) = lower('NoxVain#EUW')
+GROUP BY 1, 2 ORDER BY 1, 2;
+```
+
 ## Memory & Hosting Cost
 
 On Railway, memory is almost the whole bill (Sep-Oct 2026: memory ~97% of project cost; CPU and egress are cents). Since the fixes below (2026-10-26) the bot runs at ~75-140 MB (previously 1.2-4.8 GB); Postgres (~600-735 MB) is now the larger share.

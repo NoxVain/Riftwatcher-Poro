@@ -55,6 +55,7 @@ async def evaluate_rank_changes_and_notify(
     match_recap_channel_id=None,
     db_get_state=None,
     db_set_state=None,
+    db_insert_lp_change=None,
 ):
     channel = await resolve_channel(events_channel_id)
     if channel is None:
@@ -72,6 +73,7 @@ async def evaluate_rank_changes_and_notify(
         recap_channel=recap_channel,
         db_get_state=db_get_state,
         db_set_state=db_set_state,
+        db_insert_lp_change=db_insert_lp_change,
     )
 
 

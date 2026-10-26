@@ -5,6 +5,7 @@ from src.recap_lp import (
     LP_MATCH_WINDOW_SECONDS,
     add_lp_to_content,
     build_lp_event,
+    build_lp_history_row,
     event_matches_game,
     format_lp_summary,
     handle_lp_event,
@@ -276,3 +277,30 @@ def test_edit_failure_is_logged_not_raised():
     )
     assert handled is False
     assert any("Could not add LP" in line for line in logs)
+
+
+def test_lp_history_row_for_one_game_across_a_division():
+    row = build_lp_history_row("Nox#EUW", "RANKED_SOLO_5X5", _prev("GOLD", "I", 90, 10, 8), _cur("PLATINUM", "IV", 8, 11, 8))
+    assert row == {
+        "riot_id": "Nox#EUW", "queue_type": "RANKED_SOLO_5X5", "won": True,
+        "wins_delta": 1, "losses_delta": 0, "lp_delta": 18,
+        "previous_tier": "GOLD", "previous_rank_division": "I", "previous_league_points": 90,
+        "tier": "PLATINUM", "rank_division": "IV", "league_points": 8, "wins": 11, "losses": 8,
+    }
+
+
+def test_lp_history_keeps_changes_that_are_not_one_game():
+    prev = _prev("GOLD", "II", 50, 10, 10)
+    dodge = build_lp_history_row("Nox#EUW", "RANKED_SOLO_5X5", prev, _cur("GOLD", "II", 45, 10, 10))
+    assert (dodge["won"], dodge["wins_delta"], dodge["losses_delta"], dodge["lp_delta"]) == (None, 0, 0, -5)
+    two_games = build_lp_history_row("Nox#EUW", "RANKED_SOLO_5X5", prev, _cur("GOLD", "II", 90, 12, 10))
+    assert (two_games["won"], two_games["wins_delta"], two_games["lp_delta"]) == (None, 2, 40)
+    reset = build_lp_history_row("Nox#EUW", "RANKED_SOLO_5X5", prev, _cur("SILVER", "I", 0, 0, 0))
+    assert (reset["wins_delta"], reset["losses_delta"]) == (-10, -10)
+
+
+def test_lp_history_skips_unchanged_or_unknown():
+    prev = _prev("GOLD", "II", 50, 10, 10)
+    assert build_lp_history_row("Nox#EUW", "RANKED_SOLO_5X5", prev, _cur("GOLD", "II", 50, 10, 10)) is None
+    assert build_lp_history_row("Nox#EUW", "RANKED_SOLO_5X5", None, _cur("GOLD", "II", 70, 11, 10)) is None
+    assert build_lp_history_row("Nox#EUW", "RANKED_SOLO_5X5", prev, {"tier": "GOLD", "rank": "II", "leaguePoints": 70}) is None

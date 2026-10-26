@@ -7,7 +7,12 @@ from src.db.cache import (
 )
 from src.db.players import db_get_puuid, db_load_tracked_players, db_remove_player, db_upsert_player
 from src.db.pool import DB_ENABLED
-from src.db.ranked_state import db_delete_ranked_state_queue, db_load_ranked_state, db_upsert_ranked_state
+from src.db.ranked_state import (
+    db_delete_ranked_state_queue,
+    db_insert_lp_change,
+    db_load_ranked_state,
+    db_upsert_ranked_state,
+)
 from src.db.schema import init_db
 from src.db.state import (
     db_get_last_report_message,

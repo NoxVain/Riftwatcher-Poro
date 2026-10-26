@@ -74,3 +74,19 @@ def db_delete_ranked_state_queue(riot_id, queue_type):
         "DELETE FROM player_ranked_state WHERE lower(riot_id) = lower(%s) AND queue_type = %s;",
         (riot_id, queue_type),
     )
+
+
+_LP_HISTORY_COLS = (
+    "riot_id", "queue_type", "won", "wins_delta", "losses_delta", "lp_delta",
+    "previous_tier", "previous_rank_division", "previous_league_points",
+    "tier", "rank_division", "league_points", "wins", "losses",
+)
+
+
+def db_insert_lp_change(change):
+    """Append one observed rank/LP change (a dict with the _LP_HISTORY_COLS keys)."""
+    db_execute(
+        f"INSERT INTO lp_history ({', '.join(_LP_HISTORY_COLS)}) "
+        f"VALUES ({', '.join(['%s'] * len(_LP_HISTORY_COLS))});",
+        tuple(change.get(col) for col in _LP_HISTORY_COLS),
+    )

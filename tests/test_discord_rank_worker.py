@@ -272,3 +272,56 @@ def test_process_rank_cycle_lp_failure_does_not_block_rank_state():
 
     assert upserts == [("Alpha#EUW", "RANKED_SOLO_5X5")]
     assert any("Could not record LP change" in line for line in logs)
+
+
+def test_process_rank_cycle_stores_lp_history_rows():
+    riot = FakeRiotClient()
+    riot.by_player["Alpha#EUW"] = [
+        {"queueType": "RANKED_SOLO_5x5", "tier": "GOLD", "rank": "II", "leaguePoints": 22, "wins": 10, "losses": 10},
+    ]
+    stored = []
+
+    asyncio.run(
+        process_rank_cycle(
+            friends=["Alpha#EUW"],
+            channel=FakeChannel(),
+            riot_client=riot,
+            db_load_ranked_state=lambda _riot_id: [_ranked_row(40, 10, 9)],
+            db_upsert_ranked_state=lambda *_args: None,
+            db_delete_ranked_state_queue=lambda *_args: None,
+            log=lambda _msg: None,
+            db_insert_lp_change=stored.append,
+        )
+    )
+
+    [row] = stored
+    assert (row["riot_id"], row["queue_type"], row["won"], row["lp_delta"]) == ("Alpha#EUW", "RANKED_SOLO_5X5", False, -18)
+    assert (row["tier"], row["rank_division"], row["league_points"]) == ("GOLD", "II", 22)
+
+
+def test_lp_history_failure_does_not_block_rank_state():
+    riot = FakeRiotClient()
+    riot.by_player["Alpha#EUW"] = [
+        {"queueType": "RANKED_SOLO_5x5", "tier": "GOLD", "rank": "II", "leaguePoints": 60, "wins": 11, "losses": 9},
+    ]
+    upserts = []
+    logs = []
+
+    def failing_insert(_row):
+        raise RuntimeError("db down")
+
+    asyncio.run(
+        process_rank_cycle(
+            friends=["Alpha#EUW"],
+            channel=FakeChannel(),
+            riot_client=riot,
+            db_load_ranked_state=lambda _riot_id: [_ranked_row(40, 10, 9)],
+            db_upsert_ranked_state=lambda riot_id, queue_type, _entry: upserts.append((riot_id, queue_type)),
+            db_delete_ranked_state_queue=lambda *_args: None,
+            log=logs.append,
+            db_insert_lp_change=failing_insert,
+        )
+    )
+
+    assert upserts == [("Alpha#EUW", "RANKED_SOLO_5X5")]
+    assert any("Could not store LP history" in line for line in logs)

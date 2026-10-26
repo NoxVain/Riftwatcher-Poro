@@ -95,6 +95,7 @@ All workers run continuously while connected, each with startup jitter and cycle
   - compares current ranked entries with `player_ranked_state`
   - sends rank up/down messages to `EVENTS_CHANNEL_ID`
   - first observation is baseline only (no alert); queues that disappear from Riot's response are removed from the baseline
+  - every observed change in a queue's rank, LP or win/loss counts is appended to `lp_history` (`build_lp_history_row`); a failed insert is logged and never blocks alerts or rank-state persistence
   - LP for recaps (`src/recap_lp.py`): when a Solo/Duo or Flex queue's counters moved by exactly one game with a consistent LP change (wins gain LP; losses lose LP or stay at 0), it builds an LP event (100 LP per division, shared Master+ ladder). It edits the matching pending recap in `MATCH_RECAP_CHANNEL_ID` (same queue and result, game ended up to 30 minutes before the poll, newest first) or stores the event for the recap worker. If the recap channel can't be resolved, the pending recap is kept and the event stored; each poll retries pairing stored events with pending recaps. No extra Riot requests; LP failures are logged and never block rank-state persistence
 - Recap worker
   - interval: `max(30, MATCH_RECAP_POLL_SECONDS)`
@@ -221,6 +222,8 @@ Badges (`report_builder.py`) are separate from the score: per-minute rates shrun
     - patch-notes state: `patch_notes_seen` (JSON list of posted article ids/URLs), `patch_notes_last_checked_at` (unix seconds)
 - `player_ranked_state`
   - last known rank state per `(riot_id, queue_type)`
+- `lp_history`
+  - append-only log of every rank/LP change the rank worker observes (Riot keeps no LP history): player, queue, `observed_at`, `won` (only when exactly one game happened; NULL for dodge/decay, several games or resets), `wins_delta`/`losses_delta`, `lp_delta` (100 LP per division, shared Master+ ladder), and the rank before and after
 
 Schema creation and additive migrations (`ADD COLUMN IF NOT EXISTS`) run on every startup in `src/db/schema.py`.
 

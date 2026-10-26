@@ -229,7 +229,7 @@ Badges (`report_builder.py`) are separate from the score: per-minute rates shrun
   - per cycle/day wins/losses and aggregate performance stats, keyed by `(day_date, riot_id)`
   - includes expanded fields: assists, gold, wards, objective takedowns, multi-kills, KP numerator/denominator, and `primary_role`
 - `match_info_cache`
-  - cached Riot match payloads (cleaned up after `MATCH_CACHE_RETENTION_DAYS`)
+  - cached Riot match payloads, cleaned up `MATCH_CACHE_RETENTION_DAYS` after they were cached (`0` = never; production keeps everything because the cache holds history Riot no longer serves, see OPERATIONS.md)
 - `bot_state`
   - key/value operational state:
     - scoreboard message ids (`last_report_*`, `last_weekly_report_*`, previous-day message + cycle keys)

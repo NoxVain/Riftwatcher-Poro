@@ -194,6 +194,16 @@ Riot encrypts PUUIDs per API key project. A new key project (as in Feb 2026) giv
 
 The first run on 2026-10-26 data: 12,415 cached matches, one old PUUID for each of the 18 tracked players, no ambiguities. Rewriting about 12k payloads creates dead tuples in Postgres that autovacuum reclaims.
 
+## Match Cache Retention
+
+Production runs with `MATCH_CACHE_RETENTION_DAYS=0` (set 2026-10-27), so cached matches are never deleted. The cache is the bot's only complete match history:
+
+- Riot's match list for a player covers only recent games (for Freshwhite#EUW, about 950 games back to Feb 2026). Older games can still be fetched by match ID, but nothing lists them any more.
+- Riot deletes match data after about two years (a June 2024 game returns 404). The cache still has games back to March 2024.
+- Retention counts from when a match was cached (`updated_at`), not when it was played. With the 730-day default, the first deletions would have started on 2028-02-17, removing the 2024 games for good.
+
+Cost: the `match_info_cache` table is ~705 MB on disk and grows with every cached game. Disk is cheap on Railway, and memory barely changes: baselines read only the newest `BASELINE_MATCH_LIMIT` (5000) payloads, and Postgres keeps mostly recent data in memory. The refresh worker still logs `Match cache cleanup complete: deleted=0, retention_days=0` every hour. To turn deletion back on, set a positive number of days; the code default is still 730 for self-hosters.
+
 ## Memory & Hosting Cost
 
 On Railway, memory is almost the whole bill (Sep-Oct 2026: memory ~97% of project cost; CPU and egress are cents). Since the fixes below (2026-10-26) the bot runs at ~75-140 MB (previously 1.2-4.8 GB); Postgres (~600-735 MB) is now the larger share.

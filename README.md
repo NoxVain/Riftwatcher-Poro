@@ -242,7 +242,7 @@ Optional (with defaults):
 - `MAX_TODAY_MATCH_DETAILS` (`100`)
 - `MAX_MATCH_IDS_SCAN` (`2000`, set `0` for no cap)
 - `MAX_IN_MEMORY_MATCH_CACHE` (`200`)
-- `MATCH_CACHE_RETENTION_DAYS` (`730`, set `0` to disable cleanup)
+- `MATCH_CACHE_RETENTION_DAYS` (`730`, set `0` to disable cleanup; age counts from when a match was cached, not played. Riot deletes matches after about two years and only lists a player's recent games, so cleaned-up games may be gone for good. Production uses `0`; see OPERATIONS.md)
 - `DB_POOL_SIZE` (`5`)
 - `LOG_RIOT_REQUESTS` (`false`)
 - `LOG_JSON` (`false`)

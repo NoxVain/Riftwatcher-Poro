@@ -63,6 +63,7 @@ Start with:
 - `src/puuid_remap.py` - one-off background rewrite of old (pre key-change) PUUIDs in cached matches
 - `src/match_stats.py` - per-player match stats extracted from cached matches into `player_match_stats` (background sync)
 - `src/player_analysis.py` - `!analyze` rules: guarded strengths and tips from a year of ranked games, and the compact card
+- `src/records.py` - Hall of Fame: group records and personal bests from ranked games (`!records`), and "New group record" lines in recaps
 - `tests/` - unit tests
 
 ## Features
@@ -192,6 +193,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 - `!remove Name#Tag`
 - `!profile Name#Tag`
 - `!analyze Name#Tag [solo|flex]` (alias `!analyse`; the name alone works when it's unique)
+- `!records [Name#Tag]` (group Hall of Fame, or one player's personal bests; ranked games only)
 - `!DebugPlayer Name#Tag`
 - `!health`
 - `!backfill YYYY-MM-DD YYYY-MM-DD`

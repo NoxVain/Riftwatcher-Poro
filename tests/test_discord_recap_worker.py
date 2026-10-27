@@ -1100,3 +1100,86 @@ def test_concurrent_lp_edits_on_one_card_both_survive():
     assert "40LP → **22LP\u00a0(-18)**" in text
     assert "50LP → **30LP\u00a0(-20)**" in text
 
+
+
+def _record_cycle(*, iter_rows, kills=12, upserted=None, logs=None):
+    channel = FakeChannel()
+    riot = FakeRiotClient()
+    now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+    riot.puuid_by_riot_id = {"Alpha#NA1": "puuid-a"}
+    riot.recent_ids_by_puuid = {"puuid-a": ["EUW1_2", "EUW1_1"]}
+    participant = dict(
+        _participant("puuid-a", win=True), kills=kills, teamId=100, challenges={"teamDamagePercentage": 0.2}
+    )
+    riot.match_info_by_id = {
+        "EUW1_2": {
+            "metadata": {"matchId": "EUW1_2"},
+            "info": {"queueId": 420, "gameDuration": 1800, "gameEndTimestamp": now_ms, "participants": [participant]},
+        }
+    }
+    riot.mode_records_by_riot_id = {"Alpha#NA1": ({}, {})}
+    state = {_state_key("Alpha#NA1"): "EUW1_1"}
+
+    async def edit_last_report_message(**kwargs):
+        pass
+
+    asyncio.run(
+        process_recap_cycle(
+            friends=["Alpha#NA1"],
+            riot_client=riot,
+            poro_service=FakePoroService(),
+            match_recap_channel_id=123,
+            channel=channel,
+            db_enabled=True,
+            db_get_state=state.get,
+            db_set_state=state.__setitem__,
+            db_upsert_daily_stats=lambda *args, **kwargs: None,
+            edit_last_report_message=edit_last_report_message,
+            db_iter_record_rows=iter_rows,
+            db_upsert_player_match_stats=(upserted.extend if upserted is not None else None),
+            log=(logs.append if logs is not None else (lambda _msg: None)),
+        )
+    )
+    return channel
+
+
+def _stored_history(queue_ids, *, before=None, exclude_match_ids=()):
+    assert tuple(queue_ids) == (420, 440, 710)
+    assert "EUW1_2" in exclude_match_ids and before is not None
+    start = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    return iter([
+        {"match_id": f"EUW1_OLD{i}", "riot_id": "Bravo#NA1", "queue_id": 420, "game_end_at": start.replace(day=1 + i % 28),
+         "duration_seconds": 1800, "champion_name": "Zed", "win": True, "remake": False, "kills": 10, "deaths": 5,
+         "assists": 50, "damage_to_champions": 90000, "damage_share": 0.45, "damage_taken": 90000, "gold_earned": 30000,
+         "cs": 400, "vision_score": 150, "solo_kills": 9, "penta_kills": 0}
+        for i in range(250)
+    ])
+
+
+def test_recap_shows_one_line_per_new_group_record_and_stores_the_game():
+    upserted = []
+    logs = []
+    channel = _record_cycle(iter_rows=_stored_history, kills=12, upserted=upserted, logs=logs)
+    content = channel.messages[0]["content"]
+    assert "\n🏆 **New group record:** 12 kills (was 10, Bravo on Zed, Jan 2025)" in content
+    # Deaths (2 vs 5) and the other categories didn't beat the stored records.
+    assert content.count("New group record") == 1
+    assert [row["match_id"] for row in upserted] == ["EUW1_2"]
+    assert any("[records] Checked 1 ranked match(es) against 250 stored games: new_records=1 (kills Alpha#NA1 12" in line for line in logs)
+
+
+def test_recap_without_a_record_has_no_record_line():
+    channel = _record_cycle(iter_rows=_stored_history, kills=10)
+    assert "New group record" not in channel.messages[0]["content"]
+
+
+def test_recap_still_posts_when_the_record_check_fails():
+    logs = []
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("db down")
+
+    channel = _record_cycle(iter_rows=broken, logs=logs)
+    assert "**Alpha** · **Ahri** Mid" in channel.messages[0]["content"]
+    assert "New group record" not in channel.messages[0]["content"]
+    assert any("[records] Record check skipped; recap posts without it: RuntimeError: db down" in line for line in logs)

@@ -100,6 +100,7 @@ db_iter_cached_matches = dbm.db_iter_cached_matches
 db_upsert_player_match_stats = dbm.db_upsert_player_match_stats
 db_load_player_analysis_rows = dbm.db_load_player_analysis_rows
 db_load_role_group_totals = dbm.db_load_role_group_totals
+db_iter_record_rows = dbm.db_iter_record_rows
 db_delete_player_match_stats_except = dbm.db_delete_player_match_stats_except
 db_delete_ranked_state_queue = dbm.db_delete_ranked_state_queue
 db_insert_lp_change = dbm.db_insert_lp_change
@@ -464,6 +465,8 @@ async def background_match_recap_notifier():
         resolve_channel=resolve_channel,
         worker_stats=WORKER_STATS,
         log=log,
+        db_iter_record_rows=db_iter_record_rows,
+        db_upsert_player_match_stats=db_upsert_player_match_stats,
     )
 
 
@@ -740,6 +743,7 @@ async def on_message(message):
         db_load_tracked_puuids=db_load_tracked_puuids,
         db_load_player_analysis_rows=db_load_player_analysis_rows,
         db_load_role_group_totals=db_load_role_group_totals,
+        db_iter_record_rows=db_iter_record_rows,
     )
 
 

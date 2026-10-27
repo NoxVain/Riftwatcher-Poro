@@ -19,7 +19,7 @@ from src.report_logic import get_match_duration_seconds, get_match_end_unix_seco
 from src.runtime.memory import release_freed_memory
 
 # Bump when extraction changes, so the next pass rebuilds every row.
-STATS_VERSION = 1
+STATS_VERSION = 2
 STATS_FINGERPRINT_KEY = "player_match_stats_fingerprint"
 STATS_WATERMARK_KEY = "player_match_stats_cached_through"
 STATS_SYNC_INTERVAL_SECONDS = 600
@@ -66,6 +66,7 @@ STATS_COLUMNS = (
     "opponent_cs_diff",
     "arena_placement",
     "tracked_teammates",
+    "penta_kills",
 )
 
 
@@ -176,6 +177,7 @@ def extract_player_match_rows(payload, tracked_puuids):
                 for p in participants
                 if p is not me and p.get("teamId") == team and p.get("puuid") in tracked_puuids
             ),
+            "penta_kills": _int(me.get("pentaKills")),
         })
     return rows
 

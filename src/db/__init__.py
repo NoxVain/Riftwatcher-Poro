@@ -9,6 +9,7 @@ from src.db.cache import (
 )
 from src.db.match_stats import (
     db_delete_player_match_stats_except,
+    db_iter_record_rows,
     db_load_player_analysis_rows,
     db_load_role_group_totals,
     db_upsert_player_match_stats,

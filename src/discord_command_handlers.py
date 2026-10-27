@@ -1,4 +1,5 @@
 from src.commands.analysis_handlers import handle_analysis_commands
+from src.commands.records_handlers import handle_records_commands
 from src.commands.context import CommandHandlerContext
 from src.commands.ops_handlers import handle_ops_commands
 from src.commands.permissions import enforce_admin_permission
@@ -40,6 +41,7 @@ async def handle_incoming_message(
     db_load_tracked_puuids=None,
     db_load_player_analysis_rows=None,
     db_load_role_group_totals=None,
+    db_iter_record_rows=None,
 ):
     content = message.content.strip()
     content_lower = content.casefold()
@@ -82,6 +84,7 @@ async def handle_incoming_message(
         db_load_tracked_puuids=db_load_tracked_puuids,
         db_load_player_analysis_rows=db_load_player_analysis_rows,
         db_load_role_group_totals=db_load_role_group_totals,
+        db_iter_record_rows=db_iter_record_rows,
     )
 
     if await enforce_command_channel(ctx):
@@ -96,6 +99,8 @@ async def handle_incoming_message(
         if await handle_ops_commands(ctx):
             return
         if await handle_analysis_commands(ctx):
+            return
+        if await handle_records_commands(ctx):
             return
         if await handle_player_commands(ctx):
             return

@@ -70,3 +70,59 @@ def db_load_role_group_totals(queue_id, since):
         role: {"games": int(games), "kills": int(kills), "deaths": int(deaths), "assists": int(assists), "minutes": float(minutes)}
         for role, games, kills, deaths, assists, minutes in rows
     }
+
+
+RECORD_ROW_COLUMNS = (
+    "match_id",
+    "queue_id",
+    "game_end_at",
+    "duration_seconds",
+    "champion_name",
+    "win",
+    "remake",
+    "kills",
+    "deaths",
+    "assists",
+    "damage_to_champions",
+    "damage_share",
+    "damage_taken",
+    "gold_earned",
+    "cs",
+    "vision_score",
+    "solo_kills",
+    "penta_kills",
+)
+RECORD_PAGE_ROWS = 1000
+
+
+def db_iter_record_rows(queue_ids, *, before=None, exclude_match_ids=(), batch_size=RECORD_PAGE_ROWS):
+    """Yield tracked players' non-remake games in `queue_ids` as dicts with `riot_id`, oldest first.
+
+    Paged by (game_end_at, match_id, puuid), so only one page is in memory; `before`
+    keeps only games that ended earlier. Consume it in a worker thread.
+    """
+    columns = ", ".join(f"s.{col}" for col in RECORD_ROW_COLUMNS)
+    cursor = None
+    page_size = max(1, int(batch_size))
+    while True:
+        params = [list(queue_ids), list(exclude_match_ids)]
+        where = "s.queue_id = ANY(%s) AND NOT s.remake AND NOT (s.match_id = ANY(%s))"
+        if before is not None:
+            where += " AND s.game_end_at < %s"
+            params.append(before)
+        if cursor is not None:
+            where += " AND (s.game_end_at, s.match_id, s.puuid) > (%s, %s, %s)"
+            params.extend(cursor)
+        rows = db_execute(
+            f"SELECT {columns}, s.puuid, t.riot_id FROM player_match_stats s "
+            "JOIN tracked_players t ON t.puuid = s.puuid "
+            f"WHERE {where} ORDER BY s.game_end_at, s.match_id, s.puuid LIMIT %s;",
+            (*params, page_size),
+            fetch=True,
+        ) or []
+        for row in rows:
+            yield dict(zip((*RECORD_ROW_COLUMNS, "puuid", "riot_id"), row))
+        if len(rows) < page_size:
+            return
+        last = rows[-1]
+        cursor = (last[RECORD_ROW_COLUMNS.index("game_end_at")], last[0], last[len(RECORD_ROW_COLUMNS)])

@@ -198,3 +198,4 @@ def init_db():
         ON player_match_stats (puuid, game_end_at);
         """
     )
+    db_execute("ALTER TABLE player_match_stats ADD COLUMN IF NOT EXISTS penta_kills INTEGER NULL;")

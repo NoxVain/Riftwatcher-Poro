@@ -1,6 +1,7 @@
 import asyncio
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 import discord
 import requests
@@ -24,6 +25,7 @@ from src.discord_text import (
     streak_callout_state_key,
     streak_tts_enabled_state_key,
 )
+from src.match_stats import extract_player_match_rows
 from src.recap_cards import (
     RESULT_ACCENTS,
     CardMatch,
@@ -41,6 +43,7 @@ from src.recap_lp import (
     register_pending_recap,
     take_lp_event_for_game,
 )
+from src.records import RECORD_QUEUE_IDS, detect_record_breaks, format_record_break, load_record_book
 from src.report_logic import derive_primary_role, get_match_duration_seconds, get_match_end_unix_seconds, get_mode_bucket, is_remake_match
 
 
@@ -77,6 +80,51 @@ async def _attach_stored_lp(
         }
     )
     return player_line
+
+
+# Group records are optional enrichment: past this, the recap goes out without them.
+RECORD_CHECK_TIMEOUT_SECONDS = 10
+
+
+async def _find_record_breaks(record_matches, *, db_iter_record_rows, db_upsert_player_match_stats, log):
+    """New group records set by this batch's ranked games: {(match_id, riot_id): [RecordBreak]}.
+
+    Compares against every stored ranked game that ended before the batch, then stores
+    the batch's rows, so the next recap compares against these games too (the stats
+    sync would only add them on its next pass). Never raises.
+    """
+    if not record_matches:
+        return {}
+    record_matches = sorted(record_matches, key=lambda entry: entry[0])
+    before = datetime.fromtimestamp(record_matches[0][0], tz=timezone.utc)
+    match_ids = [match_id for _end_ts, match_id, _rows in record_matches]
+
+    def check():
+        book = load_record_book(db_iter_record_rows, before=before, exclude_match_ids=match_ids)
+        stored_games = book.games
+        breaks = detect_record_breaks(book, [(match_id, rows) for _end_ts, match_id, rows in record_matches])
+        return stored_games, breaks
+
+    breaks = {}
+    try:
+        stored_games, breaks = await asyncio.wait_for(asyncio.to_thread(check), timeout=RECORD_CHECK_TIMEOUT_SECONDS)
+        found = [record for records in breaks.values() for record in records]
+        details = ", ".join(
+            f"{record.category.key} {record.riot_id} {record.value:g} (was {record.previous.value:g})" for record in found
+        )
+        log(
+            f"[records] Checked {len(record_matches)} ranked match(es) against {stored_games} stored games: "
+            f"new_records={len(found)}{f' ({details})' if details else ''}."
+        )
+    except Exception as exc:
+        log(f"[records] Record check skipped; recap posts without it: {type(exc).__name__}: {exc}")
+    rows = [row for _end_ts, _match_id, match_rows in record_matches for row in match_rows]
+    if rows and db_upsert_player_match_stats is not None:
+        try:
+            await asyncio.to_thread(db_upsert_player_match_stats, rows)
+        except Exception as exc:
+            log(f"[records] Could not store recap games in player_match_stats; the stats sync adds them later: {exc}")
+    return breaks
 
 
 @dataclass
@@ -271,6 +319,8 @@ async def process_recap_cycle(
     edit_last_report_message,
     edit_last_weekly_report_message=None,
     champion_icons=None,
+    db_iter_record_rows=None,
+    db_upsert_player_match_stats=None,
     log,
 ):
     recap_split_spacing_seconds = 3.0
@@ -322,6 +372,8 @@ async def process_recap_cycle(
 
     puuid_to_riot_id = {puuid: riot_id for riot_id, puuid in puuid_by_riot_id.items()}
     match_entries = []
+    # (end_ts, match_id, stats rows with riot_id) for ranked games: checked for group records.
+    record_matches = []
     failed_match_ids = set()
     skipped_no_tracked_participants = 0
     skipped_remakes = 0
@@ -350,6 +402,12 @@ async def process_recap_cycle(
             continue
         duration_seconds = get_match_duration_seconds(match_info)
         match_entries.append((end_ts, match_id, queue_id, duration_seconds, tracked_participants))
+        if queue_id in RECORD_QUEUE_IDS and db_enabled and db_iter_record_rows is not None:
+            stats_rows = extract_player_match_rows(match_info, set(puuid_to_riot_id))
+            for row in stats_rows:
+                row["riot_id"] = puuid_to_riot_id[row["puuid"]]
+            if stats_rows:
+                record_matches.append((end_ts, match_id, stats_rows))
 
     log(
         "[recap] Match scan summary: "
@@ -359,6 +417,12 @@ async def process_recap_cycle(
     )
 
     match_entries.sort(key=lambda row: row[0])
+    record_breaks = await _find_record_breaks(
+        record_matches,
+        db_iter_record_rows=db_iter_record_rows,
+        db_upsert_player_match_stats=db_upsert_player_match_stats,
+        log=log,
+    )
     champion_display_mode = DEFAULT_CHAMPION_DISPLAY_MODE
     if champion_icons is not None:
         try:
@@ -415,6 +479,9 @@ async def process_recap_cycle(
                     lp_waiting=lp_waiting,
                     log=log,
                 )
+            # One line per record, after the stats; LP edits only touch the heading line.
+            for record_break in record_breaks.get((match_id, riot_id), []):
+                player_line += f"\n{format_record_break(record_break)}"
             # _attach_stored_lp queued this player if LP will be edited in later.
             pending = lp_waiting[-1]["pending"] if len(lp_waiting) > waiting_before else None
             card_players.append(CardPlayer(riot_id, player_line, pending))

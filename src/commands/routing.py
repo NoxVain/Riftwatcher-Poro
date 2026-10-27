@@ -9,6 +9,7 @@ from src.constants import (
     HELP_COMMAND,
     DAILY_COMMAND,
     PROFILE_COMMAND,
+    RECORDS_COMMAND,
     REMOVE_COMMAND,
     RIOT_TEST_COMMAND,
     SCORE_COMMAND,
@@ -36,6 +37,7 @@ def format_help_text(*, report_day_start_hour, daily_channel_id, weekly_channel_
         f"- `{SCORE_COMMAND}`: Show how each player's Gamer Score is calculated today (run in {events_channel_ref}).\n"
         f"- `{PROFILE_COMMAND} Name#Tag`: Show player profile summary (run in {events_channel_ref}).\n"
         f"- `{ANALYZE_COMMAND} Name#Tag [solo|flex]`: Strengths and tips from a year of ranked games; Solo/Duo unless `flex` (run in {events_channel_ref}).\n"
+        f"- `{RECORDS_COMMAND} [Name#Tag]`: Group records from ranked games, or one player's personal bests (run in {events_channel_ref}).\n"
         f"- `{RIOT_TEST_COMMAND}`: Verify Riot API connectivity (run in {events_channel_ref}).\n"
         f"- `{TEST_COMMAND}`: Verify Discord send permissions (run in {events_channel_ref}).\n"
         f"- `{STREAK_COMMAND} Name#Tag`: Manually post current win/loss streak callout (run in {f'<#{match_recap_channel_id}>' if match_recap_channel_id else events_channel_ref}).\n"
@@ -64,6 +66,7 @@ def is_supported_command(content_lower):
         CHAMPION_DISPLAY_COMMAND.casefold(),
         ANALYZE_COMMAND.casefold(),
         ANALYZE_ALIAS.casefold(),
+        RECORDS_COMMAND.casefold(),
     }
     if content_lower in known_exact:
         return True
@@ -78,6 +81,7 @@ def is_supported_command(content_lower):
         or content_lower.startswith(f"{CHAMPION_DISPLAY_COMMAND.casefold()} ")
         or content_lower.startswith(f"{ANALYZE_COMMAND.casefold()} ")
         or content_lower.startswith(f"{ANALYZE_ALIAS.casefold()} ")
+        or content_lower.startswith(f"{RECORDS_COMMAND.casefold()} ")
     )
 
 
@@ -117,6 +121,7 @@ def command_channel_id(content_lower, *, daily_channel_id, weekly_channel_id, ev
             TTS_COMMAND.casefold(),
             ANALYZE_COMMAND.casefold(),
             ANALYZE_ALIAS.casefold(),
+            RECORDS_COMMAND.casefold(),
         }
         or content_lower.startswith(f"{ADD_COMMAND.casefold()} ")
         or content_lower.startswith(f"{REMOVE_COMMAND.casefold()} ")
@@ -126,6 +131,7 @@ def command_channel_id(content_lower, *, daily_channel_id, weekly_channel_id, ev
         or content_lower.startswith(f"{TTS_COMMAND.casefold()} ")
         or content_lower.startswith(f"{ANALYZE_COMMAND.casefold()} ")
         or content_lower.startswith(f"{ANALYZE_ALIAS.casefold()} ")
+        or content_lower.startswith(f"{RECORDS_COMMAND.casefold()} ")
     ):
         return events_channel_id
     return None

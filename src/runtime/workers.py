@@ -130,6 +130,8 @@ async def background_match_recap_notifier(
     resolve_channel,
     worker_stats,
     log,
+    db_iter_record_rows=None,
+    db_upsert_player_match_stats=None,
 ):
     sleep_seconds = max(30, match_recap_poll_seconds)
     # Lives as long as the worker so portrait lookups stay cached between cycles.
@@ -161,6 +163,8 @@ async def background_match_recap_notifier(
                 db_upsert_daily_stats=db_upsert_daily_stats,
                 edit_last_report_message=edit_last_report_message,
                 edit_last_weekly_report_message=edit_last_weekly_report_message,
+                db_iter_record_rows=db_iter_record_rows,
+                db_upsert_player_match_stats=db_upsert_player_match_stats,
                 log=log,
             )
         except Exception as exc:

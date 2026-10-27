@@ -196,7 +196,7 @@ The first run on 2026-10-26 data: 12,415 cached matches, one old PUUID for each 
 
 ## Player Match Stats
 
-`player_match_stats` holds one row per tracked player per cached match. It's built from `match_info_cache` by a background loop (`src/match_stats.py`), with no Riot requests. It's meant for analysis (`!analyze`, and later `!vs` and awards).
+`player_match_stats` holds one row per tracked player per cached match. It's built from `match_info_cache` by a background loop (`src/match_stats.py`), with no Riot requests. It's meant for analysis (`!analyze`, `!records`, and later `!vs` and awards).
 
 `!analyze Name#Tag [solo|flex]` (events channel, anyone can run it) reads one player's last 12 months from this table and logs `[analyze] Sent <queue> analysis for <riot id>: games=… strengths=… tips=…`. If the card shows "Not enough … games", the player has fewer than 20 ranked games in that queue in the table. Check their rows with the query below before suspecting the rules. Thresholds and wording live in `src/player_analysis.py`.
 
@@ -214,6 +214,20 @@ WHERE lower(t.riot_id) = lower('NoxVain#EUW') AND s.queue_id IN (420, 440) AND N
   AND s.game_end_at > now() - interval '365 days'
 GROUP BY 1 ORDER BY 2 DESC;
 ```
+
+## Records
+
+`!records` and `!records Name` (events channel, anyone can run them) read all ranked rows (Solo/Duo, Flex, ranked 5v5; no remakes) from `player_match_stats` in pages of 1,000 and log `[records] Sent group records: games=…` or `[records] Sent personal bests for <riot id>: games=…`.
+
+Recaps of ranked games check for new group records before posting:
+
+- Each check logs `[records] Checked <n> ranked match(es) against <games> stored games: new_records=<k> (<category> <riot id> <value> (was <old>), …).`
+- A failure or a check slower than 10 seconds logs `[records] Record check skipped; recap posts without it: …` and the recap goes out without record lines.
+- The worker then stores the recap's ranked games in `player_match_stats`; if that fails it logs `[records] Could not store recap games …` and the stats sync adds them on its next pass.
+- No record lines are posted while fewer than 200 ranked games are stored (fresh install).
+- A replay of the 12 months to 2026-10-27 gave 8 recaps with record lines (13 lines) out of 3,412 ranked matches.
+
+Pentakills come from the `penta_kills` column, added with `STATS_VERSION` 2. The first stats pass after that deploy rebuilds every row (about 25 s); until it finishes, the pentakill line is missing from `!records`.
 
 ## Match Cache Retention
 

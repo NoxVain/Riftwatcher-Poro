@@ -1183,3 +1183,20 @@ def test_recap_still_posts_when_the_record_check_fails():
     assert "**Alpha** · **Ahri** Mid" in channel.messages[0]["content"]
     assert "New group record" not in channel.messages[0]["content"]
     assert any("[records] Record check skipped; recap posts without it: RuntimeError: db down" in line for line in logs)
+
+
+def _card_shape(view):
+    return [(type(item).__name__, getattr(item, "content", None)) for item in view.walk_children()]
+
+
+def test_recap_card_is_unchanged_when_no_record_is_broken_or_the_check_fails():
+    before = _record_cycle(iter_rows=None, kills=10).messages[0]
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("db down")
+
+    for iter_rows in (_stored_history, broken):
+        after = _record_cycle(iter_rows=iter_rows, kills=10).messages[0]
+        assert after["content"] == before["content"]
+        assert _card_shape(after["view"]) == _card_shape(before["view"])
+        assert after["view"].children[0].accent_colour == before["view"].children[0].accent_colour

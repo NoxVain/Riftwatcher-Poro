@@ -7,7 +7,12 @@ from src.db.cache import (
     db_rewrite_cached_puuids,
     db_upsert_match_info,
 )
-from src.db.match_stats import db_delete_player_match_stats_except, db_upsert_player_match_stats
+from src.db.match_stats import (
+    db_delete_player_match_stats_except,
+    db_load_player_analysis_rows,
+    db_load_role_group_totals,
+    db_upsert_player_match_stats,
+)
 from src.db.players import db_get_puuid, db_load_tracked_players, db_load_tracked_puuids, db_remove_player, db_upsert_player
 from src.db.pool import DB_ENABLED
 from src.db.ranked_state import (

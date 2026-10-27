@@ -35,3 +35,6 @@ class CommandHandlerContext:
     db_set_state: Any = None
     db_remove_player: Any = None
     admin_role_id: int | None = None
+    db_load_tracked_puuids: Any = None
+    db_load_player_analysis_rows: Any = None
+    db_load_role_group_totals: Any = None

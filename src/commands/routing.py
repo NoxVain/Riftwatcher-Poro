@@ -1,5 +1,7 @@
 from src.constants import (
     ADD_COMMAND,
+    ANALYZE_ALIAS,
+    ANALYZE_COMMAND,
     BACKFILL_COMMAND,
     CHAMPION_DISPLAY_COMMAND,
     DEBUG_PLAYER_COMMAND,
@@ -33,6 +35,7 @@ def format_help_text(*, report_day_start_hour, daily_channel_id, weekly_channel_
         f"- `{BACKFILL_COMMAND} YYYY-MM-DD YYYY-MM-DD`: Rebuild historical daily stats from cached matches (run in {events_channel_ref}).\n"
         f"- `{SCORE_COMMAND}`: Show how each player's Gamer Score is calculated today (run in {events_channel_ref}).\n"
         f"- `{PROFILE_COMMAND} Name#Tag`: Show player profile summary (run in {events_channel_ref}).\n"
+        f"- `{ANALYZE_COMMAND} Name#Tag [solo|flex]`: Strengths and tips from a year of ranked games; Solo/Duo unless `flex` (run in {events_channel_ref}).\n"
         f"- `{RIOT_TEST_COMMAND}`: Verify Riot API connectivity (run in {events_channel_ref}).\n"
         f"- `{TEST_COMMAND}`: Verify Discord send permissions (run in {events_channel_ref}).\n"
         f"- `{STREAK_COMMAND} Name#Tag`: Manually post current win/loss streak callout (run in {f'<#{match_recap_channel_id}>' if match_recap_channel_id else events_channel_ref}).\n"
@@ -59,6 +62,8 @@ def is_supported_command(content_lower):
         PROFILE_COMMAND.casefold(),
         TTS_COMMAND.casefold(),
         CHAMPION_DISPLAY_COMMAND.casefold(),
+        ANALYZE_COMMAND.casefold(),
+        ANALYZE_ALIAS.casefold(),
     }
     if content_lower in known_exact:
         return True
@@ -71,6 +76,8 @@ def is_supported_command(content_lower):
         or content_lower.startswith(f"{STREAK_COMMAND.casefold()} ")
         or content_lower.startswith(f"{TTS_COMMAND.casefold()} ")
         or content_lower.startswith(f"{CHAMPION_DISPLAY_COMMAND.casefold()} ")
+        or content_lower.startswith(f"{ANALYZE_COMMAND.casefold()} ")
+        or content_lower.startswith(f"{ANALYZE_ALIAS.casefold()} ")
     )
 
 
@@ -108,6 +115,8 @@ def command_channel_id(content_lower, *, daily_channel_id, weekly_channel_id, ev
             SCORE_COMMAND.casefold(),
             PROFILE_COMMAND.casefold(),
             TTS_COMMAND.casefold(),
+            ANALYZE_COMMAND.casefold(),
+            ANALYZE_ALIAS.casefold(),
         }
         or content_lower.startswith(f"{ADD_COMMAND.casefold()} ")
         or content_lower.startswith(f"{REMOVE_COMMAND.casefold()} ")
@@ -115,6 +124,8 @@ def command_channel_id(content_lower, *, daily_channel_id, weekly_channel_id, ev
         or content_lower.startswith(f"{BACKFILL_COMMAND.casefold()} ")
         or content_lower.startswith(f"{PROFILE_COMMAND.casefold()} ")
         or content_lower.startswith(f"{TTS_COMMAND.casefold()} ")
+        or content_lower.startswith(f"{ANALYZE_COMMAND.casefold()} ")
+        or content_lower.startswith(f"{ANALYZE_ALIAS.casefold()} ")
     ):
         return events_channel_id
     return None

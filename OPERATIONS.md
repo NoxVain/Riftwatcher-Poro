@@ -196,7 +196,9 @@ The first run on 2026-10-26 data: 12,415 cached matches, one old PUUID for each 
 
 ## Player Match Stats
 
-`player_match_stats` holds one row per tracked player per cached match. It's built from `match_info_cache` by a background loop (`src/match_stats.py`), with no Riot requests. It's meant for analysis (a planned `!analyze` command, `!vs`, awards).
+`player_match_stats` holds one row per tracked player per cached match. It's built from `match_info_cache` by a background loop (`src/match_stats.py`), with no Riot requests. It's meant for analysis (`!analyze`, and later `!vs` and awards).
+
+`!analyze Name#Tag [solo|flex]` (events channel, anyone can run it) reads one player's last 12 months from this table and logs `[analyze] Sent <queue> analysis for <riot id>: games=… strengths=… tips=…`. If the card shows "Not enough … games", the player has fewer than 20 ranked games in that queue in the table. Check their rows with the query below before suspecting the rules. Thresholds and wording live in `src/player_analysis.py`.
 
 - The loop starts once the PUUID remap is done (about 5 minutes after startup), then runs every 10 minutes.
 - Logs: `[stats] Player match stats full sync: rows=… matches=… new=… elapsed=…` for a full rebuild, and an `incremental sync` line only when new matches were cached. Failures log `[stats] Player match stats sync failed; retrying next pass: …`.

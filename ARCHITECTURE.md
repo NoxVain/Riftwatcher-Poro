@@ -101,6 +101,8 @@ These are the priorities behind most decisions in this repo. New changes should 
   - rewrites old PUUIDs in `match_info_cache` to the tracked players' current ones. Riot encrypts PUUIDs per API key project, so payloads cached before the Feb 2026 key change named players by PUUIDs that lookups no longer match. Old→current pairs come from participants whose Riot ID matches a tracked player; ambiguous cases are skipped. The rewrite runs in Postgres on the payload text (pages of 500 match IDs, `updated_at` untouched). Runs as a background task 5 minutes after startup, once per set of tracked players (`puuid_remap_fingerprint`); a new player or a future key change triggers it again
 - `src/match_stats.py`
   - per-player match stats: one compact row per tracked player per cached match in `player_match_stats` (about 35 numbers: result, champion, role, KDA, kill participation, damage share, gold/CS diff against the lane opponent, vision, objectives, tracked teammates), so analysis queries a year of games in milliseconds instead of parsing payloads. Rows come only from cached payloads (no Riot requests). A background loop starts after the PUUID remap and runs every 10 minutes. The first pass and any change to the tracked players or `STATS_VERSION` trigger a full rebuild (paged, about 16k rows) that also drops rows of untracked PUUIDs; later passes read only matches cached since the watermark, minus a 5-minute overlap
+- `src/player_analysis.py`
+  - `!analyze Name#Tag [solo|flex]` (handler in `src/commands/analysis_handlers.py`): one queue's last 12 months of ranked games from `player_match_stats` (Solo/Duo unless `flex`; remakes excluded), compared with the player's own splits and with per-role totals of all tracked players. Rule-based findings: best/weakest champions, off-roles against the main role (with lane gold), KDA and deaths against the group's players in the main role, 90-day trend, tilt (the game within 70 minutes of a loss), sessions (game 4+ of a report day), laning CS trend, best duo partner. Every finding needs a minimum sample (10 games per champion/role, 15 per partner, 20 on each side of a split, 50 group games per role baseline) and a clear gap; the card shows at most 3 strengths and 3 tips, strongest first (gap × √games). Only the best duo partner is ever named. Sent as a Components V2 card with a plain-text fallback; no Riot requests
 
 ## Worker Model
 
@@ -257,7 +259,7 @@ Schema creation and additive migrations (`ADD COLUMN IF NOT EXISTS`) run on ever
 
 - `DAILY_REPORT_CHANNEL_ID`: daily scoreboard + `!Daily` command
 - `WEEKLY_REPORT_CHANNEL_ID`: weekly scoreboard + `!Weekly` command
-- `EVENTS_CHANNEL_ID`: ops/admin commands (`!help`, `!health`, `/health`, `!score`, `!test`, `!riottest`, `!Add`, `!remove`, `!DebugPlayer`, `!profile`, `!backfill`, `!tts`, `!champdisplay`), rank alerts, and patch-notes posts
+- `EVENTS_CHANNEL_ID`: ops/admin commands (`!help`, `!health`, `/health`, `!score`, `!test`, `!riottest`, `!Add`, `!remove`, `!DebugPlayer`, `!profile`, `!analyze`, `!backfill`, `!tts`, `!champdisplay`), rank alerts, and patch-notes posts
 - `MATCH_RECAP_CHANNEL_ID`: match recap posts, streak callouts, `!streak`, `!tts`, and `!champdisplay` commands
 - `NEWS_CHANNEL_ID` (optional): esports schedule and live/game/series updates; feature disabled when unset
 

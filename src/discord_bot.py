@@ -98,6 +98,8 @@ db_load_tracked_players = dbm.db_load_tracked_players
 db_load_tracked_puuids = dbm.db_load_tracked_puuids
 db_iter_cached_matches = dbm.db_iter_cached_matches
 db_upsert_player_match_stats = dbm.db_upsert_player_match_stats
+db_load_player_analysis_rows = dbm.db_load_player_analysis_rows
+db_load_role_group_totals = dbm.db_load_role_group_totals
 db_delete_player_match_stats_except = dbm.db_delete_player_match_stats_except
 db_delete_ranked_state_queue = dbm.db_delete_ranked_state_queue
 db_insert_lp_change = dbm.db_insert_lp_change
@@ -735,6 +737,9 @@ async def on_message(message):
         db_set_state=db_set_state,
         match_recap_channel_id=MATCH_RECAP_CHANNEL_ID,
         admin_role_id=cfg.ADMIN_ROLE_ID or None,
+        db_load_tracked_puuids=db_load_tracked_puuids,
+        db_load_player_analysis_rows=db_load_player_analysis_rows,
+        db_load_role_group_totals=db_load_role_group_totals,
     )
 
 

@@ -12,7 +12,6 @@ This backlog tracks work not yet implemented as of 2026-10-26.
 
 ## Feature Backlog
 
-1. Player analysis command (`!analyze Name#Tag`): a year of ranked games turned into guarded, rule-based strengths and tips (champion pool, role, trend, duo vs solo, lane diffs). The data layer (`player_match_stats`) has shipped; the card layout needs a mockup and maintainer approval first.
 1. Head-to-head command (`!vs Name1 Name2`) for day/week
 2. Daily MVP + Clutch/Int awards
 3. Weekly title belts (Damage King, Objective Goblin, Vision Dad)
@@ -43,6 +42,7 @@ This backlog tracks work not yet implemented as of 2026-10-26.
   - Old PUUIDs (from before the Feb 2026 Riot key change) in cached matches are rewritten to current ones by Riot ID, so all cached games are found by PUUID again.
   - Cached matches are kept forever in production (`MATCH_CACHE_RETENTION_DAYS=0`): the cache holds history Riot no longer serves.
   - `player_match_stats`: per-player match numbers extracted from the cache in the background (no Riot requests), the data layer for player analysis.
+  - `!analyze Name#Tag [solo|flex]`: compact card with up to 3 strengths and 3 tips from the last 12 months of one ranked queue, each with its record; guarded by minimum samples and gaps; only the best duo partner is named.
 
 ### 2026-06 to 2026-10
 

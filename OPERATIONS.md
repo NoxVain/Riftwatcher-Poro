@@ -203,7 +203,7 @@ The first run on 2026-10-26 data: 12,415 cached matches, one old PUUID for each 
 - The loop starts once the PUUID remap is done (about 5 minutes after startup), then runs every 10 minutes.
 - Logs: `[stats] Player match stats full sync: rows=… matches=… new=… elapsed=…` for a full rebuild, and an `incremental sync` line only when new matches were cached. Failures log `[stats] Player match stats sync failed; retrying next pass: …`.
 - A full rebuild happens on the first run, when a player is added or removed, when PUUIDs change, or when `STATS_VERSION` is bumped. It also deletes rows of PUUIDs that are no longer tracked.
-- Measured on a local copy of the 2026-10-27 production data: 12,423 cached matches gave 16,400 rows (12 MB) in 24 s, and a per-player year query took about 1 ms.
+- In production on 2026-10-27, a full rebuild of 12,426 cached matches took 140 s and gave 16,411 rows (about 12 MB; bot memory peaked at 197 MB). A local copy of the same data took 24 s, so expect production to be several times slower than a local test. A per-player year query takes about 1 ms.
 - To force a rebuild, delete the `player_match_stats_fingerprint` row in `bot_state`. The table can always be rebuilt from the cache, so it's safe to truncate.
 - Example (read-only): champion records for one player over the last year of ranked games:
 
@@ -227,7 +227,7 @@ Recaps of ranked games check for new group records before posting:
 - No record lines are posted while fewer than 200 ranked games are stored (fresh install).
 - A replay of the 12 months to 2026-10-27 gave 8 recaps with record lines (13 lines) out of 3,412 ranked matches.
 
-Pentakills come from the `penta_kills` column, added with `STATS_VERSION` 2. The first stats pass after that deploy rebuilds every row (about 25 s); until it finishes, the pentakill line is missing from `!records`.
+Pentakills come from the `penta_kills` column, added with `STATS_VERSION` 2. The first stats pass after that deploy rebuilds every row (140 s in production on 2026-10-27); until it finishes, the pentakill line is missing from `!records`.
 
 ## Match Cache Retention
 

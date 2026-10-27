@@ -1,6 +1,6 @@
 # Improvement Backlog
 
-This backlog tracks work not yet implemented as of 2026-10-26.
+This backlog tracks work not yet implemented as of 2026-10-27.
 
 ## Source docs reviewed
 
@@ -8,18 +8,63 @@ This backlog tracks work not yet implemented as of 2026-10-26.
 - `ARCHITECTURE.md`
 - `OPERATIONS.md`
 - `SELF_HOSTING.md`
-- git history through PR #18 (2026-10-26)
+- git history through PR #25 (2026-10-27)
 
 ## Feature Backlog
 
-1. Head-to-head command (`!vs Name1 Name2`) for day/week
-2. Daily MVP + Clutch/Int awards
-3. Weekly title belts (Damage King, Objective Goblin, Vision Dad)
-4. Prediction game for day record guesses
-5. Party synergy stats for duo/trio combinations
-6. Seasonal month-long points race
-7. Clip/quote of the day in recap flow
-8. Weekly boss challenge mode with success/fail announcement
+### Next up (in this order, one at a time)
+
+Each starts with a mockup on real data for the maintainer to approve, and needs no new Riot requests.
+
+1. Hall of Fame (`!records`) and record-broken callouts.
+   - Group and per-player records from the full match archive (2+ years, including history Riot no longer serves): most kills, damage, deaths, CS or vision in one game, longest game, longest win and loss streaks.
+   - A recap that beats a group record gets an extra line, e.g. "NEW GROUP RECORD: 31 kills (old record Tamarin, March 2025)".
+   - Pure SQL over `player_match_stats`.
+2. Weekly title belts and daily awards.
+   - Daily MVP and Clutch/Int awards; weekly belts such as Damage King, Objective Goblin, Vision Dad, Backseat Gamer (pings) and Grey Screen Enjoyer (time spent dead), posted with the weekly scoreboard.
+   - Needs new `player_match_stats` columns for pings, challenges and time dead (bump `STATS_VERSION` so the table rebuilds from the cache).
+3. Poro Wrapped (December): per-player year in review.
+   - Games and hours played, top champions, best duo, peak rank (`lp_history`), most-pinged teammate, worst day.
+   - Build in November so it can post when the season ends.
+
+### Later
+
+No new Riot requests:
+- Head-to-head command (`!vs Name1 Name2`) for day/week.
+- Party synergy stats for duo/trio combinations (self-join on `match_id`; `!analyze` already finds the best duo partner).
+- Nemesis: the enemy champion each player loses to most (`opponent_champion_id` is already stored).
+- Recap highlight lines from challenges (Baron/Dragon steal, outnumbered kill, ally saved, flawless ace, perfect game).
+- Group ban stats ("the group's most hated champion").
+- Win rate by keystone and summoner spells, possibly as an `!analyze` finding.
+- Riot server maintenance and incident notices for the platform, from the status endpoint the API-key check already calls.
+
+Few Riot requests (check the shared 100 per 120 s budget first):
+- Champion mastery milestone callouts and `!mastery` (champion-mastery-v4, about one request per player per day).
+- Weekly free champion rotation post (champion rotations endpoint, one request per week).
+- Clash reminders before Clash weekends (clash-v1 tournaments, one request per day).
+- Live game callouts ("NoxVain and Freshwhite just started Flex, Lux + Jinx") from spectator-v5. Costs about one request per player per poll, roughly a fifth of the budget at a 2-minute poll; only worth it at a slow poll for recently active players.
+
+Bigger or less certain:
+- Prediction game for day record guesses.
+- Seasonal month-long points race.
+- Clip/quote of the day in recap flow.
+- Weekly boss challenge mode with success/fail announcement.
+
+Considered and skipped:
+- Match timelines (gold diff at 15, first death time): one extra request per match and large payloads, against the memory budget.
+
+### Unused match data
+
+Checked 2026-10-27 against the 12,426 cached matches. These fields are in the cached payloads but not yet extracted into `player_match_stats`:
+
+| Field | Cached matches with it |
+|---|---|
+| Ping counts (`enemyMissingPings`, `allInPings`, `dangerPings`, `onMyWayPings`, ...) | 12,422 |
+| `challenges` (~100 stats: `skillshotsDodged`, `epicMonsterSteals`, `outnumberedKills`, `saveAllyFromDeath`, `flawlessAces`, `perfectGame`, ...) | 12,120 |
+| `totalTimeSpentDead` | 12,422 |
+| Team `bans` | 12,422 |
+| `perks` (runes) and summoner spells | 12,422 |
+| Atakhan and other team objectives | 9,137 |
 
 ## Recently Completed (Removed From Backlog)
 

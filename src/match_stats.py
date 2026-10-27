@@ -19,7 +19,7 @@ from src.report_logic import get_match_duration_seconds, get_match_end_unix_seco
 from src.runtime.memory import release_freed_memory
 
 # Bump when extraction changes, so the next pass rebuilds every row.
-STATS_VERSION = 2
+STATS_VERSION = 3
 STATS_FINGERPRINT_KEY = "player_match_stats_fingerprint"
 STATS_WATERMARK_KEY = "player_match_stats_cached_through"
 STATS_SYNC_INTERVAL_SECONDS = 600
@@ -67,6 +67,13 @@ STATS_COLUMNS = (
     "arena_placement",
     "tracked_teammates",
     "penta_kills",
+    "herald_takedowns",
+    "objective_steals",
+    "ally_saves",
+    "outnumbered_kills",
+    "skillshots_dodged",
+    "pings",
+    "time_dead_seconds",
 )
 
 
@@ -76,6 +83,30 @@ def _int(value):
 
 def _float(value):
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+PING_KEYS = (
+    "allInPings",
+    "assistMePings",
+    "basicPings",
+    "commandPings",
+    "dangerPings",
+    "enemyMissingPings",
+    "enemyVisionPings",
+    "getBackPings",
+    "holdPings",
+    "needVisionPings",
+    "onMyWayPings",
+    "pushPings",
+    "retreatPings",
+    "visionClearedPings",
+)
+
+
+def _pings(participant):
+    # Older payloads carry no ping counts at all; None keeps them out of ping stats.
+    counts = [participant[key] for key in PING_KEYS if isinstance(participant.get(key), int)]
+    return sum(counts) if counts else None
 
 
 def _cs(participant):
@@ -178,6 +209,13 @@ def extract_player_match_rows(payload, tracked_puuids):
                 if p is not me and p.get("teamId") == team and p.get("puuid") in tracked_puuids
             ),
             "penta_kills": _int(me.get("pentaKills")),
+            "herald_takedowns": _int(challenges.get("riftHeraldTakedowns")),
+            "objective_steals": _int(challenges.get("epicMonsterSteals")),
+            "ally_saves": _int(challenges.get("saveAllyFromDeath")),
+            "outnumbered_kills": _int(challenges.get("outnumberedKills")),
+            "skillshots_dodged": _int(challenges.get("skillshotsDodged")),
+            "pings": _pings(me),
+            "time_dead_seconds": _int(me.get("totalTimeSpentDead")),
         })
     return rows
 

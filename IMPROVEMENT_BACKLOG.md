@@ -16,16 +16,14 @@ This backlog tracks work not yet implemented as of 2026-10-27.
 
 Each starts with a mockup on real data for the maintainer to approve, and needs no new Riot requests.
 
-1. Weekly title belts and daily awards.
-   - Daily MVP and Clutch/Int awards; weekly belts such as Damage King, Objective Goblin, Vision Dad, Backseat Gamer (pings) and Grey Screen Enjoyer (time spent dead), posted with the weekly scoreboard.
-   - Needs new `player_match_stats` columns for pings, challenges and time dead (bump `STATS_VERSION` so the table rebuilds from the cache).
-2. Poro Wrapped (December): per-player year in review.
+1. Poro Wrapped (December): per-player year in review.
    - Games and hours played, top champions, best duo, peak rank (`lp_history`), most-pinged teammate, worst day.
    - Build in November so it can post when the season ends.
 
 ### Later
 
 No new Riot requests:
+- Daily awards on the daily scoreboard: Clutch of the day (best KDA in a win) and Grey screen of the day (most time dead in one game). Mocked up 2026-10-27; left out for now. The daily MVP is already the scoreboard's ⭐.
 - Head-to-head command (`!vs Name1 Name2`) for day/week.
 - Party synergy stats for duo/trio combinations (self-join on `match_id`; `!analyze` already finds the best duo partner).
 - Nemesis: the enemy champion each player loses to most (`opponent_champion_id` is already stored).
@@ -83,6 +81,7 @@ Checked 2026-10-27 against the 12,426 cached matches. These fields are in the ca
   - Old PUUIDs (from before the Feb 2026 Riot key change) in cached matches are rewritten to current ones by Riot ID, so all cached games are found by PUUID again.
   - Cached matches are kept forever in production (`MATCH_CACHE_RETENTION_DAYS=0`): the cache holds history Riot no longer serves.
   - `player_match_stats`: per-player match numbers extracted from the cache in the background (no Riot requests), the data layer for player analysis.
+  - Weekly title belts in the events channel when a report week closes: 6 Glory and 2 Shame belts by best rate among players with 3+ ranked games, ties shared, `🔁 defended` when held the week before. New `player_match_stats` columns for pings, time dead, ally saves, outnumbered kills, skillshots dodged, objective steals and herald takedowns.
   - `!records [Name#Tag]`: Hall of Fame from ranked games (Solo/Duo, Flex, ranked 5v5) with group records, streaks, pentakills and career totals, or one player's personal bests with their place in the group; recaps get one "New group record" line per record broken. Personal-best lines in recaps are left off for now.
   - `!analyze Name#Tag [solo|flex]`: compact card with up to 3 strengths and 3 tips from the last 12 months of one ranked queue, each with its record; guarded by minimum samples and gaps; only the best duo partner is named.
 

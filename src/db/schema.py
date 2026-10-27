@@ -199,3 +199,13 @@ def init_db():
         """
     )
     db_execute("ALTER TABLE player_match_stats ADD COLUMN IF NOT EXISTS penta_kills INTEGER NULL;")
+    for column in (
+        "herald_takedowns",
+        "objective_steals",
+        "ally_saves",
+        "outnumbered_kills",
+        "skillshots_dodged",
+        "pings",
+        "time_dead_seconds",
+    ):
+        db_execute(f"ALTER TABLE player_match_stats ADD COLUMN IF NOT EXISTS {column} INTEGER NULL;")

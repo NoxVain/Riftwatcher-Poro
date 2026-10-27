@@ -196,7 +196,7 @@ The first run on 2026-10-26 data: 12,415 cached matches, one old PUUID for each 
 
 ## Player Match Stats
 
-`player_match_stats` holds one row per tracked player per cached match. It's built from `match_info_cache` by a background loop (`src/match_stats.py`), with no Riot requests. It's meant for analysis (`!analyze`, `!records`, and later `!vs` and awards).
+`player_match_stats` holds one row per tracked player per cached match. It's built from `match_info_cache` by a background loop (`src/match_stats.py`), with no Riot requests. It's meant for analysis (`!analyze`, `!records`, weekly belts, and later `!vs`).
 
 `!analyze Name#Tag [solo|flex]` (events channel, anyone can run it) reads one player's last 12 months from this table and logs `[analyze] Sent <queue> analysis for <riot id>: games=… strengths=… tips=…`. If the card shows "Not enough … games", the player has fewer than 20 ranked games in that queue in the table. Check their rows with the query below before suspecting the rules. Thresholds and wording live in `src/player_analysis.py`.
 
@@ -228,6 +228,16 @@ Recaps of ranked games check for new group records before posting:
 - A replay of the 12 months to 2026-10-27 gave 8 recaps with record lines (13 lines) out of 3,412 ranked matches.
 
 Pentakills come from the `penta_kills` column, added with `STATS_VERSION` 2. The first stats pass after that deploy rebuilds every row (140 s in production on 2026-10-27); until it finishes, the pentakill line is missing from `!records`.
+
+## Weekly Title Belts
+
+The belts card for a report week posts in `EVENTS_CHANNEL_ID` about 20-30 minutes after the week closes (Monday 06:00 Oslo in production), from that week's ranked rows in `player_match_stats`.
+
+- Logs: `[belts] Posted weekly belts for <start>..<end> in channel <id>: belts=… defended=… games=… players=….` A week where nobody played 3 ranked games logs `[belts] No belts for week …` and posts nothing.
+- The very first run stores the last closed week's holders and logs `[belts] First run: …`; the first card posts the following Monday, so defended marks work from the first card.
+- `[belts] Channel … not available; retrying next check.` or `[belts] Weekly belts check failed; retrying next check: …` retry every 10 minutes. The week is stored before sending, so a send that fails after that is not retried.
+- To repost a week (e.g. after fixing a bug), set `weekly_belts_state` back to the previous week's value, or delete it to start over from a silent baseline (defended streaks reset).
+- The belt columns came with `STATS_VERSION` 3, whose deploy rebuilds every row (about 140 s). Ping counts only exist in newer payloads; older rows have NULL and never win a belt.
 
 ## Match Cache Retention
 

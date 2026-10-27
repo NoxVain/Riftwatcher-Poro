@@ -63,6 +63,7 @@ Start with:
 - `src/puuid_remap.py` - one-off background rewrite of old (pre key-change) PUUIDs in cached matches
 - `src/match_stats.py` - per-player match stats extracted from cached matches into `player_match_stats` (background sync)
 - `src/player_analysis.py` - `!analyze` rules: guarded strengths and tips from a year of ranked games, and the compact card
+- `src/belts.py` - weekly title belts (Damage King, Backseat Gamer, ...) posted in the events channel when a report week closes, with defended streaks
 - `src/records.py` - Hall of Fame: group records and personal bests from ranked games (`!records`), and "New group record" lines in recaps
 - `tests/` - unit tests
 

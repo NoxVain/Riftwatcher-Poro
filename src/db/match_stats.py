@@ -126,3 +126,36 @@ def db_iter_record_rows(queue_ids, *, before=None, exclude_match_ids=(), batch_s
             return
         last = rows[-1]
         cursor = (last[RECORD_ROW_COLUMNS.index("game_end_at")], last[0], last[len(RECORD_ROW_COLUMNS)])
+
+
+BELT_ROW_COLUMNS = (
+    "queue_id",
+    "remake",
+    "duration_seconds",
+    "damage_to_champions",
+    "vision_score",
+    "turret_takedowns",
+    "dragon_takedowns",
+    "baron_takedowns",
+    "herald_takedowns",
+    "ally_saves",
+    "outnumbered_kills",
+    "skillshots_dodged",
+    "pings",
+    "time_dead_seconds",
+)
+
+
+def db_load_belt_rows(start, end):
+    """Tracked players' ranked, non-remake games that ended in [start, end), with `riot_id`.
+
+    One report week: a few hundred small rows at most.
+    """
+    rows = db_execute(
+        f"SELECT {', '.join('s.' + col for col in BELT_ROW_COLUMNS)}, t.riot_id FROM player_match_stats s "
+        "JOIN tracked_players t ON t.puuid = s.puuid "
+        "WHERE s.queue_id = ANY(%s) AND NOT s.remake AND s.game_end_at >= %s AND s.game_end_at < %s;",
+        ([420, 440, 710], start, end),
+        fetch=True,
+    ) or []
+    return [dict(zip((*BELT_ROW_COLUMNS, "riot_id"), row)) for row in rows]

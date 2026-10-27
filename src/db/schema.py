@@ -147,3 +147,54 @@ def init_db():
         ON lp_history (lower(riot_id), queue_type, observed_at);
         """
     )
+    db_execute(
+        """
+        CREATE TABLE IF NOT EXISTS player_match_stats (
+            match_id TEXT NOT NULL,
+            puuid TEXT NOT NULL,
+            queue_id INTEGER NULL,
+            game_end_at TIMESTAMPTZ NOT NULL,
+            duration_seconds INTEGER NOT NULL,
+            game_version TEXT NULL,
+            champion_id INTEGER NULL,
+            champion_name TEXT NULL,
+            team_position TEXT NULL,
+            win BOOLEAN NOT NULL,
+            remake BOOLEAN NOT NULL,
+            surrender BOOLEAN NOT NULL,
+            kills INTEGER NOT NULL,
+            deaths INTEGER NOT NULL,
+            assists INTEGER NOT NULL,
+            kill_participation REAL NULL,
+            damage_share REAL NULL,
+            damage_to_champions INTEGER NOT NULL,
+            damage_taken INTEGER NULL,
+            gold_earned INTEGER NULL,
+            cs INTEGER NOT NULL,
+            vision_score INTEGER NULL,
+            wards_placed INTEGER NULL,
+            wards_killed INTEGER NULL,
+            control_wards_bought INTEGER NULL,
+            turret_takedowns INTEGER NULL,
+            dragon_takedowns INTEGER NULL,
+            baron_takedowns INTEGER NULL,
+            first_blood BOOLEAN NOT NULL,
+            solo_kills INTEGER NULL,
+            lane_cs_10 REAL NULL,
+            max_cs_advantage REAL NULL,
+            opponent_champion_id INTEGER NULL,
+            opponent_gold_diff INTEGER NULL,
+            opponent_cs_diff INTEGER NULL,
+            arena_placement INTEGER NULL,
+            tracked_teammates TEXT[] NOT NULL DEFAULT '{}',
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (puuid, match_id)
+        );
+        """
+    )
+    db_execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_player_match_stats_puuid_end
+        ON player_match_stats (puuid, game_end_at);
+        """
+    )

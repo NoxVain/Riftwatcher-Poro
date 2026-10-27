@@ -129,3 +129,36 @@ def db_rewrite_cached_puuids(remap, batch_size=PUUID_REWRITE_BATCH_SIZE):
         ) or []
         changed += len(rows)
     return changed
+
+
+def db_iter_cached_matches(since=None, batch_size=MATCH_PAYLOAD_BATCH_SIZE):
+    """Yield (match_id, updated_at, payload) oldest-cached first, optionally only rows
+    cached after `since` (a datetime). Paged like db_load_match_payloads_for_baseline,
+    so only one page of payloads is in memory; consume it in a worker thread.
+    """
+    if since is None:
+        id_rows = db_execute("SELECT match_id FROM match_info_cache ORDER BY updated_at, match_id;", fetch=True)
+    else:
+        id_rows = db_execute(
+            "SELECT match_id FROM match_info_cache WHERE updated_at > %s ORDER BY updated_at, match_id;",
+            (since,),
+            fetch=True,
+        )
+    match_ids = [row[0] for row in (id_rows or [])]
+    page_size = max(1, int(batch_size))
+    for start in range(0, len(match_ids), page_size):
+        page_ids = match_ids[start:start + page_size]
+        rows = db_execute(
+            "SELECT match_id, updated_at, payload FROM match_info_cache WHERE match_id = ANY(%s);",
+            (page_ids,),
+            fetch=True,
+        ) or []
+        by_id = {match_id: (updated_at, payload) for match_id, updated_at, payload in rows}
+        for match_id in page_ids:
+            found = by_id.get(match_id)
+            if not found or not found[1]:
+                continue
+            try:
+                yield match_id, found[0], json.loads(found[1])
+            except json.JSONDecodeError:
+                continue

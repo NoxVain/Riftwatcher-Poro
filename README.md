@@ -61,6 +61,7 @@ Start with:
 - `src/recap_cards.py` - match recap cards (Components V2): packing within Discord limits, per-player components for LP edits
 - `src/champion_icons.py` - recap champion display mode and portrait emojis (Data Dragon -> Discord application emojis)
 - `src/puuid_remap.py` - one-off background rewrite of old (pre key-change) PUUIDs in cached matches
+- `src/match_stats.py` - per-player match stats extracted from cached matches into `player_match_stats` (background sync)
 - `tests/` - unit tests
 
 ## Features
@@ -281,6 +282,7 @@ Patch notes, all optional:
 - `bot_state` - generic state keys (message ids, last seen ids, flags, patch-notes seen articles)
 - `player_ranked_state` - last known rank state per player/queue
 - `lp_history` - every rank/LP change the rank worker observes (LP delta, result, rank before/after), for analysis; see OPERATIONS.md
+- `player_match_stats` - one row of numbers per tracked player per cached match (derived from `match_info_cache`), for fast per-player analysis
 
 ## Testing
 

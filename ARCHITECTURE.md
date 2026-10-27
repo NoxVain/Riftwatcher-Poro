@@ -99,6 +99,8 @@ These are the priorities behind most decisions in this repo. New changes should 
   - recap champion display mode (`name`/`icon`/`both`) and portrait emojis: Data Dragon portraits uploaded once as application-owned emojis named after the champion (`:Ahri:`, `:KaiSa:`; punctuation/spaces dropped), mapped from the numeric champion ID via the Data Dragon catalog; emojis from the earlier `rw_champ_<championId>` naming are renamed in place, not re-uploaded; serialized lookups, 5-minute emoji cache and failure backoff, daily catalog cache, 10-second lookup timeout, bounded downloads
 - `src/puuid_remap.py`
   - rewrites old PUUIDs in `match_info_cache` to the tracked players' current ones. Riot encrypts PUUIDs per API key project, so payloads cached before the Feb 2026 key change named players by PUUIDs that lookups no longer match. Old→current pairs come from participants whose Riot ID matches a tracked player; ambiguous cases are skipped. The rewrite runs in Postgres on the payload text (pages of 500 match IDs, `updated_at` untouched). Runs as a background task 5 minutes after startup, once per set of tracked players (`puuid_remap_fingerprint`); a new player or a future key change triggers it again
+- `src/match_stats.py`
+  - per-player match stats: one compact row per tracked player per cached match in `player_match_stats` (about 35 numbers: result, champion, role, KDA, kill participation, damage share, gold/CS diff against the lane opponent, vision, objectives, tracked teammates), so analysis queries a year of games in milliseconds instead of parsing payloads. Rows come only from cached payloads (no Riot requests). A background loop starts after the PUUID remap and runs every 10 minutes. The first pass and any change to the tracked players or `STATS_VERSION` trigger a full rebuild (paged, about 16k rows) that also drops rows of untracked PUUIDs; later passes read only matches cached since the watermark, minus a 5-minute overlap
 
 ## Worker Model
 
@@ -238,6 +240,7 @@ Badges (`report_builder.py`) are separate from the score: per-minute rates shrun
     - `streak_tts_enabled`
     - `champion_display_mode` (`name` | `icon` | `both`; unset = `icon`)
     - `puuid_remap_fingerprint` (hash of tracked Riot IDs + PUUIDs the cache was last remapped for)
+    - `player_match_stats_fingerprint` (tracked PUUIDs + `STATS_VERSION` of the last full stats rebuild), `player_match_stats_cached_through` (newest `match_info_cache.updated_at` processed)
     - alert dedupe flags: `riot_401_alert_sent`, `worker_stall_alert_sent::{worker}`, `esports_auth_alert_sent`
     - esports state: `esports_match_snapshot`, `esports_schedule_posted_cycle`, `esports_weekly_schedule_posted_week`
     - patch-notes state: `patch_notes_seen` (JSON list of posted article ids/URLs), `patch_notes_last_checked_at` (unix seconds)
@@ -245,6 +248,8 @@ Badges (`report_builder.py`) are separate from the score: per-minute rates shrun
   - last known rank state per `(riot_id, queue_type)`
 - `lp_history`
   - append-only log of every rank/LP change the rank worker observes (Riot keeps no LP history): player, queue, `observed_at`, `won` (only when exactly one game happened; NULL for dodge/decay, several games or resets), `wins_delta`/`losses_delta`, `lp_delta` (100 LP per division, shared Master+ ladder), and the rank before and after
+- `player_match_stats`
+  - one row per tracked player per cached match, keyed by `(puuid, match_id)`, indexed by `(puuid, game_end_at)`; derived from `match_info_cache` by `src/match_stats.py` and rebuildable from it at any time. Arena rows carry `arena_placement`; remakes are flagged, not dropped
 
 Schema creation and additive migrations (`ADD COLUMN IF NOT EXISTS`) run on every startup in `src/db/schema.py`.
 

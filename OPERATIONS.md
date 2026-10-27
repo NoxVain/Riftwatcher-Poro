@@ -194,6 +194,25 @@ Riot encrypts PUUIDs per API key project. A new key project (as in Feb 2026) giv
 
 The first run on 2026-10-26 data: 12,415 cached matches, one old PUUID for each of the 18 tracked players, no ambiguities. Rewriting about 12k payloads creates dead tuples in Postgres that autovacuum reclaims.
 
+## Player Match Stats
+
+`player_match_stats` holds one row per tracked player per cached match. It's built from `match_info_cache` by a background loop (`src/match_stats.py`), with no Riot requests. It's meant for analysis (a planned `!analyze` command, `!vs`, awards).
+
+- The loop starts once the PUUID remap is done (about 5 minutes after startup), then runs every 10 minutes.
+- Logs: `[stats] Player match stats full sync: rows=… matches=… new=… elapsed=…` for a full rebuild, and an `incremental sync` line only when new matches were cached. Failures log `[stats] Player match stats sync failed; retrying next pass: …`.
+- A full rebuild happens on the first run, when a player is added or removed, when PUUIDs change, or when `STATS_VERSION` is bumped. It also deletes rows of PUUIDs that are no longer tracked.
+- Measured on a local copy of the 2026-10-27 production data: 12,423 cached matches gave 16,400 rows (12 MB) in 24 s, and a per-player year query took about 1 ms.
+- To force a rebuild, delete the `player_match_stats_fingerprint` row in `bot_state`. The table can always be rebuilt from the cache, so it's safe to truncate.
+- Example (read-only): champion records for one player over the last year of ranked games:
+
+```sql
+SELECT s.champion_name, count(*) AS games, sum(s.win::int) AS wins
+FROM player_match_stats s JOIN tracked_players t ON t.puuid = s.puuid
+WHERE lower(t.riot_id) = lower('NoxVain#EUW') AND s.queue_id IN (420, 440) AND NOT s.remake
+  AND s.game_end_at > now() - interval '365 days'
+GROUP BY 1 ORDER BY 2 DESC;
+```
+
 ## Match Cache Retention
 
 Production runs with `MATCH_CACHE_RETENTION_DAYS=0` (set 2026-10-27), so cached matches are never deleted. The cache is the bot's only complete match history:

@@ -35,13 +35,14 @@ This repository is a modular Python Discord bot.
 - `src/esports_api.py`: LoL Esports web API client; `src/esports_logic.py`: pure esports parsing/diff/format helpers.
 - `src/patch_notes_api.py`: leagueoflegends.com patch-notes client; `src/patch_notes_logic.py`: pure patch-notes parsing/format/seen-state helpers.
 - `src/runtime/`: Shared worker loops (`workers.py`), tracked-message persistence (`message_store.py`), Riot/stall alerts and the stall watchdog (`alerts.py`), returning freed memory to the OS (`memory.py`), and stack dumps logged with stall alerts (`diagnostics.py`).
-- `src/db/`: Postgres pool (`pool.py`, connect/checkout timeouts), schema/migrations (`schema.py`), and persistence helpers split by concern (`state.py` for the `bot_state` key/value store, `players.py`, `cache.py` for match payloads and paged baseline reads, `stats.py`, `ranked_state.py` for rank state and the `lp_history` table).
+- `src/db/`: Postgres pool (`pool.py`, connect/checkout timeouts), schema/migrations (`schema.py`), and persistence helpers split by concern (`state.py` for the `bot_state` key/value store, `players.py`, `cache.py` for match payloads and paged reads, `stats.py`, `ranked_state.py` for rank state and the `lp_history` table, `match_stats.py` for `player_match_stats`).
 - `src/report_logic.py`: Pure ranking/time-window/queue-bucket helpers.
 - `src/rank_logic.py`: Rank normalization/comparison and rank-change message text.
 - `src/recap_lp.py`: LP gain/loss for ranked recaps, built from the rank worker's polls (no extra Riot requests) and edited into posted recaps; also builds `lp_history` rows.
 - `src/arena_static.py`: Arena augment/item display-name loader (CommunityDragon/Data Dragon, cached per process).
 - `src/champion_icons.py`: Recap champion display mode (`!champdisplay name|icon|both`) and Data Dragon portraits uploaded as Discord application emojis.
 - `src/puuid_remap.py`: Background rewrite of old PUUIDs in cached match payloads after a Riot API key change (PUUIDs are encrypted per key project), matched by Riot ID.
+- `src/match_stats.py`: Per-player match stats (`player_match_stats`, one row per tracked player per cached match) extracted from cached payloads by a background sync, so analysis is a SQL query instead of a payload scan.
 - `tests/`: Unit tests for pure logic, command routing/handlers, workers, and runtime helpers.
 - `README.md`, `ARCHITECTURE.md`, `OPERATIONS.md`, `SELF_HOSTING.md`: Runtime, design, runbook, and deployment documentation. `IMPROVEMENT_BACKLOG.md`: planned features and recently shipped work.
 - `.github/workflows/test.yml`: GitHub Actions CI (pytest on the `.python-version` Python for pushes/PRs to `main`); `.github/dependabot.yml`: weekly pip and GitHub Actions update PRs.

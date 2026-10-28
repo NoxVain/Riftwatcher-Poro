@@ -10,6 +10,7 @@ from src.discord_command_handlers import handle_incoming_message
 from src.match_stats import extract_player_match_rows
 from src.records import (
     CATEGORIES_BY_KEY,
+    MIN_GAMES_FOR_PERSONAL_BESTS,
     MIN_GAMES_FOR_RECAP_RECORDS,
     RECORDS_ACCENT,
     RecordBreak,
@@ -162,6 +163,39 @@ def test_best_player_in_a_game_takes_the_record_and_later_games_must_beat_it():
     breaks = detect_record_breaks(book, [(a["match_id"], [b, a]), (later["match_id"], [later])])
     assert list(breaks) == [(a["match_id"], "A#1")]
     assert book.record("kills").value == 14
+
+
+def test_personal_bests_need_a_history_and_a_strictly_better_value():
+    rookie = history(MIN_GAMES_FOR_PERSONAL_BESTS - 1, riot_id="Rookie#EUW", kills=5, vision=20)
+    book = build_record_book(history(kills=30, vision=200) + history(riot_id="Nox#EUW", kills=8, vision=40) + rookie)
+    tie = row("Nox#EUW", days=400, kills=8, vision=40)
+    better = row("Nox#EUW", days=401, kills=9, vision=40)
+    rookie_game = row("Rookie#EUW", days=401, kills=6, vision=25)
+    breaks = detect_record_breaks(
+        book, [(game["match_id"], [game]) for game in (tie, better, rookie_game)]
+    )
+    assert list(breaks) == [(better["match_id"], "Nox#EUW")]
+    found = breaks[(better["match_id"], "Nox#EUW")]
+    assert [(b.category.key, b.value, b.previous.value, b.personal) for b in found] == [("kills", 9, 8, True)]
+
+
+def test_personal_bests_skip_worst_categories_and_group_records_come_first():
+    book = build_record_book(history(kills=10, vision=30, deaths=3) + history(riot_id="Nox#EUW", kills=5, vision=20, deaths=2))
+    game = row("Nox#EUW", days=400, kills=11, vision=25, deaths=9, minutes=40)
+    found = detect_record_breaks(book, [(game["match_id"], [game])])[(game["match_id"], "Nox#EUW")]
+    # kills: group record (no personal line too); vision: personal best; deaths and
+    # longest game are "worst" categories, so no personal line (deaths 9 is a group record).
+    assert [(b.category.key, b.personal) for b in found] == [
+        ("kills", False), ("deaths", False), ("longest_game", False), ("vision", True)
+    ]
+
+
+def test_personal_best_line():
+    book = build_record_book([row("NoxVain#EUW", vision=144, champion="Rell", days=40)])
+    line = format_record_break(
+        RecordBreak(CATEGORIES_BY_KEY["vision"], "NoxVain#EUW", 155, book.bests["vision"]["NoxVain#EUW"], personal=True)
+    )
+    assert line == "-# 📈 Personal best: 155 vision score (was 144 on Rell, Feb 2025)"
 
 
 def test_record_break_line():

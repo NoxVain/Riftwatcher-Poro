@@ -45,7 +45,7 @@ This repository is a modular Python Discord bot.
 - `src/match_stats.py`: Per-player match stats (`player_match_stats`, one row per tracked player per cached match) extracted from cached payloads by a background sync, so analysis is a SQL query instead of a payload scan.
 - `src/player_analysis.py`: Pure `!analyze` rules (guarded strengths/tips per queue) and the compact card; the handler is `src/commands/analysis_handlers.py`.
 - `src/belts.py`: Weekly title belts: pure awards/defended-streak logic and the background task that posts the card in `EVENTS_CHANNEL_ID` once per closed report week.
-- `src/records.py`: Pure Hall of Fame logic (ranked-only group records, personal bests, streaks) for `!records` and the "New group record" recap lines; the handler is `src/commands/records_handlers.py`.
+- `src/records.py`: Pure Hall of Fame logic (ranked-only group records, personal bests, streaks) for `!records` and the "New group record" and "Personal best" recap lines; the handler is `src/commands/records_handlers.py`.
 - `tests/`: Unit tests for pure logic, command routing/handlers, workers, and runtime helpers.
 - `README.md`, `ARCHITECTURE.md`, `OPERATIONS.md`, `SELF_HOSTING.md`: Runtime, design, runbook, and deployment documentation. `IMPROVEMENT_BACKLOG.md`: planned features and recently shipped work.
 - `.github/workflows/test.yml`: GitHub Actions CI (pytest on the `.python-version` Python for pushes/PRs to `main`); `.github/dependabot.yml`: weekly pip and GitHub Actions update PRs.

@@ -82,12 +82,12 @@ async def _attach_stored_lp(
     return player_line
 
 
-# Group records are optional enrichment: past this, the recap goes out without them.
+# Group records and personal bests are optional enrichment: past this, the recap goes out without them.
 RECORD_CHECK_TIMEOUT_SECONDS = 10
 
 
 async def _find_record_breaks(record_matches, *, db_iter_record_rows, db_upsert_player_match_stats, log):
-    """New group records set by this batch's ranked games: {(match_id, riot_id): [RecordBreak]}.
+    """Group records and personal bests set by this batch's ranked games: {(match_id, riot_id): [RecordBreak]}.
 
     Compares against every stored ranked game that ended before the batch, then stores
     the batch's rows, so the next recap compares against these games too (the stats
@@ -109,12 +109,19 @@ async def _find_record_breaks(record_matches, *, db_iter_record_rows, db_upsert_
     try:
         stored_games, breaks = await asyncio.wait_for(asyncio.to_thread(check), timeout=RECORD_CHECK_TIMEOUT_SECONDS)
         found = [record for records in breaks.values() for record in records]
-        details = ", ".join(
-            f"{record.category.key} {record.riot_id} {record.value:g} (was {record.previous.value:g})" for record in found
-        )
+        group = [record for record in found if not record.personal]
+        personal = [record for record in found if record.personal]
+
+        def details(records):
+            text = ", ".join(
+                f"{record.category.key} {record.riot_id} {record.value:g} (was {record.previous.value:g})"
+                for record in records
+            )
+            return f" ({text})" if text else ""
+
         log(
             f"[records] Checked {len(record_matches)} ranked match(es) against {stored_games} stored games: "
-            f"new_records={len(found)}{f' ({details})' if details else ''}."
+            f"new_records={len(group)}{details(group)} personal_bests={len(personal)}{details(personal)}."
         )
     except Exception as exc:
         log(f"[records] Record check skipped; recap posts without it: {type(exc).__name__}: {exc}")
@@ -479,7 +486,8 @@ async def process_recap_cycle(
                     lp_waiting=lp_waiting,
                     log=log,
                 )
-            # One line per record, after the stats; LP edits only touch the heading line.
+            # One line per record after the stats, group records first, then small personal-best
+            # lines; LP edits only touch the heading line.
             for record_break in record_breaks.get((match_id, riot_id), []):
                 player_line += f"\n{format_record_break(record_break)}"
             # _attach_stored_lp queued this player if LP will be edited in later.

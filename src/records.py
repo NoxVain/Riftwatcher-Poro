@@ -5,7 +5,8 @@ DB access. Only ranked games count (Solo/Duo, Flex and ranked 5v5), remakes excl
 
 `RecordBook` reads rows in game order and keeps each player's best per category,
 their ranked streaks and career totals. The same book drives `!records` (group card),
-`!records Name` (personal bests) and the "New group record" lines in match recaps.
+`!records Name` (personal bests) and the "New group record" and "Personal best" lines
+in match recaps.
 """
 
 from dataclasses import dataclass, field
@@ -15,6 +16,8 @@ import discord
 RECORD_QUEUE_IDS = (420, 440, 710)
 # Don't announce records until the table holds a real history (fresh installs, rebuilds).
 MIN_GAMES_FOR_RECAP_RECORDS = 200
+# A player's first games would all be personal bests; wait until they have a history.
+MIN_GAMES_FOR_PERSONAL_BESTS = 50
 RECORDS_ACCENT = 0xF0B232
 
 SECTION_CARRY = "Carry"
@@ -198,16 +201,20 @@ class RecordBreak:
     riot_id: str
     value: float
     previous: Holder
+    # True for a player's own best (a "Personal best" line), False for a group record.
+    personal: bool = False
 
 
 def detect_record_breaks(book, matches):
-    """Group records broken by new games, in order.
+    """Group records and personal bests broken by new games, in order.
 
     `matches` is [(match_id, [row, ...])] oldest first; each row is a stats row with
     `riot_id`. Only a value strictly above the record counts; when several tracked
-    players in one game pass it, the best of them takes the record. Each match is
-    added to the book afterwards, so a later game must beat an earlier one.
-    Returns {(match_id, riot_id): [RecordBreak, ...]}.
+    players in one game pass it, the best of them takes the record. Personal bests
+    cover the "best" categories of `!records Name`, need MIN_GAMES_FOR_PERSONAL_BESTS
+    earlier ranked games, and are skipped where the same game set the group record.
+    Each match is added to the book afterwards, so a later game must beat an earlier one.
+    Returns {(match_id, riot_id): [RecordBreak, ...]}, group records first.
     """
     breaks = {}
     if book.games < MIN_GAMES_FOR_RECAP_RECORDS:
@@ -228,6 +235,21 @@ def detect_record_breaks(book, matches):
                 breaks.setdefault((match_id, row["riot_id"]), []).append(
                     RecordBreak(category, row["riot_id"], value, previous)
                 )
+        for row in eligible:
+            riot_id = row["riot_id"]
+            career = book.careers.get(riot_id)
+            if career is None or career.games < MIN_GAMES_FOR_PERSONAL_BESTS:
+                continue
+            group_keys = {found.category.key for found in breaks.get((match_id, riot_id), [])}
+            for category in CATEGORIES:
+                if category.personal != "best" or category.key in group_keys:
+                    continue
+                value = category.value(row)
+                previous = book.bests.get(category.key, {}).get(riot_id)
+                if value is not None and previous is not None and value > previous.value:
+                    breaks.setdefault((match_id, riot_id), []).append(
+                        RecordBreak(category, riot_id, value, previous, personal=True)
+                    )
         for row in rows:
             book.add(row)
     return breaks
@@ -242,10 +264,15 @@ def _month(at):
 
 
 def format_record_break(record_break):
-    """One recap line per broken record."""
+    """One recap line per broken record; personal bests are small text."""
     category = record_break.category
     previous = record_break.previous
     champion = f" on {previous.champion}" if previous.champion else ""
+    if record_break.personal:
+        return (
+            f"-# 📈 Personal best: {category.phrase(record_break.value)} "
+            f"(was {category.text(previous.value)}{champion}, {_month(previous.at)})"
+        )
     return (
         f"🏆 **New group record:** {category.phrase(record_break.value)} "
         f"(was {category.text(previous.value)}, {_name(previous.riot_id)}{champion}, {_month(previous.at)})"

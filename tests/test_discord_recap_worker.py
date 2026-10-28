@@ -1168,6 +1168,22 @@ def test_recap_shows_one_line_per_new_group_record_and_stores_the_game():
     assert any("[records] Checked 1 ranked match(es) against 250 stored games: new_records=1 (kills Alpha#NA1 12" in line for line in logs)
 
 
+def test_recap_ends_with_a_small_personal_best_line():
+    def iter_rows(queue_ids, **kwargs):
+        rows = list(_stored_history(queue_ids, **kwargs))
+        bravo = [dict(stored, kills=20) for stored in rows]
+        # Alpha's own history: 60 games with 10 kills on Lux, everything else higher than this game.
+        alpha = [dict(stored, match_id=f"EUW1_A{i}", riot_id="Alpha#NA1", champion_name="Lux") for i, stored in enumerate(rows[:60])]
+        return iter(sorted(bravo + alpha, key=lambda stored: stored["game_end_at"]))
+
+    logs = []
+    channel = _record_cycle(iter_rows=iter_rows, kills=12, logs=logs)
+    content = channel.messages[0]["content"]
+    assert content.endswith("\n-# 📈 Personal best: 12 kills (was 10 on Lux, Jan 2025)")
+    assert "New group record" not in content
+    assert any("new_records=0 personal_bests=1 (kills Alpha#NA1 12 (was 10))." in line for line in logs)
+
+
 def test_recap_without_a_record_has_no_record_line():
     channel = _record_cycle(iter_rows=_stored_history, kills=10)
     assert "New group record" not in channel.messages[0]["content"]

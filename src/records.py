@@ -71,10 +71,6 @@ def _column(name, min_minutes=0):
     return value
 
 
-def _deathless_kills(row):
-    return row.get("kills") if row.get("deaths") == 0 and row.get("kills") else None
-
-
 def _cs_per_minute(row):
     minutes = _minutes(row)
     return row["cs"] / minutes if minutes >= 20 and row.get("cs") is not None else None
@@ -82,10 +78,10 @@ def _cs_per_minute(row):
 
 CATEGORIES = (
     RecordCategory("kills", "kills", SECTION_CARRY, _column("kills"), personal="best", singular="kill"),
-    # Most kills in one game with 0 deaths (not a kill streak).
+    # Riot's largestKillingSpree: most kills in a row without dying in one game.
     RecordCategory(
-        "deathless_kills", "kills in a deathless game", SECTION_CARRY, _deathless_kills, personal="best",
-        singular="kill in a deathless game",
+        "kill_streak", "kills in a row", SECTION_CARRY, _column("killing_spree"), personal="best",
+        singular="kill in a row",
     ),
     RecordCategory("damage", "damage", SECTION_CARRY, _column("damage_to_champions"), personal="best"),
     RecordCategory(
@@ -129,6 +125,7 @@ class _Career:
     wins: int = 0
     seconds: int = 0
     pentakills: int = 0
+    deathless: int = 0
     run_win: bool | None = None
     run_length: int = 0
     first_at: object = None
@@ -169,6 +166,7 @@ class RecordBook:
         career.wins += int(won)
         career.seconds += int(row.get("duration_seconds") or 0)
         career.pentakills += int(row.get("penta_kills") or 0)
+        career.deathless += int(row.get("deaths") == 0)
         if career.first_at is None:
             career.first_at = at
         career.run_length = career.run_length + 1 if career.run_win == won else 1
@@ -182,6 +180,14 @@ class RecordBook:
         """Group record for a category: the best value, the earliest game on a tie."""
         holders = (self.streaks[key] if key in self.streaks else self.bests.get(key, {})).values()
         return min(holders, key=lambda h: (-h.value, h.at), default=None)
+
+    def career_rank(self, field_name, riot_id):
+        """Place among players by a career count (1 + players with strictly more), or None."""
+        mine = self.careers.get(riot_id)
+        if mine is None:
+            return None
+        value = getattr(mine, field_name)
+        return 1 + sum(1 for career in self.careers.values() if getattr(career, field_name) > value)
 
     def group_rank(self, key, riot_id):
         """1 + the number of players with a strictly better best, or None."""
@@ -317,6 +323,18 @@ def _streak_line(holder, kind, *, with_name=True, rank=None):
     return " · ".join(parts)
 
 
+def _deathless_text(count):
+    return f"**{count:,}** deathless game{'s' if count != 1 else ''}"
+
+
+def _rank_suffix(rank):
+    if rank == 1:
+        return " · group record"
+    if rank in (2, 3):
+        return f" · #{rank} in the group"
+    return ""
+
+
 def _hours(seconds):
     return f"{round(seconds / 3600):,}"
 
@@ -350,6 +368,10 @@ def format_group_sections(book):
     if total_pentas:
         name, career = max(book.careers.items(), key=lambda item: (item[1].pentakills, -item[1].games))
         lines.append(f"**{career.pentakills}** pentakills · {_name(name)} · group total {total_pentas}")
+    total_deathless = sum(career.deathless for career in book.careers.values())
+    if total_deathless:
+        name, career = max(book.careers.items(), key=lambda item: (item[1].deathless, -item[1].games))
+        lines.append(f"{_deathless_text(career.deathless)} · {_name(name)} · group total {total_deathless:,}")
     name, career = max(book.careers.items(), key=lambda item: item[1].games)
     lines.append(f"**{career.games:,}** games, {_hours(career.seconds)} hours · {_name(name)}")
     sections.append("**Streaks and career**\n" + "\n".join(lines))
@@ -379,6 +401,8 @@ def format_personal_sections(book, riot_id):
         best.append(_streak_line(win_run, "win", with_name=False, rank=book.group_rank("win", riot_id)))
     if career.pentakills:
         best.append(f"**{career.pentakills}** pentakill{'s' if career.pentakills != 1 else ''}")
+    if career.deathless:
+        best.append(_deathless_text(career.deathless) + _rank_suffix(book.career_rank("deathless", riot_id)))
     loss_run = book.streaks["loss"].get(riot_id)
     if loss_run is not None:
         worst.append(_streak_line(loss_run, "loss", with_name=False, rank=book.group_rank("loss", riot_id)))

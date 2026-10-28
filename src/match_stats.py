@@ -19,9 +19,12 @@ from src.report_logic import get_match_duration_seconds, get_match_end_unix_seco
 from src.runtime.memory import release_freed_memory
 
 # Bump when extraction changes, so the next pass rebuilds every row.
-STATS_VERSION = 3
+STATS_VERSION = 4
 STATS_FINGERPRINT_KEY = "player_match_stats_fingerprint"
 STATS_WATERMARK_KEY = "player_match_stats_cached_through"
+# STATS_VERSION of the last completed full pass; until it matches, a rebuild is under way
+# and new columns are only partly filled (recap record checks wait for it).
+STATS_VERSION_KEY = "player_match_stats_version"
 STATS_SYNC_INTERVAL_SECONDS = 600
 # Re-read a little before the watermark: a row cached just before the last pass may
 # have committed after it read. Upserts make the overlap harmless.
@@ -74,6 +77,7 @@ STATS_COLUMNS = (
     "skillshots_dodged",
     "pings",
     "time_dead_seconds",
+    "killing_spree",
 )
 
 
@@ -216,6 +220,8 @@ def extract_player_match_rows(payload, tracked_puuids):
             "skillshots_dodged": _int(challenges.get("skillshotsDodged")),
             "pings": _pings(me),
             "time_dead_seconds": _int(me.get("totalTimeSpentDead")),
+            # Most kills in a row without dying in this game.
+            "killing_spree": _int(me.get("largestKillingSpree")),
         })
     return rows
 
@@ -284,6 +290,7 @@ def sync_player_match_stats(
         set_state(STATS_WATERMARK_KEY, newest.isoformat())
     if full:
         set_state(STATS_FINGERPRINT_KEY, fingerprint)
+        set_state(STATS_VERSION_KEY, str(STATS_VERSION))
     return {
         "mode": "full" if full else "incremental",
         "matches": match_count,

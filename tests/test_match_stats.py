@@ -12,6 +12,8 @@ from src.db import match_stats as db_match_stats
 from src.match_stats import (
     STATS_COLUMNS,
     STATS_FINGERPRINT_KEY,
+    STATS_VERSION,
+    STATS_VERSION_KEY,
     STATS_WATERMARK_KEY,
     WATERMARK_OVERLAP_SECONDS,
     extract_player_match_rows,
@@ -105,6 +107,12 @@ def test_extract_rows_for_each_tracked_player():
     assert nox["opponent_cs_diff"] == 5
     assert nox["arena_placement"] is None
     assert nox["tracked_teammates"] == [FRESH]
+    assert nox["killing_spree"] is None
+
+
+def test_extract_reads_the_largest_killing_spree():
+    payload = match("EUW1_9", [player(NOX, 100, "MIDDLE", kills=22, deaths=2, largestKillingSpree=21)])
+    assert extract_player_match_rows(payload, TRACKED)[0]["killing_spree"] == 21
 
 
 def test_extract_computes_shares_without_challenges():
@@ -189,6 +197,7 @@ def test_first_sync_rebuilds_everything_and_saves_state():
     assert store.since_calls == [None]
     assert store.deletes == [sorted(TRACKED)]
     assert store.state[STATS_FINGERPRINT_KEY] == stats_fingerprint(TRACKED)
+    assert store.state[STATS_VERSION_KEY] == str(STATS_VERSION)
     assert store.state[STATS_WATERMARK_KEY] == (T0 + timedelta(minutes=5)).isoformat()
 
 

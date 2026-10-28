@@ -91,6 +91,7 @@ RECORD_ROW_COLUMNS = (
     "vision_score",
     "solo_kills",
     "penta_kills",
+    "killing_spree",
 )
 RECORD_PAGE_ROWS = 1000
 

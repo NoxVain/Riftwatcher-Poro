@@ -30,7 +30,7 @@ _counter = iter(range(1, 1_000_000))
 
 def row(riot_id="Nox#EUW", *, days=0, queue=420, win=True, kills=5, deaths=3, assists=8, minutes=30,
         champion="Lux", damage=20000, share=0.25, taken=20000, gold=12000, cs=200, vision=30,
-        solo_kills=1, pentas=0, remake=False):
+        solo_kills=1, pentas=0, spree=3, remake=False):
     n = next(_counter)
     return {
         "match_id": f"EUW1_{n}",
@@ -52,6 +52,7 @@ def row(riot_id="Nox#EUW", *, days=0, queue=420, win=True, kills=5, deaths=3, as
         "vision_score": vision,
         "solo_kills": solo_kills,
         "penta_kills": pentas,
+        "killing_spree": spree,
     }
 
 
@@ -84,12 +85,12 @@ def test_tie_keeps_the_earlier_game():
 
 def test_category_eligibility():
     book = build_record_book([
-        row(kills=9, deaths=1),
-        row(kills=6, deaths=0),
+        row(spree=9),
+        row(spree=None),  # stats row from before the column existed
         row(minutes=14, share=0.6, cs=400),  # too short for share and CS/min
         row(minutes=25, share=0.4, cs=250),
     ])
-    assert book.record("deathless_kills").value == 6
+    assert book.record("kill_streak").value == 9
     assert book.record("damage_share").value == 0.4
     assert book.record("cs_per_minute").value == 10.0
     assert book.record("cs").value == 400
@@ -217,15 +218,17 @@ def test_group_card_sections():
     rows = [
         row("Freshwhite#euw", days=10, kills=34, champion="Caitlyn", pentas=2),
         row("JonastCvuHU#UNC", days=20, deaths=23, champion="Briar", win=False),
-        row("Not a snake#EUW", days=30, pentas=1),
+        row("Not a snake#EUW", days=30, pentas=1, deaths=0),
+        row("Not a snake#EUW", days=31, deaths=0),
     ]
     sections = format_group_sections(build_record_book(rows))
     text = "\n\n".join(sections)
-    assert sections[0] == "🏆 **Hall of Fame**\n-# 3 ranked games · 3 players · since Jan 2025"
+    assert sections[0] == "🏆 **Hall of Fame**\n-# 4 ranked games · 3 players · since Jan 2025"
     assert "**Carry**\n**34** kills · Freshwhite · Caitlyn · Jan 2025" in text
     assert "**23** deaths · JonastCvuHU · Briar · Jan 2025" in text
     assert "**3** pentakills" not in text
     assert "**2** pentakills · Freshwhite · group total 3" in text
+    assert "**2** deathless games · Not a snake · group total 2" in text
     assert sections[-1].endswith("`!records Name` for personal bests")
 
 
@@ -245,17 +248,21 @@ def test_personal_card_shows_place_in_group_and_hides_empty_bests():
     assert "**23** kills · Rakan · Jan 2025 · group record" in text
     assert "**Worst**\n**19** deaths" in text
     assert "pentakill" not in text
+    assert "deathless" not in text
 
 
-def test_personal_card_lists_deathless_kills_cs_per_minute_and_longest_game():
+def test_personal_card_lists_kill_streak_cs_per_minute_longest_game_and_deathless_games():
     rows = [
-        row("NoxVain#EUW", days=1, kills=7, deaths=0, cs=246, minutes=30, champion="Ahri"),
+        row("NoxVain#EUW", days=1, spree=11, deaths=0, cs=246, minutes=30, champion="Ahri"),
         row("NoxVain#EUW", days=2, minutes=52, win=False, champion="Rakan"),
+        row("Tamarin#EUW", days=3, deaths=0),
+        row("Tamarin#EUW", days=4, deaths=0),
     ]
     sections = format_personal_sections(build_record_book(rows), "NoxVain#EUW")
     best = next(section for section in sections if section.startswith("**Best**"))
     worst = next(section for section in sections if section.startswith("**Worst**"))
-    assert "**7** kills in a deathless game · Ahri · Jan 2025 · group record" in best
+    assert "**11** kills in a row · Ahri · Jan 2025 · group record" in best
+    assert best.endswith("\n**1** deathless game · #2 in the group")
     assert "**8.2** CS/min · Ahri · Jan 2025 · group record" in best
     assert "**52:00** longest game · Rakan · Jan 2025 · group record" in worst
 
@@ -397,10 +404,9 @@ def test_records_command_only_in_events_channel():
 
 
 def test_a_value_of_one_reads_singular():
-    book = build_record_book([row("Gizhmo#EUW", kills=1, deaths=0, solo_kills=1, assists=1, champion="Caitlyn")])
+    book = build_record_book([row("Gizhmo#EUW", kills=1, solo_kills=1, assists=1, champion="Caitlyn")])
     text = "\n\n".join(format_personal_sections(book, "Gizhmo#EUW"))
-    assert "**1** kill in a deathless game · Caitlyn" in text
+    assert "**1** kill · Caitlyn" in text
     assert "**1** solo kill · Caitlyn" in text
     assert "**1** assist · Caitlyn" in text
-    deathless = CATEGORIES_BY_KEY["deathless_kills"]
-    assert deathless.phrase(14) == "14 kills in a deathless game"
+    assert CATEGORIES_BY_KEY["kill_streak"].phrase(22) == "22 kills in a row"

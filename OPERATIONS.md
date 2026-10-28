@@ -222,13 +222,13 @@ GROUP BY 1 ORDER BY 2 DESC;
 Recaps of ranked games check for new group records and personal bests before posting:
 
 - Each check logs `[records] Checked <n> ranked match(es) against <games> stored games: new_records=<k> (<category> <riot id> <value> (was <old>), …) personal_bests=<k> (…).`
-- A failure or a check slower than 10 seconds logs `[records] Record check skipped; recap posts without it: …` and the recap goes out without record or personal-best lines.
+- A failure or a check slower than 10 seconds logs `[records] Record check skipped; recap posts without it: …` and the recap goes out without record or personal-best lines. While the stats table rebuilds after a `STATS_VERSION` bump (about 140 s after the deploy), the reason is `player_match_stats is rebuilding (built v3, need v4)`.
 - The worker then stores the recap's ranked games in `player_match_stats`; if that fails it logs `[records] Could not store recap games …` and the stats sync adds them on its next pass.
 - No record lines are posted while fewer than 200 ranked games are stored (fresh install), and no personal-best lines for a player with fewer than 50 stored ranked games.
-- Personal bests cover the Best categories of `!records Name` (kills, kills in a deathless game, damage, solo kills, CS, CS/min, vision, assists) and are skipped where the same game set the group record.
+- Personal bests cover the Best categories of `!records Name` (kills, kills in a row, damage, solo kills, CS, CS/min, vision, assists) and are skipped where the same game set the group record.
 - A replay of the 12 months to 2026-10-27 gave 8 recaps with record lines (13 lines) out of 3,412 ranked matches. A replay of the year to 2026-10-28 gave 75 personal-best lines in 70 recaps (at most 4 in one recap), about 6 a month.
 
-Pentakills come from the `penta_kills` column, added with `STATS_VERSION` 2. The first stats pass after that deploy rebuilds every row (140 s in production on 2026-10-27); until it finishes, the pentakill line is missing from `!records`.
+Pentakills come from the `penta_kills` column, added with `STATS_VERSION` 2. The first stats pass after that deploy rebuilds every row (140 s in production on 2026-10-27); until it finishes, the pentakill line is missing from `!records`. Kills in a row come from `killing_spree` (`STATS_VERSION` 4, 2026-10-29) and are missing from `!records` until that rebuild finishes.
 
 ## Weekly Title Belts
 

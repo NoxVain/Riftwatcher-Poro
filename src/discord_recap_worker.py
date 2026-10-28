@@ -25,7 +25,7 @@ from src.discord_text import (
     streak_callout_state_key,
     streak_tts_enabled_state_key,
 )
-from src.match_stats import extract_player_match_rows
+from src.match_stats import STATS_VERSION, STATS_VERSION_KEY, extract_player_match_rows
 from src.recap_cards import (
     RESULT_ACCENTS,
     CardMatch,
@@ -86,12 +86,15 @@ async def _attach_stored_lp(
 RECORD_CHECK_TIMEOUT_SECONDS = 10
 
 
-async def _find_record_breaks(record_matches, *, db_iter_record_rows, db_upsert_player_match_stats, log):
+async def _find_record_breaks(
+    record_matches, *, db_iter_record_rows, db_upsert_player_match_stats, db_get_state, log
+):
     """Group records and personal bests set by this batch's ranked games: {(match_id, riot_id): [RecordBreak]}.
 
     Compares against every stored ranked game that ended before the batch, then stores
     the batch's rows, so the next recap compares against these games too (the stats
-    sync would only add them on its next pass). Never raises.
+    sync would only add them on its next pass). Skipped while the stats table rebuilds
+    for a new STATS_VERSION, when new columns are only partly filled. Never raises.
     """
     if not record_matches:
         return {}
@@ -107,6 +110,9 @@ async def _find_record_breaks(record_matches, *, db_iter_record_rows, db_upsert_
 
     breaks = {}
     try:
+        built_version = db_get_state(STATS_VERSION_KEY)
+        if built_version != str(STATS_VERSION):
+            raise RuntimeError(f"player_match_stats is rebuilding (built v{built_version}, need v{STATS_VERSION})")
         stored_games, breaks = await asyncio.wait_for(asyncio.to_thread(check), timeout=RECORD_CHECK_TIMEOUT_SECONDS)
         found = [record for records in breaks.values() for record in records]
         group = [record for record in found if not record.personal]
@@ -428,6 +434,7 @@ async def process_recap_cycle(
         record_matches,
         db_iter_record_rows=db_iter_record_rows,
         db_upsert_player_match_stats=db_upsert_player_match_stats,
+        db_get_state=db_get_state,
         log=log,
     )
     champion_display_mode = DEFAULT_CHAMPION_DISPLAY_MODE

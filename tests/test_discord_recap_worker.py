@@ -10,6 +10,7 @@ import requests
 from discord_fakes import ComponentMessage, view_text
 from src.champion_icons import CHAMPION_DISPLAY_STATE_KEY
 from src.discord_recap_worker import process_recap_cycle
+from src.match_stats import STATS_VERSION, STATS_VERSION_KEY
 from src.recap_cards import ACCENT_WIN
 from src.recap_lp import handle_lp_event, lp_events_state_key, lp_pending_state_key
 
@@ -1102,7 +1103,7 @@ def test_concurrent_lp_edits_on_one_card_both_survive():
 
 
 
-def _record_cycle(*, iter_rows, kills=12, upserted=None, logs=None):
+def _record_cycle(*, iter_rows, kills=12, upserted=None, logs=None, stats_version=STATS_VERSION):
     channel = FakeChannel()
     riot = FakeRiotClient()
     now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
@@ -1118,7 +1119,7 @@ def _record_cycle(*, iter_rows, kills=12, upserted=None, logs=None):
         }
     }
     riot.mode_records_by_riot_id = {"Alpha#NA1": ({}, {})}
-    state = {_state_key("Alpha#NA1"): "EUW1_1"}
+    state = {_state_key("Alpha#NA1"): "EUW1_1", STATS_VERSION_KEY: str(stats_version)}
 
     async def edit_last_report_message(**kwargs):
         pass
@@ -1182,6 +1183,20 @@ def test_recap_ends_with_a_small_personal_best_line():
     assert content.endswith("\n-# 📈 Personal best: 12 kills (was 10 on Lux, Jan 2025)")
     assert "New group record" not in content
     assert any("new_records=0 personal_bests=1 (kills Alpha#NA1 12 (was 10))." in line for line in logs)
+
+
+def test_recap_skips_the_record_check_while_the_stats_table_rebuilds():
+    upserted = []
+    logs = []
+    channel = _record_cycle(iter_rows=_stored_history, kills=12, upserted=upserted, logs=logs, stats_version=STATS_VERSION - 1)
+    assert "New group record" not in channel.messages[0]["content"]
+    assert any(
+        f"[records] Record check skipped; recap posts without it: RuntimeError: player_match_stats is rebuilding "
+        f"(built v{STATS_VERSION - 1}, need v{STATS_VERSION})" in line
+        for line in logs
+    )
+    # The game is still stored for later checks.
+    assert [row["match_id"] for row in upserted] == ["EUW1_2"]
 
 
 def test_recap_without_a_record_has_no_record_line():

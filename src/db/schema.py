@@ -207,5 +207,6 @@ def init_db():
         "skillshots_dodged",
         "pings",
         "time_dead_seconds",
+        "killing_spree",
     ):
         db_execute(f"ALTER TABLE player_match_stats ADD COLUMN IF NOT EXISTS {column} INTEGER NULL;")

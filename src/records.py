@@ -44,12 +44,17 @@ class RecordCategory:
     text: object = _int_text
     # Shown on `!records Name`; "best" or "worst" section, or None to leave it out.
     personal: str | None = None
+    # Label for a value of exactly 1 ("1 kill"); None when the label reads the same.
+    singular: str | None = None
+
+    def label_for(self, value):
+        return self.singular if self.singular and value == 1 else self.label
 
     def phrase(self, value):
         """"34 kills", "longest game 64:46": the record as it reads in a recap line."""
         if self.key == "longest_game":
             return f"{self.label} {self.text(value)}"
-        return f"{self.text(value)} {self.label}"
+        return f"{self.text(value)} {self.label_for(value)}"
 
 
 def _minutes(row):
@@ -76,22 +81,28 @@ def _cs_per_minute(row):
 
 
 CATEGORIES = (
-    RecordCategory("kills", "kills", SECTION_CARRY, _column("kills"), personal="best"),
-    RecordCategory("deathless_kills", "kills without dying", SECTION_CARRY, _deathless_kills, personal="best"),
+    RecordCategory("kills", "kills", SECTION_CARRY, _column("kills"), personal="best", singular="kill"),
+    # Most kills in one game with 0 deaths (not a kill streak).
+    RecordCategory(
+        "deathless_kills", "kills in a deathless game", SECTION_CARRY, _deathless_kills, personal="best",
+        singular="kill in a deathless game",
+    ),
     RecordCategory("damage", "damage", SECTION_CARRY, _column("damage_to_champions"), personal="best"),
     RecordCategory(
         "damage_share", "of team damage", SECTION_CARRY, _column("damage_share", min_minutes=15),
         text=lambda v: f"{v * 100:.1f}%",
     ),
-    RecordCategory("solo_kills", "solo kills", SECTION_CARRY, _column("solo_kills"), personal="best"),
+    RecordCategory(
+        "solo_kills", "solo kills", SECTION_CARRY, _column("solo_kills"), personal="best", singular="solo kill"
+    ),
     RecordCategory("cs", "CS", SECTION_FARM, _column("cs"), personal="best"),
     RecordCategory(
         "cs_per_minute", "CS/min", SECTION_FARM, _cs_per_minute, text=lambda v: f"{v:.1f}", personal="best"
     ),
     RecordCategory("gold", "gold", SECTION_FARM, _column("gold_earned")),
     RecordCategory("vision", "vision score", SECTION_FARM, _column("vision_score"), personal="best"),
-    RecordCategory("assists", "assists", SECTION_FARM, _column("assists"), personal="best"),
-    RecordCategory("deaths", "deaths", SECTION_PAIN, _column("deaths"), personal="worst"),
+    RecordCategory("assists", "assists", SECTION_FARM, _column("assists"), personal="best", singular="assist"),
+    RecordCategory("deaths", "deaths", SECTION_PAIN, _column("deaths"), personal="worst", singular="death"),
     RecordCategory("damage_taken", "damage taken", SECTION_PAIN, _column("damage_taken")),
     RecordCategory(
         "longest_game", "longest game", SECTION_PAIN, _column("duration_seconds"), text=_duration_text,
@@ -280,7 +291,7 @@ def format_record_break(record_break):
 
 
 def _holder_line(category, holder, *, with_name=True, rank=None):
-    parts = [f"**{category.text(holder.value)}** {category.label}"]
+    parts = [f"**{category.text(holder.value)}** {category.label_for(holder.value)}"]
     if with_name:
         parts.append(_name(holder.riot_id))
     if holder.champion:

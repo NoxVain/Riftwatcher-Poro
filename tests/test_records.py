@@ -255,7 +255,7 @@ def test_personal_card_lists_deathless_kills_cs_per_minute_and_longest_game():
     sections = format_personal_sections(build_record_book(rows), "NoxVain#EUW")
     best = next(section for section in sections if section.startswith("**Best**"))
     worst = next(section for section in sections if section.startswith("**Worst**"))
-    assert "**7** kills without dying · Ahri · Jan 2025 · group record" in best
+    assert "**7** kills in a deathless game · Ahri · Jan 2025 · group record" in best
     assert "**8.2** CS/min · Ahri · Jan 2025 · group record" in best
     assert "**52:00** longest game · Rakan · Jan 2025 · group record" in worst
 
@@ -394,3 +394,13 @@ def test_records_command_falls_back_to_text():
 def test_records_command_only_in_events_channel():
     channel = run_command("!records", channel=FakeChannel(channel_id=5))
     assert channel.sent == ["Use `!records` in <#999>."]
+
+
+def test_a_value_of_one_reads_singular():
+    book = build_record_book([row("Gizhmo#EUW", kills=1, deaths=0, solo_kills=1, assists=1, champion="Caitlyn")])
+    text = "\n\n".join(format_personal_sections(book, "Gizhmo#EUW"))
+    assert "**1** kill in a deathless game · Caitlyn" in text
+    assert "**1** solo kill · Caitlyn" in text
+    assert "**1** assist · Caitlyn" in text
+    deathless = CATEGORIES_BY_KEY["deathless_kills"]
+    assert deathless.phrase(14) == "14 kills in a deathless game"

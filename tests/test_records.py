@@ -213,6 +213,19 @@ def test_personal_card_shows_place_in_group_and_hides_empty_bests():
     assert "pentakill" not in text
 
 
+def test_personal_card_lists_deathless_kills_cs_per_minute_and_longest_game():
+    rows = [
+        row("NoxVain#EUW", days=1, kills=7, deaths=0, cs=246, minutes=30, champion="Ahri"),
+        row("NoxVain#EUW", days=2, minutes=52, win=False, champion="Rakan"),
+    ]
+    sections = format_personal_sections(build_record_book(rows), "NoxVain#EUW")
+    best = next(section for section in sections if section.startswith("**Best**"))
+    worst = next(section for section in sections if section.startswith("**Worst**"))
+    assert "**7** kills without dying · Ahri · Jan 2025 · group record" in best
+    assert "**8.2** CS/min · Ahri · Jan 2025 · group record" in best
+    assert "**52:00** longest game · Rakan · Jan 2025 · group record" in worst
+
+
 def test_personal_card_for_player_without_games():
     sections = format_personal_sections(build_record_book([]), "New#EUW")
     assert sections == ["🏆 **New** · personal bests", "No ranked games recorded yet."]

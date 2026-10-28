@@ -74,7 +74,7 @@ def _cs_per_minute(row):
 
 CATEGORIES = (
     RecordCategory("kills", "kills", SECTION_CARRY, _column("kills"), personal="best"),
-    RecordCategory("deathless_kills", "kills without dying", SECTION_CARRY, _deathless_kills),
+    RecordCategory("deathless_kills", "kills without dying", SECTION_CARRY, _deathless_kills, personal="best"),
     RecordCategory("damage", "damage", SECTION_CARRY, _column("damage_to_champions"), personal="best"),
     RecordCategory(
         "damage_share", "of team damage", SECTION_CARRY, _column("damage_share", min_minutes=15),
@@ -82,14 +82,17 @@ CATEGORIES = (
     ),
     RecordCategory("solo_kills", "solo kills", SECTION_CARRY, _column("solo_kills"), personal="best"),
     RecordCategory("cs", "CS", SECTION_FARM, _column("cs"), personal="best"),
-    RecordCategory("cs_per_minute", "CS/min", SECTION_FARM, _cs_per_minute, text=lambda v: f"{v:.1f}"),
+    RecordCategory(
+        "cs_per_minute", "CS/min", SECTION_FARM, _cs_per_minute, text=lambda v: f"{v:.1f}", personal="best"
+    ),
     RecordCategory("gold", "gold", SECTION_FARM, _column("gold_earned")),
     RecordCategory("vision", "vision score", SECTION_FARM, _column("vision_score"), personal="best"),
     RecordCategory("assists", "assists", SECTION_FARM, _column("assists"), personal="best"),
     RecordCategory("deaths", "deaths", SECTION_PAIN, _column("deaths"), personal="worst"),
     RecordCategory("damage_taken", "damage taken", SECTION_PAIN, _column("damage_taken")),
     RecordCategory(
-        "longest_game", "longest game", SECTION_PAIN, _column("duration_seconds"), text=_duration_text
+        "longest_game", "longest game", SECTION_PAIN, _column("duration_seconds"), text=_duration_text,
+        personal="worst",
     ),
 )
 CATEGORIES_BY_KEY = {category.key: category for category in CATEGORIES}

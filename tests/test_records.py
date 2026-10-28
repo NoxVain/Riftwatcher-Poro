@@ -221,9 +221,11 @@ def test_group_card_sections():
         row("Not a snake#EUW", days=30, pentas=1, deaths=0),
         row("Not a snake#EUW", days=31, deaths=0),
     ]
+    # Freshwhite and JonastCvuHU in the same match: one game in the header.
+    rows[1]["match_id"] = rows[0]["match_id"]
     sections = format_group_sections(build_record_book(rows))
     text = "\n\n".join(sections)
-    assert sections[0] == "🏆 **Hall of Fame**\n-# 4 ranked games · 3 players · since Jan 2025"
+    assert sections[0] == "🏆 **Hall of Fame**\n-# 3 ranked games · 3 players · since Jan 2025"
     assert "**Carry**\n**34** kills · Freshwhite · Caitlyn · Jan 2025" in text
     assert "**23** deaths · JonastCvuHU · Briar · Jan 2025" in text
     assert "**3** pentakills" not in text
@@ -362,7 +364,7 @@ def test_records_command_sends_group_card():
     channel = run_command("!records", logs=logs)
     assert channel.sent[0].startswith("🏆 **Hall of Fame**")
     assert "**30** kills · Tamarin" in channel.sent[0]
-    assert logs[-1] == "[records] Sent group records: games=2."
+    assert logs[-1] == "[records] Sent group records: games=2 matches=2."
 
 
 def test_records_command_sends_personal_bests():

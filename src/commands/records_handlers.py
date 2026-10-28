@@ -49,5 +49,5 @@ async def handle_records_commands(ctx):
     except discord.HTTPException as exc:
         ctx.log(f"[records] Discord rejected the records card (HTTP {getattr(exc, 'status', '?')}); sending it as plain text.")
         await channel.send("\n\n".join(sections))
-    ctx.log(f"[records] Sent {'personal bests for ' + riot_id if riot_id else 'group records'}: games={book.games}.")
+    ctx.log(f"[records] Sent {'personal bests for ' + riot_id if riot_id else 'group records'}: games={book.games} matches={len(book.match_ids)}.")
     return True

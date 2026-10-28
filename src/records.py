@@ -138,7 +138,10 @@ class RecordBook:
     # "win" / "loss" -> riot_id -> longest ranked streak
     streaks: dict = field(default_factory=lambda: {"win": {}, "loss": {}})
     careers: dict = field(default_factory=dict)
+    # Player-games: a match with three tracked players counts three times.
     games: int = 0
+    # Unique matches, for the Hall of Fame header.
+    match_ids: set = field(default_factory=set)
     first_at: object = None
 
     def add(self, row):
@@ -148,6 +151,7 @@ class RecordBook:
         riot_id = row["riot_id"]
         at = row["game_end_at"]
         self.games += 1
+        self.match_ids.add(row.get("match_id"))
         if self.first_at is None or at < self.first_at:
             self.first_at = at
         for category in CATEGORIES:
@@ -348,7 +352,7 @@ def format_group_sections(book):
         return ["🏆 **Hall of Fame**", "No ranked games recorded yet."]
     players = len(book.careers)
     header = (
-        f"🏆 **Hall of Fame**\n-# {book.games:,} ranked games · {players} players · since {_month(book.first_at)}"
+        f"🏆 **Hall of Fame**\n-# {len(book.match_ids):,} ranked games · {players} players · since {_month(book.first_at)}"
     )
     sections = [header]
     for section in (SECTION_CARRY, SECTION_FARM, SECTION_PAIN):

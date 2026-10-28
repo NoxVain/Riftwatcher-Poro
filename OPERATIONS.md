@@ -217,7 +217,7 @@ GROUP BY 1 ORDER BY 2 DESC;
 
 ## Records
 
-`!records` and `!records Name` (events channel, anyone can run them) read all ranked rows (Solo/Duo, Flex, ranked 5v5; no remakes) from `player_match_stats` in pages of 1,000 and log `[records] Sent group records: games=…` or `[records] Sent personal bests for <riot id>: games=…`.
+`!records` and `!records Name` (events channel, anyone can run them) read all ranked rows (Solo/Duo, Flex, ranked 5v5; no remakes) from `player_match_stats` in pages of 1,000 and log `[records] Sent group records: games=… matches=…` or `[records] Sent personal bests for <riot id>: games=… matches=…` (`games` counts player-games, `matches` unique matches).
 
 Recaps of ranked games check for new group records and personal bests before posting:
 

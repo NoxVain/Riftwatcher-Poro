@@ -15,11 +15,12 @@ import hashlib
 import time
 from datetime import datetime, timedelta, timezone
 
+from src.discord_text import ARENA_QUEUE_IDS
 from src.report_logic import get_match_duration_seconds, get_match_end_unix_seconds, is_remake_match
 from src.runtime.memory import release_freed_memory
 
 # Bump when extraction changes, so the next pass rebuilds every row.
-STATS_VERSION = 5
+STATS_VERSION = 6
 STATS_FINGERPRINT_KEY = "player_match_stats_fingerprint"
 STATS_WATERMARK_KEY = "player_match_stats_cached_through"
 # STATS_VERSION of the last completed full pass; until it matches, a rebuild is under way
@@ -208,7 +209,7 @@ def extract_player_match_rows(payload, tracked_puuids):
                 int(me.get("goldEarned", 0) or 0) - int(opponent.get("goldEarned", 0) or 0) if opponent else None
             ),
             "opponent_cs_diff": _cs(me) - _cs(opponent) if opponent else None,
-            "arena_placement": _int(me.get("placement")) if info.get("queueId") == 1700 else None,
+            "arena_placement": _int(me.get("placement")) if info.get("queueId") in ARENA_QUEUE_IDS else None,
             "tracked_teammates": sorted(
                 p.get("puuid")
                 for p in participants

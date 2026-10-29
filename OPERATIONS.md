@@ -240,6 +240,16 @@ The belts card for a report week posts in `EVENTS_CHANNEL_ID` about 20-30 minute
 - To repost a week (e.g. after fixing a bug), set `weekly_belts_state` back to the previous week's value, or delete it to start over from a silent baseline (defended streaks reset).
 - The belt columns came with `STATS_VERSION` 3, whose deploy rebuilds every row (about 140 s). Ping counts only exist in newer payloads; older rows have NULL and never win a belt.
 
+## Poro Wrapped
+
+The group Wrapped posts once in `EVENTS_CHANNEL_ID` on 31 December between 18:00 and about 18:10 Oslo (the task checks every 10 minutes), covering 1 January until 18:00. `!wrapped Name` is open from then until 31 January.
+
+- Logs: `[wrapped] Posted Wrapped <year> in channel <id>: cards=… games=… players=….` and `[wrapped] Sent Wrapped <year> for <riot id>: …` (`(admin preview)` when an admin runs it outside the window).
+- Preview before New Year's Eve: as an admin, run `!wrapped` (group cards) or `!wrapped Name` in the events channel. It posts there, so everyone can see it.
+- `[wrapped] Channel … not available; retrying next check.` and `[wrapped] Wrapped check failed; retrying next check: …` retry every 10 minutes. If the bot is down at 18:00, the post goes out at the first check after startup (until the end of January).
+- The year is stored in `poro_wrapped_posted_year` before sending, so a send that fails after that is not retried. To repost, delete that key; the next check posts again.
+- Arena 3x6 placements came with `STATS_VERSION` 6 (the deploy rebuilds every row, about 2 minutes); before that, only queue 1700 Arena games had a placement.
+
 ## Match Cache Retention
 
 Production runs with `MATCH_CACHE_RETENTION_DAYS=0` (set 2026-10-27), so cached matches are never deleted. The cache is the bot's only complete match history:

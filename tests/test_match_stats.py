@@ -141,6 +141,9 @@ def test_extract_marks_remakes_and_arena_placement():
     assert extract_player_match_rows(remake, TRACKED)[0]["remake"] is True
     arena_row = extract_player_match_rows(arena, TRACKED)[0]
     assert arena_row["arena_placement"] == 3
+    # Arena 3x6 (1750) carries a placement too.
+    arena_3x6 = match("EUW1_4", [player(NOX, 100, "", placement=5)], queue=1750)
+    assert extract_player_match_rows(arena_3x6, TRACKED)[0]["arena_placement"] == 5
     assert arena_row["team_position"] is None and arena_row["opponent_gold_diff"] is None
 
 
@@ -396,3 +399,43 @@ def test_db_delete_player_match_stats_except_passes_puuid_list(monkeypatch):
     db_match_stats.db_delete_player_match_stats_except([NOX, FRESH])
 
     assert fake.queries == [("DELETE FROM player_match_stats WHERE NOT (puuid = ANY(%s));", ([NOX, FRESH],))]
+
+
+def test_db_iter_wrapped_rows_pages_all_queues_in_the_period(monkeypatch):
+    columns = db_match_stats.WRAPPED_ROW_COLUMNS
+    end_index = columns.index("game_end_at")
+    pages = []
+
+    def execute(query, params=None, fetch=False):
+        pages.append((query, params))
+        if len(pages) == 1:
+            first = [None] * len(columns)
+            first[0], first[end_index] = "EUW1_1", T0
+            second = list(first)
+            second[0] = "EUW1_2"
+            return [(*first, "p1", "Nox#EUW"), (*second, "p1", "Nox#EUW")]
+        return []
+
+    monkeypatch.setattr(db_match_stats, "db_execute", execute)
+    rows = list(db_match_stats.db_iter_wrapped_rows(T0, T0 + timedelta(days=1), batch_size=2))
+
+    assert [row["match_id"] for row in rows] == ["EUW1_1", "EUW1_2"]
+    assert rows[0]["riot_id"] == "Nox#EUW" and "arena_placement" in rows[0]
+    first_query, first_params = pages[0]
+    assert "NOT s.remake AND s.game_end_at >= %s AND s.game_end_at < %s" in first_query
+    assert "queue_id" not in first_query.split("WHERE", 1)[1]
+    assert first_params == (T0, T0 + timedelta(days=1), 2)
+    # The second page continues after the last row of the first.
+    assert pages[1][1] == (T0, T0 + timedelta(days=1), T0, "EUW1_2", "p1", 2)
+
+
+def test_db_load_all_ranked_states_groups_by_player(monkeypatch):
+    import src.db.ranked_state as db_ranked_state
+
+    monkeypatch.setattr(db_ranked_state, "db_execute", lambda query, params=None, fetch=False: [
+        ("Nox#EUW", "RANKED_FLEX_SR", "GOLD", "IV", 24, 10, 9, False, False, False, False, T0),
+        ("Nox#EUW", "RANKED_SOLO_5X5", "BRONZE", "I", 79, 5, 6, False, False, False, False, T0),
+    ])
+    states = db_ranked_state.db_load_all_ranked_states()
+    assert [entry["queue_type"] for entry in states["Nox#EUW"]] == ["RANKED_FLEX_SR", "RANKED_SOLO_5X5"]
+    assert states["Nox#EUW"][1]["tier"] == "BRONZE"

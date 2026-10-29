@@ -17,6 +17,7 @@ from src.constants import (
     TEST_COMMAND,
     TTS_COMMAND,
     WEEK_COMMAND,
+    WRAPPED_COMMAND,
 )
 
 
@@ -38,6 +39,7 @@ def format_help_text(*, report_day_start_hour, daily_channel_id, weekly_channel_
         f"- `{PROFILE_COMMAND} Name#Tag`: Show player profile summary (run in {events_channel_ref}).\n"
         f"- `{ANALYZE_COMMAND} Name#Tag [solo|flex]`: Strengths and tips from a year of ranked games; Solo/Duo unless `flex` (run in {events_channel_ref}).\n"
         f"- `{RECORDS_COMMAND} [Name#Tag]`: Group records from ranked games, or one player's personal bests (run in {events_channel_ref}).\n"
+        f"- `{WRAPPED_COMMAND} Name#Tag`: A player's Poro Wrapped for the year, from 31 Dec 18:00 until the end of January (run in {events_channel_ref}).\n"
         f"- `{RIOT_TEST_COMMAND}`: Verify Riot API connectivity (run in {events_channel_ref}).\n"
         f"- `{TEST_COMMAND}`: Verify Discord send permissions (run in {events_channel_ref}).\n"
         f"- `{STREAK_COMMAND} Name#Tag`: Manually post current win/loss streak callout (run in {f'<#{match_recap_channel_id}>' if match_recap_channel_id else events_channel_ref}).\n"
@@ -67,6 +69,7 @@ def is_supported_command(content_lower):
         ANALYZE_COMMAND.casefold(),
         ANALYZE_ALIAS.casefold(),
         RECORDS_COMMAND.casefold(),
+        WRAPPED_COMMAND.casefold(),
     }
     if content_lower in known_exact:
         return True
@@ -82,6 +85,7 @@ def is_supported_command(content_lower):
         or content_lower.startswith(f"{ANALYZE_COMMAND.casefold()} ")
         or content_lower.startswith(f"{ANALYZE_ALIAS.casefold()} ")
         or content_lower.startswith(f"{RECORDS_COMMAND.casefold()} ")
+        or content_lower.startswith(f"{WRAPPED_COMMAND.casefold()} ")
     )
 
 
@@ -122,6 +126,7 @@ def command_channel_id(content_lower, *, daily_channel_id, weekly_channel_id, ev
             ANALYZE_COMMAND.casefold(),
             ANALYZE_ALIAS.casefold(),
             RECORDS_COMMAND.casefold(),
+            WRAPPED_COMMAND.casefold(),
         }
         or content_lower.startswith(f"{ADD_COMMAND.casefold()} ")
         or content_lower.startswith(f"{REMOVE_COMMAND.casefold()} ")
@@ -132,6 +137,7 @@ def command_channel_id(content_lower, *, daily_channel_id, weekly_channel_id, ev
         or content_lower.startswith(f"{ANALYZE_COMMAND.casefold()} ")
         or content_lower.startswith(f"{ANALYZE_ALIAS.casefold()} ")
         or content_lower.startswith(f"{RECORDS_COMMAND.casefold()} ")
+        or content_lower.startswith(f"{WRAPPED_COMMAND.casefold()} ")
     ):
         return events_channel_id
     return None

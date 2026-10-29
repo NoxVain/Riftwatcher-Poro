@@ -17,6 +17,7 @@ from src.constants import ADD_COMMAND, BACKFILL_COMMAND, DEBUG_PLAYER_COMMAND, H
 from src.esports_api import EsportsApiClient
 from src.patch_notes_api import PatchNotesClient
 from src.belts import run_weekly_belts_loop
+from src.wrapped import run_wrapped_loop
 from src.match_stats import run_match_stats_sync_loop
 from src.poro_service import PoroService
 from src.puuid_remap import run_puuid_remap_once
@@ -102,6 +103,8 @@ db_upsert_player_match_stats = dbm.db_upsert_player_match_stats
 db_load_player_analysis_rows = dbm.db_load_player_analysis_rows
 db_load_role_group_totals = dbm.db_load_role_group_totals
 db_iter_record_rows = dbm.db_iter_record_rows
+db_iter_wrapped_rows = dbm.db_iter_wrapped_rows
+db_load_all_ranked_states = dbm.db_load_all_ranked_states
 db_load_belt_rows = dbm.db_load_belt_rows
 db_delete_player_match_stats_except = dbm.db_delete_player_match_stats_except
 db_delete_ranked_state_queue = dbm.db_delete_ranked_state_queue
@@ -202,6 +205,7 @@ BACKGROUND_PATCH_TASK = None
 BACKGROUND_PUUID_REMAP_TASK = None
 BACKGROUND_MATCH_STATS_TASK = None
 BACKGROUND_BELTS_TASK = None
+BACKGROUND_WRAPPED_TASK = None
 
 
 def trigger_riot_key_alert(status_code=401):
@@ -530,6 +534,19 @@ async def background_weekly_belts():
     )
 
 
+async def background_wrapped():
+    return await run_wrapped_loop(
+        db_iter_wrapped_rows=db_iter_wrapped_rows,
+        db_load_all_ranked_states=db_load_all_ranked_states,
+        db_get_state=db_get_state,
+        db_set_state=db_set_state,
+        resolve_channel=resolve_channel,
+        channel_id=EVENTS_CHANNEL_ID,
+        tz=REPORT_TIMEZONE,
+        log=log,
+    )
+
+
 async def background_daily_refresher():
     await runtime_background_daily_refresher(
         db_enabled=DB_ENABLED,
@@ -616,7 +633,7 @@ async def background_worker_stall_notifier():
 
 @client.event
 async def on_ready():
-    global BACKGROUND_REFRESH_TASK, BACKGROUND_RECAP_TASK, BACKGROUND_RANK_TASK, BACKGROUND_BACKFILL_TASK, BACKGROUND_STALL_TASK, BACKGROUND_ESPORTS_TASK, BACKGROUND_PATCH_TASK, BACKGROUND_PUUID_REMAP_TASK, BACKGROUND_MATCH_STATS_TASK, BACKGROUND_BELTS_TASK, STARTUP_SCOREBOARD_INIT_DONE, DEFAULT_EXECUTOR_CONFIGURED
+    global BACKGROUND_REFRESH_TASK, BACKGROUND_RECAP_TASK, BACKGROUND_RANK_TASK, BACKGROUND_BACKFILL_TASK, BACKGROUND_STALL_TASK, BACKGROUND_ESPORTS_TASK, BACKGROUND_PATCH_TASK, BACKGROUND_PUUID_REMAP_TASK, BACKGROUND_MATCH_STATS_TASK, BACKGROUND_BELTS_TASK, BACKGROUND_WRAPPED_TASK, STARTUP_SCOREBOARD_INIT_DONE, DEFAULT_EXECUTOR_CONFIGURED
     # on_ready fires again after every reconnect; only install the custom executor once.
     if cfg.ASYNCIO_THREAD_POOL_SIZE > 0 and not DEFAULT_EXECUTOR_CONFIGURED:
         loop = asyncio.get_running_loop()
@@ -681,6 +698,8 @@ async def on_ready():
             BACKGROUND_MATCH_STATS_TASK = client.loop.create_task(background_match_stats())
         if BACKGROUND_BELTS_TASK is None or BACKGROUND_BELTS_TASK.done():
             BACKGROUND_BELTS_TASK = client.loop.create_task(background_weekly_belts())
+        if BACKGROUND_WRAPPED_TASK is None or BACKGROUND_WRAPPED_TASK.done():
+            BACKGROUND_WRAPPED_TASK = client.loop.create_task(background_wrapped())
         if ESPORTS_ENABLED:
             log(
                 f"[startup] Esports news enabled: NEWS_CHANNEL_ID={NEWS_CHANNEL_ID} "
@@ -763,6 +782,8 @@ async def on_message(message):
         db_load_player_analysis_rows=db_load_player_analysis_rows,
         db_load_role_group_totals=db_load_role_group_totals,
         db_iter_record_rows=db_iter_record_rows,
+        db_iter_wrapped_rows=db_iter_wrapped_rows,
+        db_load_all_ranked_states=db_load_all_ranked_states,
     )
 
 

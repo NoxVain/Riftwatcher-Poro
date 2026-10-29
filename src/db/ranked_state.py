@@ -90,3 +90,21 @@ def db_insert_lp_change(change):
         f"VALUES ({', '.join(['%s'] * len(_LP_HISTORY_COLS))});",
         tuple(change.get(col) for col in _LP_HISTORY_COLS),
     )
+
+
+def db_load_all_ranked_states():
+    """{riot_id: [rank entries]} for every player with stored rank state."""
+    rows = db_execute(
+        """
+        SELECT
+            riot_id, queue_type, tier, rank_division, league_points,
+            wins, losses, hot_streak, veteran, fresh_blood, inactive, updated_at
+        FROM player_ranked_state
+        ORDER BY riot_id, queue_type;
+        """,
+        fetch=True,
+    ) or []
+    states = {}
+    for row in rows:
+        states.setdefault(row[0], []).append(dict(zip(_RANKED_STATE_COLS, row[1:])))
+    return states

@@ -44,6 +44,7 @@ This repository is a modular Python Discord bot.
 - `src/puuid_remap.py`: Background rewrite of old PUUIDs in cached match payloads after a Riot API key change (PUUIDs are encrypted per key project), matched by Riot ID.
 - `src/match_stats.py`: Per-player match stats (`player_match_stats`, one row per tracked player per cached match) extracted from cached payloads by a background sync, so analysis is a SQL query instead of a payload scan.
 - `src/player_analysis.py`: Pure `!analyze` rules (guarded strengths/tips per queue) and the compact card; the handler is `src/commands/analysis_handlers.py`.
+- `src/wrapped.py`: Poro Wrapped: pure year-in-review logic (awards, banter, group and personal cards) and the background task that posts the group cards in `EVENTS_CHANNEL_ID` on 31 December; the `!wrapped` handler is `src/commands/wrapped_handlers.py`.
 - `src/belts.py`: Weekly title belts: pure awards/defended-streak logic and the background task that posts the card in `EVENTS_CHANNEL_ID` once per closed report week.
 - `src/records.py`: Pure Hall of Fame logic (ranked-only group records, personal bests, streaks) for `!records` and the "New group record" and "Personal best" recap lines; the handler is `src/commands/records_handlers.py`.
 - `tests/`: Unit tests for pure logic, command routing/handlers, workers, and runtime helpers.

@@ -101,37 +101,65 @@ RECORD_ROW_COLUMNS = (
 RECORD_PAGE_ROWS = 1000
 
 
-def db_iter_record_rows(queue_ids, *, before=None, exclude_match_ids=(), batch_size=RECORD_PAGE_ROWS):
-    """Yield tracked players' non-remake games in `queue_ids` as dicts with `riot_id`, oldest first.
+def _iter_stats_rows(row_columns, where, params, batch_size):
+    """Yield tracked players' rows matching `where` as dicts with `puuid` and `riot_id`, oldest first.
 
-    Paged by (game_end_at, match_id, puuid), so only one page is in memory; `before`
-    keeps only games that ended earlier. Consume it in a worker thread.
+    Paged by (game_end_at, match_id, puuid), so only one page is in memory. `row_columns`
+    must start with match_id and include game_end_at.
     """
-    columns = ", ".join(f"s.{col}" for col in RECORD_ROW_COLUMNS)
+    columns = ", ".join(f"s.{col}" for col in row_columns)
     cursor = None
     page_size = max(1, int(batch_size))
     while True:
-        params = [list(queue_ids), list(exclude_match_ids)]
-        where = "s.queue_id = ANY(%s) AND NOT s.remake AND NOT (s.match_id = ANY(%s))"
-        if before is not None:
-            where += " AND s.game_end_at < %s"
-            params.append(before)
+        page_where, page_params = where, list(params)
         if cursor is not None:
-            where += " AND (s.game_end_at, s.match_id, s.puuid) > (%s, %s, %s)"
-            params.extend(cursor)
+            page_where += " AND (s.game_end_at, s.match_id, s.puuid) > (%s, %s, %s)"
+            page_params.extend(cursor)
         rows = db_execute(
             f"SELECT {columns}, s.puuid, t.riot_id FROM player_match_stats s "
             "JOIN tracked_players t ON t.puuid = s.puuid "
-            f"WHERE {where} ORDER BY s.game_end_at, s.match_id, s.puuid LIMIT %s;",
-            (*params, page_size),
+            f"WHERE {page_where} ORDER BY s.game_end_at, s.match_id, s.puuid LIMIT %s;",
+            (*page_params, page_size),
             fetch=True,
         ) or []
         for row in rows:
-            yield dict(zip((*RECORD_ROW_COLUMNS, "puuid", "riot_id"), row))
+            yield dict(zip((*row_columns, "puuid", "riot_id"), row))
         if len(rows) < page_size:
             return
         last = rows[-1]
-        cursor = (last[RECORD_ROW_COLUMNS.index("game_end_at")], last[0], last[len(RECORD_ROW_COLUMNS)])
+        cursor = (last[row_columns.index("game_end_at")], last[0], last[len(row_columns)])
+
+
+def db_iter_record_rows(queue_ids, *, before=None, exclude_match_ids=(), batch_size=RECORD_PAGE_ROWS):
+    """Yield tracked players' non-remake games in `queue_ids` as dicts with `riot_id`, oldest first.
+
+    `before` keeps only games that ended earlier. Consume it in a worker thread.
+    """
+    params = [list(queue_ids), list(exclude_match_ids)]
+    where = "s.queue_id = ANY(%s) AND NOT s.remake AND NOT (s.match_id = ANY(%s))"
+    if before is not None:
+        where += " AND s.game_end_at < %s"
+        params.append(before)
+    return _iter_stats_rows(RECORD_ROW_COLUMNS, where, params, batch_size)
+
+
+WRAPPED_ROW_COLUMNS = (
+    *RECORD_ROW_COLUMNS,
+    "team_position",
+    "pings",
+    "time_dead_seconds",
+    "tracked_teammates",
+    "arena_placement",
+)
+
+
+def db_iter_wrapped_rows(start, end, *, batch_size=RECORD_PAGE_ROWS):
+    """Yield tracked players' non-remake games (all queues) that ended in [start, end), oldest first.
+
+    For Poro Wrapped; consume it in a worker thread.
+    """
+    where = "NOT s.remake AND s.game_end_at >= %s AND s.game_end_at < %s"
+    return _iter_stats_rows(WRAPPED_ROW_COLUMNS, where, [start, end], batch_size)
 
 
 BELT_ROW_COLUMNS = (

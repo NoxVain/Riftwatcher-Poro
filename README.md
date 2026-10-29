@@ -63,6 +63,7 @@ Start with:
 - `src/puuid_remap.py` - one-off background rewrite of old (pre key-change) PUUIDs in cached matches
 - `src/match_stats.py` - per-player match stats extracted from cached matches into `player_match_stats` (background sync)
 - `src/player_analysis.py` - `!analyze` rules: guarded strengths and tips from a year of ranked games, and the compact card
+- `src/wrapped.py` - Poro Wrapped: the group's year in review, posted in the events channel on 31 December at 18:00, and `!wrapped Name` per player until the end of January
 - `src/belts.py` - weekly title belts (Damage King, Backseat Gamer, ...) posted in the events channel when a report week closes, with defended streaks
 - `src/records.py` - Hall of Fame: group records and personal bests from ranked games (`!records`), and "New group record" and "Personal best" lines in recaps
 - `tests/` - unit tests
@@ -195,6 +196,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 - `!profile Name#Tag`
 - `!analyze Name#Tag [solo|flex]` (alias `!analyse`; the name alone works when it's unique)
 - `!records [Name#Tag]` (group Hall of Fame, or one player's personal bests; ranked games only)
+- `!wrapped Name#Tag` (a player's Poro Wrapped for the year; open from 31 December 18:00 until the end of January, any time for admins; `!wrapped` alone previews the group post for admins)
 - `!DebugPlayer Name#Tag`
 - `!health`
 - `!backfill YYYY-MM-DD YYYY-MM-DD`

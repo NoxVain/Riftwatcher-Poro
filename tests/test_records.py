@@ -30,7 +30,8 @@ _counter = iter(range(1, 1_000_000))
 
 def row(riot_id="Nox#EUW", *, days=0, queue=420, win=True, kills=5, deaths=3, assists=8, minutes=30,
         champion="Lux", damage=20000, share=0.25, taken=20000, gold=12000, cs=200, vision=30,
-        solo_kills=1, pentas=0, spree=3, remake=False):
+        solo_kills=1, pentas=0, spree=3, camps=None, buffs=None, dragons=None, barons=None, steals=None,
+        remake=False):
     n = next(_counter)
     return {
         "match_id": f"EUW1_{n}",
@@ -53,6 +54,11 @@ def row(riot_id="Nox#EUW", *, days=0, queue=420, win=True, kills=5, deaths=3, as
         "solo_kills": solo_kills,
         "penta_kills": pentas,
         "killing_spree": spree,
+        "enemy_jungle_camps": camps,
+        "buffs_stolen": buffs,
+        "dragon_takedowns": dragons,
+        "baron_takedowns": barons,
+        "objective_steals": steals,
     }
 
 
@@ -232,6 +238,37 @@ def test_group_card_sections():
     assert "**2** pentakills · Freshwhite · group total 3" in text
     assert "**2** deathless games · Not a snake · group total 2" in text
     assert sections[-1].endswith("`!records Name` for personal bests")
+
+
+def test_group_card_jungle_section():
+    rows = [
+        row("ÇÛΜÌŃΜÝÄŠŠ#EUW", days=1, camps=80, buffs=2, dragons=6, steals=3, champion="Vi"),
+        row("ÇÛΜÌŃΜÝÄŠŠ#EUW", days=2, steals=2),
+        row("JonastCvuHU#UNC", days=3, buffs=15, champion="Karthus", steals=1),
+        row("Gizhmo#EUW", days=4, barons=1, champion="Kaisa"),
+    ]
+    sections = format_group_sections(build_record_book(rows))
+    jungle = next(section for section in sections if section.startswith("**Jungle**"))
+    assert jungle == (
+        "**Jungle**\n"
+        "**80** enemy jungle camps · ÇÛΜÌŃΜÝÄŠŠ · Vi · Jan 2025\n"
+        "**15** buffs stolen · JonastCvuHU · Karthus · Jan 2025\n"
+        "**6** dragons · ÇÛΜÌŃΜÝÄŠŠ · Vi · Jan 2025\n"
+        "**1** baron · Gizhmo · Kaisa · Jan 2025\n"
+        "**5** objective steals (career) · ÇÛΜÌŃΜÝÄŠŠ · group total 6"
+    )
+    # Jungle sits between Farm and map and Pain; it stays off personal cards.
+    order = [section.split("\n", 1)[0] for section in sections]
+    assert order.index("**Farm and map**") < order.index("**Jungle**") < order.index("**Pain**")
+    personal = "\n\n".join(format_personal_sections(build_record_book(rows), "JonastCvuHU#UNC"))
+    assert "buffs stolen" not in personal
+
+
+def test_teammates_tied_in_one_game_resolve_by_name():
+    nox = row("NoxVain#EUW", barons=4, champion="Amumu")
+    giz = dict(row("gizhmo#EUW", barons=4, champion="Kaisa"), match_id=nox["match_id"], game_end_at=nox["game_end_at"])
+    for rows in ([nox, giz], [giz, nox]):
+        assert build_record_book(rows).record("barons").riot_id == "gizhmo#EUW"
 
 
 def test_group_card_with_no_games():

@@ -115,6 +115,14 @@ def test_extract_reads_the_largest_killing_spree():
     assert extract_player_match_rows(payload, TRACKED)[0]["killing_spree"] == 21
 
 
+def test_extract_reads_counter_jungle_stats():
+    payload = match("EUW1_10", [
+        player(NOX, 100, "JUNGLE", totalEnemyJungleMinionsKilled=80, challenges={"buffsStolen": 15}),
+    ])
+    row = extract_player_match_rows(payload, TRACKED)[0]
+    assert (row["enemy_jungle_camps"], row["buffs_stolen"]) == (80, 15)
+
+
 def test_extract_computes_shares_without_challenges():
     rows = extract_player_match_rows(ranked_match(), {FRESH})
 

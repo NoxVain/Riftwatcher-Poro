@@ -22,6 +22,7 @@ RECORDS_ACCENT = 0xF0B232
 
 SECTION_CARRY = "Carry"
 SECTION_FARM = "Farm and map"
+SECTION_JUNGLE = "Jungle"
 SECTION_PAIN = "Pain"
 
 
@@ -98,6 +99,13 @@ CATEGORIES = (
     RecordCategory("gold", "gold", SECTION_FARM, _column("gold_earned")),
     RecordCategory("vision", "vision score", SECTION_FARM, _column("vision_score"), personal="best"),
     RecordCategory("assists", "assists", SECTION_FARM, _column("assists"), personal="best", singular="assist"),
+    # Jungle records count in every role (a support can take 4 barons); group card only.
+    RecordCategory("enemy_jungle_camps", "enemy jungle camps", SECTION_JUNGLE, _column("enemy_jungle_camps")),
+    RecordCategory(
+        "buffs_stolen", "buffs stolen", SECTION_JUNGLE, _column("buffs_stolen"), singular="buff stolen"
+    ),
+    RecordCategory("dragons", "dragons", SECTION_JUNGLE, _column("dragon_takedowns"), singular="dragon"),
+    RecordCategory("barons", "barons", SECTION_JUNGLE, _column("baron_takedowns"), singular="baron"),
     RecordCategory("deaths", "deaths", SECTION_PAIN, _column("deaths"), personal="worst", singular="death"),
     RecordCategory("damage_taken", "damage taken", SECTION_PAIN, _column("damage_taken")),
     RecordCategory(
@@ -126,6 +134,7 @@ class _Career:
     seconds: int = 0
     pentakills: int = 0
     deathless: int = 0
+    objective_steals: int = 0
     run_win: bool | None = None
     run_length: int = 0
     first_at: object = None
@@ -171,6 +180,7 @@ class RecordBook:
         career.seconds += int(row.get("duration_seconds") or 0)
         career.pentakills += int(row.get("penta_kills") or 0)
         career.deathless += int(row.get("deaths") == 0)
+        career.objective_steals += int(row.get("objective_steals") or 0)
         if career.first_at is None:
             career.first_at = at
         career.run_length = career.run_length + 1 if career.run_win == won else 1
@@ -181,9 +191,12 @@ class RecordBook:
             self.streaks[kind][riot_id] = Holder(career.run_length, riot_id, at)
 
     def record(self, key):
-        """Group record for a category: the best value, the earliest game on a tie."""
+        """Group record for a category: the best value, the earliest game on a tie.
+
+        Teammates in the same game tie on time too; name order makes that stable.
+        """
         holders = (self.streaks[key] if key in self.streaks else self.bests.get(key, {})).values()
-        return min(holders, key=lambda h: (-h.value, h.at), default=None)
+        return min(holders, key=lambda h: (-h.value, h.at, h.riot_id.casefold()), default=None)
 
     def career_rank(self, field_name, riot_id):
         """Place among players by a career count (1 + players with strictly more), or None."""
@@ -355,12 +368,18 @@ def format_group_sections(book):
         f"🏆 **Hall of Fame**\n-# {len(book.match_ids):,} ranked games · {players} players · since {_month(book.first_at)}"
     )
     sections = [header]
-    for section in (SECTION_CARRY, SECTION_FARM, SECTION_PAIN):
+    total_steals = sum(career.objective_steals for career in book.careers.values())
+    for section in (SECTION_CARRY, SECTION_FARM, SECTION_JUNGLE, SECTION_PAIN):
         lines = []
         for category in CATEGORIES:
             holder = book.record(category.key) if category.section == section else None
             if holder is not None:
                 lines.append(_holder_line(category, holder))
+        if section == SECTION_JUNGLE and total_steals:
+            name, career = max(book.careers.items(), key=lambda item: (item[1].objective_steals, -item[1].games))
+            lines.append(
+                f"**{career.objective_steals:,}** objective steals (career) · {_name(name)} · group total {total_steals:,}"
+            )
         if lines:
             sections.append(f"**{section}**\n" + "\n".join(lines))
     lines = []

@@ -5,16 +5,16 @@ from src.discord_text import format_health_report, format_user_error
 async def handle_health_slash(
     interaction,
     *,
-    events_channel_id,
+    commands_channel_id,
     poro_service,
     start_monotonic,
     worker_stats,
     log,
 ):
-    """Handle `/health`: restricted to the events channel, deferred to survive slow checks."""
-    if interaction.channel_id != events_channel_id:
+    """Handle `/health`: restricted to the commands channel, deferred to survive slow checks."""
+    if interaction.channel_id != commands_channel_id:
         await interaction.response.send_message(
-            f"Use `/health` in <#{events_channel_id}>.",
+            f"Use `/health` in <#{commands_channel_id}>.",
             ephemeral=True,
         )
         return

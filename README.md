@@ -62,7 +62,7 @@ Start with:
 - `src/champion_icons.py` - recap champion display mode and portrait emojis (Data Dragon -> Discord application emojis)
 - `src/puuid_remap.py` - one-off background rewrite of old (pre key-change) PUUIDs in cached matches
 - `src/match_stats.py` - per-player match stats extracted from cached matches into `player_match_stats` (background sync)
-- `src/player_analysis.py` - `!analyze` rules: guarded strengths and tips from a year of ranked games, and the compact card
+- `src/player_analysis.py` - `!analyze` rules: guarded strengths and tips from recent ranked games (3 months by default, up to 12), and the compact card
 - `src/wrapped.py` - Poro Wrapped: the group's year in review, posted in the events channel on 31 December at 18:00, and `!wrapped Name` per player until the end of January
 - `src/belts.py` - weekly title belts (Damage King, Backseat Gamer, ...) posted in the events channel when a report week closes, with defended streaks
 - `src/records.py` - Hall of Fame: group records and personal bests from ranked games (`!records`), and "New group record" and "Personal best" lines in recaps
@@ -194,8 +194,8 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 - `!Add Name#Tag`
 - `!remove Name#Tag`
 - `!profile Name#Tag`
-- `!analyze Name#Tag [solo|flex]` (alias `!analyse`; the name alone works when it's unique)
-- `!records [Name#Tag]` (group Hall of Fame, or one player's personal bests; ranked games only)
+- `!analyze Name#Tag [months] [solo|flex]` (alias `!analyse`; the last 3 months of Solo/Duo by default, `!analyze Name 12 flex` for a year of Flex; the name alone works when it's unique)
+- `!records [Name#Tag]` (alias `!record`; group Hall of Fame, or one player's personal bests; ranked games only)
 - `!wrapped Name#Tag` (a player's Poro Wrapped for the year; a surprise: it only works after the group post on 31 December 18:00 until the end of January, gets no reply at all otherwise, and isn't in `!help`)
 - `!DebugPlayer Name#Tag`
 - `!health`
@@ -207,7 +207,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 
 Slash commands:
 
-- `/health` - same output as `!health`; only answers in `EVENTS_CHANNEL_ID` (elsewhere it replies privately with a pointer)
+- `/health` - same output as `!health`; only answers in the commands channel (elsewhere it replies privately with a pointer)
 
 Run `!sync` once after deploying a new bot so slash commands appear immediately in your server.
 
@@ -217,10 +217,10 @@ Command routing:
 - `!Daily` in `DAILY_REPORT_CHANNEL_ID`
 - `!Weekly` in `WEEKLY_REPORT_CHANNEL_ID`
 - `!streak` in `MATCH_RECAP_CHANNEL_ID`
-- `!tts` in `EVENTS_CHANNEL_ID` or `MATCH_RECAP_CHANNEL_ID`
-- `!champdisplay` in `EVENTS_CHANNEL_ID` or `MATCH_RECAP_CHANNEL_ID`
+- `!tts` in the commands channel or `MATCH_RECAP_CHANNEL_ID`
+- `!champdisplay` in the commands channel or `MATCH_RECAP_CHANNEL_ID`
 - `!sync` in any server channel
-- all other commands (and `/health`) in `EVENTS_CHANNEL_ID`
+- all other commands (and `/health`) in the commands channel: `MANUAL_COMMANDS_CHANNEL_ID`, or `EVENTS_CHANNEL_ID` when unset. A command typed in the wrong channel gets a one-line pointer to the right one.
 
 Permissions:
 - `!Add`, `!remove`, `!backfill`, `!tts on|off`, and `!champdisplay name|icon|both` change shared state and require the **Manage Server** permission (or Administrator), or the optional `ADMIN_ROLE_ID` role
@@ -257,6 +257,7 @@ Optional (with defaults):
 - `RIOT_PLATFORM_ROUTING` (`euw1`)
 - `RIOT_REGIONAL_ROUTING` (`europe`) - regional host for account/match-v5 API calls (`europe`, `americas`, `asia`)
 - `BACKFILL_STALE_THRESHOLD_SECONDS` (`0` = auto: `max(300, backfill interval * 6)`) - stall watchdog threshold for the backfill worker
+- `MANUAL_COMMANDS_CHANNEL_ID` (unset = `EVENTS_CHANNEL_ID`) - channel where all `!commands` that would run in the events channel (reports, admin commands, `!help`) and `/health` run, so the events channel keeps only automatic posts
 - `ADMIN_ROLE_ID` (unset = permission-only) - role allowed to run `!Add`/`!remove`/`!backfill`/`!tts on|off`/`!champdisplay name|icon|both` in addition to Manage Server/Administrator
 
 Low-resource hosting (NAS/IoT), all optional:

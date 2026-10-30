@@ -40,6 +40,7 @@ async def handle_ops_commands(ctx):
                 weekly_channel_id=ctx.weekly_channel_id,
                 events_channel_id=ctx.events_channel_id,
                 match_recap_channel_id=ctx.match_recap_channel_id,
+                commands_channel_id=ctx.commands_channel_id,
             )
         )
         return True

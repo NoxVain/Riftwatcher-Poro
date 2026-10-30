@@ -64,6 +64,9 @@ RIOT_REGIONAL_ROUTING = get_env_str("RIOT_REGIONAL_ROUTING", "europe").lower()
 DAILY_REPORT_CHANNEL_ID = int(require_env("DAILY_REPORT_CHANNEL_ID"))
 WEEKLY_REPORT_CHANNEL_ID = int(require_env("WEEKLY_REPORT_CHANNEL_ID"))
 EVENTS_CHANNEL_ID = int(require_env("EVENTS_CHANNEL_ID"))
+# Optional channel for every !command that used to run in the events channel (reports, admin
+# commands, !help); the events channel keeps the automatic posts. Defaults to events.
+COMMANDS_CHANNEL_ID = get_env_int("MANUAL_COMMANDS_CHANNEL_ID", 0) or EVENTS_CHANNEL_ID
 # Optional role allowed to run mutating commands (!add/!remove/!backfill/!tts on|off)
 # in addition to members with Manage Server / Administrator. 0 = permission-only.
 ADMIN_ROLE_ID = get_env_int("ADMIN_ROLE_ID", 0)

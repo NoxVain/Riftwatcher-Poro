@@ -198,7 +198,7 @@ The first run on 2026-10-26 data: 12,415 cached matches, one old PUUID for each 
 
 `player_match_stats` holds one row per tracked player per cached match. It's built from `match_info_cache` by a background loop (`src/match_stats.py`), with no Riot requests. It's meant for analysis (`!analyze`, `!records`, weekly belts, and later `!vs`).
 
-`!analyze Name#Tag [solo|flex]` (events channel, anyone can run it) reads one player's last 12 months from this table and logs `[analyze] Sent <queue> analysis for <riot id>: games=… strengths=… tips=…`. If the card shows "Not enough … games", the player has fewer than 20 ranked games in that queue in the table. Check their rows with the query below before suspecting the rules. Thresholds and wording live in `src/player_analysis.py`.
+`!analyze Name#Tag [months] [solo|flex]` (commands channel, anyone can run it) reads one player's last 3 months from this table (1-12 with `months`) and logs `[analyze] Sent <queue> analysis for <riot id>: months=… games=… strengths=… tips=…`. The player's games and the group baseline are read up to the same moment, and the analysis runs in a worker thread; a failure logs `[analyze] Analysis failed for …` and replies with a safe error. If the card shows "Not enough … games", the player has fewer than 20 ranked games in that queue in the window; the card suggests `!analyze Name 12` to look a year back. Check their rows with the query below before suspecting the rules. Thresholds and wording live in `src/player_analysis.py`.
 
 - The loop starts once the PUUID remap is done (about 5 minutes after startup), then runs every 10 minutes.
 - Logs: `[stats] Player match stats full sync: rows=… matches=… new=… elapsed=…` for a full rebuild, and an `incremental sync` line only when new matches were cached. Failures log `[stats] Player match stats sync failed; retrying next pass: …`.
@@ -217,7 +217,7 @@ GROUP BY 1 ORDER BY 2 DESC;
 
 ## Records
 
-`!records` and `!records Name` (events channel, anyone can run them) read all ranked rows (Solo/Duo, Flex, ranked 5v5; no remakes) from `player_match_stats` in pages of 1,000 and log `[records] Sent group records: games=… matches=…` or `[records] Sent personal bests for <riot id>: games=… matches=…` (`games` counts player-games, `matches` unique matches).
+`!records` and `!records Name` (alias `!record`; commands channel, anyone can run them) read all ranked rows (Solo/Duo, Flex, ranked 5v5; no remakes) from `player_match_stats` in pages of 1,000 and log `[records] Sent group records: games=… matches=…` or `[records] Sent personal bests for <riot id>: games=… matches=…` (`games` counts player-games, `matches` unique matches).
 
 Recaps of ranked games check for new group records and personal bests before posting:
 
@@ -228,7 +228,7 @@ Recaps of ranked games check for new group records and personal bests before pos
 - Personal bests cover the Best categories of `!records Name` (kills, kills in a row, damage, solo kills, CS, CS/min, vision, assists) and are skipped where the same game set the group record.
 - A replay of the 12 months to 2026-10-27 gave 8 recaps with record lines (13 lines) out of 3,412 ranked matches. A replay of the year to 2026-10-28 gave 75 personal-best lines in 70 recaps (at most 4 in one recap), about 6 a month.
 
-Pentakills come from the `penta_kills` column, added with `STATS_VERSION` 2. The first stats pass after that deploy rebuilds every row (140 s in production on 2026-10-27); until it finishes, the pentakill line is missing from `!records`. Kills in a row come from `killing_spree` (`STATS_VERSION` 4, 2026-10-29) and are missing from `!records` until that rebuild finishes. The Jungle section's enemy jungle camps and buffs stolen come from `enemy_jungle_camps` and `buffs_stolen` (`STATS_VERSION` 5) the same way.
+Pentakills come from the `penta_kills` column, added with `STATS_VERSION` 2. The first stats pass after that deploy rebuilds every row (140 s in production on 2026-10-27); until it finishes, the pentakill line is missing from `!records`. Kills in a row come from `killing_spree` (`STATS_VERSION` 4, 2026-10-29) and are missing from `!records` until that rebuild finishes. The Jungle section's enemy jungle minions and buffs stolen come from `enemy_jungle_camps` and `buffs_stolen` (`STATS_VERSION` 5) the same way.
 
 ## Weekly Title Belts
 
@@ -244,7 +244,7 @@ The belts card for a report week posts in `EVENTS_CHANNEL_ID` about 20-30 minute
 
 The group Wrapped posts once in `EVENTS_CHANNEL_ID` on 31 December between 18:00 and about 18:10 Oslo (the task checks every 10 minutes), covering 1 January until 18:00. `!wrapped Name` is open from then until 31 January.
 
-- Logs: `[wrapped] Posted Wrapped <year> in channel <id>: cards=… games=… players=….` and `[wrapped] Sent Wrapped <year> for <riot id>: …` (`(admin preview)` when an admin runs it outside the window).
+- Logs: `[wrapped] Posted Wrapped <year> in channel <id>: cards=… games=… players=….` and `[wrapped] Sent Wrapped <year> for <riot id>: …`.
 - Wrapped is a surprise: until the group post has gone out (`poro_wrapped_posted_year` is this year) and before February, `!wrapped` gets no reply for anyone, admins included, and logs `[wrapped] Ignored !wrapped: Wrapped isn't open …`. There is no preview in Discord; check the cards with a local read-only render instead.
 - `[wrapped] Channel … not available; retrying next check.` and `[wrapped] Wrapped check failed; retrying next check: …` retry every 10 minutes. If the bot is down at 18:00, the post goes out at the first check after startup (until the end of January).
 - The year is stored in `poro_wrapped_posted_year` before sending, so a send that fails after that is not retried. To repost, delete that key; the next check posts again.

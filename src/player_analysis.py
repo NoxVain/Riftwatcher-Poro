@@ -1,4 +1,4 @@
-"""`!analyze`: a year of one player's ranked games turned into strengths and tips.
+"""`!analyze`: one player's recent ranked games (3 months unless asked) turned into strengths and tips.
 
 Pure logic over `player_match_stats` rows (see src/match_stats.py); no Discord, Riot or
 DB access. Every finding is guarded: it needs a minimum number of games on each side
@@ -9,6 +9,7 @@ three strengths and three things to work on, each with its record.
 Only the best duo partner is ever named; a weak duo is never called out in public.
 """
 
+import calendar
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -21,7 +22,9 @@ QUEUES = {
     "flex": {"queue_id": 440, "label": "Flex"},
 }
 DEFAULT_QUEUE = "solo"
-ANALYSIS_DAYS = 365
+DEFAULT_MONTHS = 3
+MAX_ANALYSIS_MONTHS = 12
+# Trends compare the most recent part of the window with the rest: 90 days, or half of a shorter window.
 TREND_DAYS = 90
 
 MIN_QUEUE_GAMES = 20
@@ -66,6 +69,7 @@ class PlayerAnalysis:
     other_queue_games: int
     other_queue_wins: int
     since: object = None
+    months: int = DEFAULT_MONTHS
     strengths: list = field(default_factory=list)
     tips: list = field(default_factory=list)
 
@@ -74,12 +78,58 @@ class PlayerAnalysis:
         return self.games >= MIN_QUEUE_GAMES
 
 
-def parse_analyze_args(raw):
-    """`"Not a snake flex"` -> ("Not a snake", "flex"); the queue word is optional."""
+MONTHS_ERROR = "Choose a whole number of months from 1 to 12, like `!analyze Name 6`."
+
+
+def analysis_start(now, months=DEFAULT_MONTHS):
+    """`months` calendar months before `now` (31 May minus 3 months is 28 Feb, not 3 Mar)."""
+    if not 1 <= months <= MAX_ANALYSIS_MONTHS:
+        raise ValueError(MONTHS_ERROR)
+    year, month = divmod(now.year * 12 + now.month - 1 - months, 12)
+    month += 1
+    return now.replace(year=year, month=month, day=min(now.day, calendar.monthrange(year, month)[1]))
+
+
+def _parse_options(words):
+    """Pop a trailing queue word and month count, in either order."""
+    queue, months, seen = DEFAULT_QUEUE, DEFAULT_MONTHS, set()
+    while words:
+        token = words[-1].casefold()
+        if token in QUEUES:
+            kind = "queue"
+        elif token.lstrip("+-").replace(".", "", 1).isdigit():
+            kind = "months"
+        else:
+            break
+        if kind in seen:
+            raise ValueError("Use one month count and one queue, like `!analyze Name 6 flex`.")
+        seen.add(kind)
+        words.pop()
+        if kind == "queue":
+            queue = token
+        elif not token.isdecimal() or not 1 <= int(token) <= MAX_ANALYSIS_MONTHS:
+            raise ValueError(MONTHS_ERROR)
+        else:
+            months = int(token)
+    return " ".join(words), queue, months
+
+
+def parse_analyze_args(raw, tracked=()):
+    """`"Not a snake 6 flex"` -> ("Not a snake", "flex", 6); months and queue are optional.
+
+    A tracked player's name wins over options, so "Player 2" stays a name; raises
+    ValueError with a user-facing message for a bad month count.
+    """
     words = raw.split()
-    if words and words[-1].casefold() in QUEUES:
-        return " ".join(words[:-1]), words[-1].casefold()
-    return " ".join(words), DEFAULT_QUEUE
+    for options in range(min(2, len(words) - 1) + 1):
+        name = " ".join(words[:len(words) - options])
+        wanted = name.casefold()
+        if not any(wanted in (riot_id.casefold(), riot_id.split("#", 1)[0].casefold()) for riot_id, _puuid in tracked):
+            continue
+        rest, queue, months = _parse_options(words[len(words) - options:])
+        if not rest:
+            return name, queue, months
+    return _parse_options(words)
 
 
 def resolve_tracked_player(query, tracked):
@@ -173,7 +223,7 @@ def _main_role(games):
     return main, by_role
 
 
-def _role_findings(games, role_baselines, now):
+def _role_findings(games, role_baselines, now, trend_days=TREND_DAYS):
     strengths, tips = [], []
     main, by_role = _main_role(games)
     if main is None or len(by_role[main]) < MIN_SPLIT_GAMES:
@@ -194,7 +244,7 @@ def _role_findings(games, role_baselines, now):
         text = f"Stay on {ROLE_IN_SENTENCE.get(main, main)}: {main_pct}% in {main_n} games; {', '.join(parts)}"
         gold = _avg([g for _n, _role, _wins, role_games in weak_roles[:2] for g in role_games], "opponent_gold_diff")
         if gold is not None and gold <= -1000:
-            text += f", ~{abs(gold) / 1000:.1f}k gold behind your lane opponent there"
+            text += f", ~{abs(gold) / 1000:.1f}k gold behind your lane opponent at game end"
         gap = main_pct - min(_pct(w, n) for n, _r, w, _g in weak_roles)
         tips.append(Finding(text, gap * _weight(sum(n for n, *_ in weak_roles))))
 
@@ -218,15 +268,16 @@ def _role_findings(games, role_baselines, now):
             ))
 
     if main != "UTILITY":
-        cutoff = now - timedelta(days=TREND_DAYS)
+        cutoff = now - timedelta(days=trend_days)
         recent = [g for g in main_games if g["game_end_at"] > cutoff and g["opponent_cs_diff"] is not None]
         older = [g for g in main_games if g["game_end_at"] <= cutoff and g["opponent_cs_diff"] is not None]
         if len(recent) >= MIN_SPLIT_GAMES and len(older) >= MIN_SPLIT_GAMES:
             recent_cs, older_cs = _avg(recent, "opponent_cs_diff"), _avg(older, "opponent_cs_diff")
             if recent_cs <= older_cs - LANE_CS_DROP:
+                # opponent_cs_diff is measured at game end, not at the end of laning.
                 tips.append(Finding(
-                    f"Laning slipped: {recent_cs:+.0f} CS vs your opponent in the last {TREND_DAYS} days "
-                    f"({older_cs:+.0f} before)",
+                    f"CS gap slipped: {recent_cs:+.0f} CS vs your lane opponent at game end in the last "
+                    f"{trend_days} days ({older_cs:+.0f} before)",
                     (older_cs - recent_cs) * _weight(len(recent), len(older)) / 2,
                 ))
     return strengths, tips
@@ -252,8 +303,8 @@ def _partner_findings(games, overall_pct, names_by_puuid):
     return [Finding(f"Duo with {_bold(name)}: {wins}/{n} ({pct}%)", score)]
 
 
-def _trend_findings(games, now):
-    cutoff = now - timedelta(days=TREND_DAYS)
+def _trend_findings(games, now, trend_days=TREND_DAYS):
+    cutoff = now - timedelta(days=trend_days)
     recent = [g for g in games if g["game_end_at"] > cutoff]
     older = [g for g in games if g["game_end_at"] <= cutoff]
     if len(recent) < MIN_SPLIT_GAMES or len(older) < MIN_SPLIT_GAMES:
@@ -262,10 +313,10 @@ def _trend_findings(games, now):
     older_pct = _pct(*_record(older))
     weight = _weight(len(recent), len(older))
     if recent_pct >= older_pct + TREND_GAP_PP:
-        return [Finding(f"Trending up: {recent_pct}% in the last {TREND_DAYS} days ({len(recent)}), {older_pct}% before",
+        return [Finding(f"Trending up: {recent_pct}% in the last {trend_days} days ({len(recent)}), {older_pct}% before",
                         (recent_pct - older_pct) * weight)], []
     if recent_pct <= older_pct - TREND_GAP_PP:
-        text = f"Last {TREND_DAYS} days {recent_pct}% ({len(recent)}), {older_pct}% before"
+        text = f"Last {trend_days} days {recent_pct}% ({len(recent)}), {older_pct}% before"
         recent_kda, older_kda = _kda(recent), _kda(older)
         if recent_kda >= older_kda + 0.2:
             text += f", even though KDA rose {older_kda:.2f} → {recent_kda:.2f}"
@@ -313,8 +364,17 @@ def _top(findings):
     return [f.text for f in sorted(findings, key=lambda f: f.score, reverse=True)[:MAX_FINDINGS]]
 
 
-def analyze_player(*, riot_id, games, queue, role_baselines, names_by_puuid, now, tz, day_start_hour):
-    """Build the analysis for one queue from the player's ranked rows (both queues, no remakes)."""
+def analyze_player(
+    *, riot_id, games, queue, role_baselines, names_by_puuid, now, tz, day_start_hour, months=DEFAULT_MONTHS,
+):
+    """Build the analysis for one queue from the player's ranked rows (both queues, no remakes).
+
+    Only games in the last `months` count; trends split that window at 90 days, or in
+    half when the window is shorter than 180 days.
+    """
+    since = analysis_start(now, months)
+    games = [g for g in games if since < g["game_end_at"] <= now]
+    trend_days = min(TREND_DAYS, (now - since).days // 2)
     queue_id = QUEUES[queue]["queue_id"]
     queue_games = [g for g in games if g["queue_id"] == queue_id]
     other_games = [g for g in games if g["queue_id"] != queue_id]
@@ -328,6 +388,7 @@ def analyze_player(*, riot_id, games, queue, role_baselines, names_by_puuid, now
         other_queue_games=other_n,
         other_queue_wins=other_wins,
         since=min((g["game_end_at"] for g in queue_games), default=None),
+        months=months,
     )
     if not analysis.enough_games:
         return analysis
@@ -335,8 +396,8 @@ def analyze_player(*, riot_id, games, queue, role_baselines, names_by_puuid, now
     strengths, tips = [], []
     for found_strengths, found_tips in (
         _champion_findings(queue_games, overall_pct),
-        _role_findings(queue_games, role_baselines, now),
-        _trend_findings(queue_games, now),
+        _role_findings(queue_games, role_baselines, now, trend_days),
+        _trend_findings(queue_games, now, trend_days),
         _session_findings(queue_games, tz, day_start_hour),
     ):
         strengths.extend(found_strengths)
@@ -362,22 +423,24 @@ def format_analysis_sections(analysis):
     records = [_queue_record(label, analysis.wins, analysis.games)]
     if analysis.other_queue_games:
         records.append(_queue_record(other_label, analysis.other_queue_wins, analysis.other_queue_games))
-    header = f"**{name}** · {label} analysis\n-# Last 12 months · {' · '.join(records)}"
+    period = f"last {analysis.months} month{'s' if analysis.months != 1 else ''}"
+    header = f"**{name}** · {label} analysis\n-# {period.capitalize()} · {' · '.join(records)}"
     command_name = discord.utils.escape_markdown(analysis.riot_id.split("#", 1)[0])
+    # Keep a non-default month count in suggested commands.
+    months_arg = f" {analysis.months}" if analysis.months != DEFAULT_MONTHS else ""
     if not analysis.enough_games:
-        body = (
-            f"Not enough {label} games to analyze yet: {analysis.games} in the last 12 months, "
-            f"{MIN_QUEUE_GAMES} needed."
-        )
+        body = f"Not enough {label} games to analyze yet: {analysis.games} in the {period}, {MIN_QUEUE_GAMES} needed."
         if analysis.other_queue_games >= MIN_QUEUE_GAMES:
-            body += f" Try `!analyze {command_name} {other}`."
+            body += f" Try `!analyze {command_name}{months_arg} {other}`."
+        if analysis.months < MAX_ANALYSIS_MONTHS:
+            body += f" Or look further back: `!analyze {command_name} {MAX_ANALYSIS_MONTHS}`."
         return [header, body]
     strengths = "\n".join(f"✅ {line}" for line in analysis.strengths) or "Nothing stands out yet."
     tips = "\n".join(f"⚠️ {line}" for line in analysis.tips) or "No clear weak spots in these games."
     since = analysis.since.strftime("%d %b %Y").lstrip("0") if analysis.since else "?"
     footer = (
         f"-# {label} games since {since} · tips need {MIN_GROUP_GAMES}+ games · "
-        f"`!analyze {command_name} {other}` for {other_label}"
+        f"`!analyze {command_name}{months_arg} {other}` for {other_label} · add 1-12 for months"
     )
     return [header, f"**Strengths**\n{strengths}", f"**Work on**\n{tips}", footer]
 

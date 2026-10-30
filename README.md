@@ -62,7 +62,7 @@ Start with:
 - `src/champion_icons.py` - recap champion display mode and portrait emojis (Data Dragon -> Discord application emojis)
 - `src/puuid_remap.py` - one-off background rewrite of old (pre key-change) PUUIDs in cached matches
 - `src/match_stats.py` - per-player match stats extracted from cached matches into `player_match_stats` (background sync)
-- `src/player_analysis.py` - `!analyze` rules: guarded strengths and tips from a year of ranked games, and the compact card
+- `src/player_analysis.py` - `!analyze` rules: guarded strengths and tips from recent ranked games (3 months by default, up to 12), and the compact card
 - `src/wrapped.py` - Poro Wrapped: the group's year in review, posted in the events channel on 31 December at 18:00, and `!wrapped Name` per player until the end of January
 - `src/belts.py` - weekly title belts (Damage King, Backseat Gamer, ...) posted in the events channel when a report week closes, with defended streaks
 - `src/records.py` - Hall of Fame: group records and personal bests from ranked games (`!records`), and "New group record" and "Personal best" lines in recaps
@@ -194,7 +194,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 - `!Add Name#Tag`
 - `!remove Name#Tag`
 - `!profile Name#Tag`
-- `!analyze Name#Tag [solo|flex]` (alias `!analyse`; the name alone works when it's unique)
+- `!analyze Name#Tag [months] [solo|flex]` (alias `!analyse`; the last 3 months of Solo/Duo by default, `!analyze Name 12 flex` for a year of Flex; the name alone works when it's unique)
 - `!records [Name#Tag]` (group Hall of Fame, or one player's personal bests; ranked games only)
 - `!wrapped Name#Tag` (a player's Poro Wrapped for the year; open from 31 December 18:00 until the end of January, any time for admins; `!wrapped` alone previews the group post for admins)
 - `!DebugPlayer Name#Tag`

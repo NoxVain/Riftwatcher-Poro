@@ -44,26 +44,28 @@ ANALYSIS_ROW_COLUMNS = (
 RANKED_QUEUE_IDS = [420, 440]
 
 
-def db_load_player_analysis_rows(puuid, since):
-    """One player's ranked games (Solo/Duo and Flex, no remakes) that ended after `since`."""
+def db_load_player_analysis_rows(puuid, since, *, until=None):
+    """One player's ranked games (Solo/Duo and Flex, no remakes) that ended after `since` (and by `until`)."""
+    until_sql = " AND game_end_at <= %s" if until is not None else ""
     rows = db_execute(
         f"SELECT {', '.join(ANALYSIS_ROW_COLUMNS)} FROM player_match_stats "
-        "WHERE puuid = %s AND queue_id = ANY(%s) AND NOT remake AND game_end_at > %s "
+        f"WHERE puuid = %s AND queue_id = ANY(%s) AND NOT remake AND game_end_at > %s{until_sql} "
         "ORDER BY game_end_at;",
-        (puuid, RANKED_QUEUE_IDS, since),
+        (puuid, RANKED_QUEUE_IDS, since, *([until] if until is not None else [])),
         fetch=True,
     ) or []
     return [dict(zip(ANALYSIS_ROW_COLUMNS, row)) for row in rows]
 
 
-def db_load_role_group_totals(queue_id, since):
-    """Per-role totals across all tracked players in one queue: the group baseline."""
+def db_load_role_group_totals(queue_id, since, *, until=None):
+    """Per-role totals across all tracked players in one queue: the group baseline, same window as the player."""
+    until_sql = " AND game_end_at <= %s" if until is not None else ""
     rows = db_execute(
         "SELECT team_position, count(*), sum(kills), sum(deaths), sum(assists), sum(duration_seconds) / 60.0 "
         "FROM player_match_stats "
-        "WHERE queue_id = %s AND NOT remake AND game_end_at > %s AND team_position IS NOT NULL "
+        f"WHERE queue_id = %s AND NOT remake AND game_end_at > %s{until_sql} AND team_position IS NOT NULL "
         "GROUP BY team_position;",
-        (queue_id, since),
+        (queue_id, since, *([until] if until is not None else [])),
         fetch=True,
     ) or []
     return {

@@ -1,7 +1,8 @@
 """`!wrapped Name`: one player's Poro Wrapped card.
 
-Open from the group post (31 December, 18:00) until the end of January. Admins can run
-it any time, and `!wrapped` alone shows them the group post, to preview the year so far.
+Wrapped is a surprise: the command only exists once the group post is out (31 December,
+18:00) and until the end of January. Outside that, `!wrapped` gets no reply at all, not
+even a wrong-channel pointer, and that goes for admins too. It's left out of `!help`.
 Read-only: pages through the year's rows in `player_match_stats` (src/wrapped.py).
 """
 
@@ -9,21 +10,17 @@ import asyncio
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from src.commands.permissions import has_admin_access
 from src.constants import WRAPPED_COMMAND
 from src.discord_text import format_user_error
 from src.player_analysis import resolve_tracked_player
 from src.wrapped import (
-    WRAPPED_ACCENT,
     WRAPPED_PERSONAL_ACCENT,
-    format_group_cards,
+    WRAPPED_STATE_KEY,
     format_personal_sections,
     load_wrapped,
     send_sections,
     wrapped_window,
 )
-
-PREVIEW_NOTE = "-# Preview for admins: the year so far. Everyone can use `!wrapped Name` from 31 Dec, 18:00."
 
 
 def _now():
@@ -35,59 +32,63 @@ def _is_wrapped_command(content_lower):
     return content_lower == prefix or content_lower.startswith(f"{prefix} ")
 
 
+async def _open_year(ctx):
+    """The year whose Wrapped is open now (posted, and before February), or None."""
+    tz = ZoneInfo(ctx.report_timezone_name)
+    now_utc = _now()
+    year, post_at, closes_at = wrapped_window(now_utc, tz)
+    if not post_at <= now_utc < closes_at or ctx.db_get_state is None:
+        return None
+    try:
+        posted = await asyncio.to_thread(ctx.db_get_state, WRAPPED_STATE_KEY)
+    except Exception as exc:
+        ctx.log(f"[wrapped] Could not read {WRAPPED_STATE_KEY}; treating Wrapped as closed: {type(exc).__name__}: {exc}")
+        return None
+    return year if posted == str(year) else None
+
+
+async def ignore_closed_wrapped(ctx):
+    """True (and silent) for `!wrapped` while Wrapped is closed, before channel routing can mention it."""
+    if not _is_wrapped_command(ctx.content_lower) or await _open_year(ctx) is not None:
+        return False
+    ctx.log("[wrapped] Ignored !wrapped: Wrapped isn't open (not posted yet, or past January).")
+    return True
+
+
 async def handle_wrapped_commands(ctx):
     if not _is_wrapped_command(ctx.content_lower):
         return False
+    year = await _open_year(ctx)
+    if year is None:
+        return True
     channel = ctx.message.channel
     if not ctx.db_enabled or ctx.db_iter_wrapped_rows is None:
         await channel.send("Wrapped needs the database, which isn't configured.")
         return True
-
-    tz = ZoneInfo(ctx.report_timezone_name)
-    now_utc = _now()
-    year, post_at, closes_at = wrapped_window(now_utc, tz)
-    is_open = post_at <= now_utc < closes_at
-    is_admin = has_admin_access(ctx.message.author, ctx.admin_role_id)
     query = ctx.content[len(WRAPPED_COMMAND):].strip()
-    if not is_open and not is_admin:
-        await channel.send(
-            f"Poro Wrapped {year} opens on 31 Dec at {post_at:%H:%M}. See you then."
-            if now_utc < post_at else f"Poro Wrapped {year} has closed. See you next December."
-        )
-        return True
-    if not query and not is_admin:
+    if not query:
         await channel.send("Use `!wrapped Name` (or `Name#Tag`) to see a player's year.")
         return True
 
-    riot_id = None
     try:
-        if query:
-            tracked = [(rid, puuid) for rid, puuid in await asyncio.to_thread(ctx.db_load_tracked_puuids) if puuid]
-            match, error = resolve_tracked_player(query, tracked)
-            if error:
-                await channel.send(error)
-                return True
-            riot_id = match[0]
+        tracked = [(rid, puuid) for rid, puuid in await asyncio.to_thread(ctx.db_load_tracked_puuids) if puuid]
+        match, error = resolve_tracked_player(query, tracked)
+        if error:
+            await channel.send(error)
+            return True
+        riot_id = match[0]
+        tz = ZoneInfo(ctx.report_timezone_name)
         wrapped = await asyncio.to_thread(
-            load_wrapped, ctx.db_iter_wrapped_rows, ctx.db_load_all_ranked_states, year, tz, end=now_utc
+            load_wrapped, ctx.db_iter_wrapped_rows, ctx.db_load_all_ranked_states, year, tz
         )
     except Exception as exc:
         await channel.send(format_user_error("Wrapped failed", exc, ctx.request_id_context.get()))
         ctx.log(f"[wrapped] Lookup failed for {query!r}: {type(exc).__name__}: {exc}")
         return True
 
-    if riot_id:
-        cards = [format_personal_sections(wrapped, riot_id)]
-        accent, what = WRAPPED_PERSONAL_ACCENT, "personal Wrapped"
-    else:
-        cards = format_group_cards(wrapped)
-        accent, what = WRAPPED_ACCENT, "group Wrapped"
-    if not is_open:
-        cards[0][0] += f"\n{PREVIEW_NOTE}"
-    for sections in cards:
-        await send_sections(channel, sections, accent=accent, log=ctx.log, what=what)
-    ctx.log(
-        f"[wrapped] Sent {'Wrapped ' + str(year) + ' for ' + riot_id if riot_id else 'group Wrapped ' + str(year)}"
-        f"{' (admin preview)' if not is_open else ''}: games={len(wrapped.matches)} players={len(wrapped.players)}."
+    await send_sections(
+        channel, format_personal_sections(wrapped, riot_id), accent=WRAPPED_PERSONAL_ACCENT, log=ctx.log,
+        what="personal Wrapped",
     )
+    ctx.log(f"[wrapped] Sent Wrapped {year} for {riot_id}: games={len(wrapped.matches)} players={len(wrapped.players)}.")
     return True

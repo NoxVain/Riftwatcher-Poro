@@ -196,7 +196,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 - `!profile Name#Tag`
 - `!analyze Name#Tag [solo|flex]` (alias `!analyse`; the name alone works when it's unique)
 - `!records [Name#Tag]` (group Hall of Fame, or one player's personal bests; ranked games only)
-- `!wrapped Name#Tag` (a player's Poro Wrapped for the year; open from 31 December 18:00 until the end of January, any time for admins; `!wrapped` alone previews the group post for admins)
+- `!wrapped Name#Tag` (a player's Poro Wrapped for the year; a surprise: it only works after the group post on 31 December 18:00 until the end of January, gets no reply at all otherwise, and isn't in `!help`)
 - `!DebugPlayer Name#Tag`
 - `!health`
 - `!backfill YYYY-MM-DD YYYY-MM-DD`

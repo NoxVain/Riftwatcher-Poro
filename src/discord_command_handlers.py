@@ -1,6 +1,6 @@
 from src.commands.analysis_handlers import handle_analysis_commands
 from src.commands.records_handlers import handle_records_commands
-from src.commands.wrapped_handlers import handle_wrapped_commands
+from src.commands.wrapped_handlers import handle_wrapped_commands, ignore_closed_wrapped
 from src.commands.context import CommandHandlerContext
 from src.commands.ops_handlers import handle_ops_commands
 from src.commands.permissions import enforce_admin_permission
@@ -92,6 +92,9 @@ async def handle_incoming_message(
         db_load_all_ranked_states=db_load_all_ranked_states,
     )
 
+    # Wrapped is a surprise: a closed !wrapped gets no reply, not even a wrong-channel pointer.
+    if await ignore_closed_wrapped(ctx):
+        return
     if await enforce_command_channel(ctx):
         return
     if not content.startswith("!") or not is_supported_command(content_lower):

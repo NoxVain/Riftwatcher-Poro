@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import discord
+import pytest
 
 import src.commands.wrapped_handlers as wrapped_handlers
 from src.discord_command_handlers import handle_incoming_message
@@ -366,10 +367,11 @@ class FakeMessage:
         self.author = FakeAuthor(admin)
 
 
-def run_command(content, monkeypatch, *, now, admin=False, logs=None):
-    channel = FakeChannel()
+def run_command(content, monkeypatch, *, now, admin=False, logs=None, posted="2026", channel_id=999):
+    channel = FakeChannel(channel_id)
     monkeypatch.setattr(wrapped_handlers, "_now", lambda: now)
     rows = [game("NoxVain#EUW", day=i) for i in range(3)] + [game("Tamarin#EUW")]
+    state = {WRAPPED_STATE_KEY: posted} if posted else {}
     asyncio.run(handle_incoming_message(
         message=FakeMessage(content, channel, admin),
         channel_id=channel.id,
@@ -389,6 +391,7 @@ def run_command(content, monkeypatch, *, now, admin=False, logs=None):
         db_upsert_player=None,
         log=(logs.append if logs is not None else (lambda _msg: None)),
         events_channel_id=999,
+        db_get_state=state.get,
         db_load_tracked_puuids=lambda: [("NoxVain#EUW", "noxvain"), ("Tamarin#EUW", "tamarin")],
         db_iter_wrapped_rows=lambda start, end: iter(rows),
         db_load_all_ranked_states=dict,
@@ -400,33 +403,40 @@ OPEN = datetime(2027, 1, 5, 12, tzinfo=timezone.utc)
 BEFORE = datetime(2026, 11, 5, 12, tzinfo=timezone.utc)
 
 
-def test_command_shows_a_players_card_while_open(monkeypatch):
+def test_command_shows_a_players_card_once_posted_and_open(monkeypatch):
     logs = []
     channel = run_command("!wrapped noxvain", monkeypatch, now=OPEN, logs=logs)
     assert channel.sent[0].startswith("🎁 **NoxVain** · Wrapped 2026")
-    assert "Preview" not in channel.sent[0]
     assert logs[-1] == "[wrapped] Sent Wrapped 2026 for NoxVain#EUW: games=4 players=2."
 
 
-def test_command_is_closed_before_new_years_eve_for_players(monkeypatch):
-    channel = run_command("!wrapped NoxVain", monkeypatch, now=BEFORE)
-    assert channel.sent == ["Poro Wrapped 2026 opens on 31 Dec at 18:00. See you then."]
-
-
-def test_command_is_closed_after_january(monkeypatch):
-    # In February the next Wrapped (2027) is the one coming up.
-    channel = run_command("!wrapped NoxVain", monkeypatch, now=datetime(2027, 2, 3, tzinfo=timezone.utc))
-    assert channel.sent == ["Poro Wrapped 2027 opens on 31 Dec at 18:00. See you then."]
-
-
-def test_admins_can_preview_a_player_or_the_group_post(monkeypatch):
+@pytest.mark.parametrize("now, posted", [
+    (BEFORE, None),  # before New Year's Eve
+    (datetime(2026, 12, 31, 17, 59, tzinfo=OSLO), None),  # a minute before the post
+    (datetime(2026, 12, 31, 18, 5, tzinfo=OSLO), None),  # post time, but the post hasn't gone out
+    (datetime(2027, 2, 3, tzinfo=timezone.utc), "2026"),  # after January
+])
+@pytest.mark.parametrize("admin", [False, True])
+def test_closed_wrapped_is_silent_for_everyone_including_admins(monkeypatch, now, posted, admin):
     logs = []
-    personal = run_command("!wrapped NoxVain", monkeypatch, now=BEFORE, admin=True, logs=logs)
-    assert "-# Preview for admins: the year so far." in personal.sent[0]
-    assert logs[-1].endswith("(admin preview): games=4 players=2.")
-    group = run_command("!wrapped", monkeypatch, now=BEFORE, admin=True)
-    assert group.sent[0].startswith("🎁 **Poro Wrapped 2026**") and "Preview for admins" in group.sent[0]
-    assert len(group.sent) >= 3
+    for content in ("!wrapped NoxVain", "!wrapped"):
+        channel = run_command(content, monkeypatch, now=now, posted=posted, admin=admin, logs=logs)
+        assert channel.sent == []
+    assert logs[-1] == "[wrapped] Ignored !wrapped: Wrapped isn't open (not posted yet, or past January)."
+
+
+def test_closed_wrapped_gets_no_wrong_channel_pointer(monkeypatch):
+    channel = run_command("!wrapped NoxVain", monkeypatch, now=BEFORE, posted=None, channel_id=5)
+    assert channel.sent == []
+    # Once open, the usual pointer applies.
+    assert run_command("!wrapped NoxVain", monkeypatch, now=OPEN, channel_id=5).sent == ["Use `!wrapped` in <#999>."]
+
+
+def test_wrapped_is_not_in_help():
+    from src.commands.routing import format_help_text
+
+    text = format_help_text(report_day_start_hour=6, daily_channel_id=1, weekly_channel_id=2, events_channel_id=3)
+    assert "wrapped" not in text.casefold()
 
 
 def test_command_without_a_name_explains_usage_and_unknown_names_fail(monkeypatch):

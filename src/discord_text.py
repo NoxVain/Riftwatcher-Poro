@@ -45,6 +45,20 @@ def format_user_error(prefix, exc, request_id=None):
     return text
 
 
+def split_message_text(text, limit=2000):
+    """Plain-text chunks within Discord's message limit, split at line breaks where possible; nothing is dropped."""
+    if limit < 1:
+        raise ValueError("Message limit must be positive.")
+    chunks = []
+    while len(text) > limit:
+        end = text.rfind("\n", 0, limit) + 1 or limit
+        chunks.append(text[:end])
+        text = text[end:]
+    if text:
+        chunks.append(text)
+    return chunks
+
+
 def report_signature(text):
     lines = [line for line in text.splitlines() if not line.startswith("_Last updated:")]
     return "\n".join(lines)

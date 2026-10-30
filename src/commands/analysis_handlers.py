@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 import discord
 
 from src.constants import ANALYZE_ALIAS, ANALYZE_COMMAND
-from src.discord_text import format_user_error
+from src.discord_text import format_user_error, split_message_text
 from src.player_analysis import (
     ANALYSIS_DAYS,
     QUEUES,
@@ -75,7 +75,8 @@ async def handle_analysis_commands(ctx):
         await channel.send(view=build_analysis_view(analysis))
     except discord.HTTPException as exc:
         ctx.log(f"[analyze] Discord rejected the analysis card (HTTP {getattr(exc, 'status', '?')}); sending it as plain text.")
-        await channel.send(format_analysis_text(analysis))
+        for chunk in split_message_text(format_analysis_text(analysis)):
+            await channel.send(chunk)
     ctx.log(
         f"[analyze] Sent {queue} analysis for {riot_id}: games={analysis.games} "
         f"strengths={len(analysis.strengths)} tips={len(analysis.tips)}."

@@ -228,7 +228,7 @@ Recaps of ranked games check for new group records and personal bests before pos
 - Personal bests cover the Best categories of `!records Name` (kills, kills in a row, damage, solo kills, CS, CS/min, vision, assists) and are skipped where the same game set the group record.
 - A replay of the 12 months to 2026-10-27 gave 8 recaps with record lines (13 lines) out of 3,412 ranked matches. A replay of the year to 2026-10-28 gave 75 personal-best lines in 70 recaps (at most 4 in one recap), about 6 a month.
 
-Pentakills come from the `penta_kills` column, added with `STATS_VERSION` 2. The first stats pass after that deploy rebuilds every row (140 s in production on 2026-10-27); until it finishes, the pentakill line is missing from `!records`. Kills in a row come from `killing_spree` (`STATS_VERSION` 4, 2026-10-29) and are missing from `!records` until that rebuild finishes. The Jungle section's enemy jungle camps and buffs stolen come from `enemy_jungle_camps` and `buffs_stolen` (`STATS_VERSION` 5) the same way.
+Pentakills come from the `penta_kills` column, added with `STATS_VERSION` 2. The first stats pass after that deploy rebuilds every row (140 s in production on 2026-10-27); until it finishes, the pentakill line is missing from `!records`. Kills in a row come from `killing_spree` (`STATS_VERSION` 4, 2026-10-29) and are missing from `!records` until that rebuild finishes. The Jungle section's enemy jungle minions and buffs stolen come from `enemy_jungle_camps` and `buffs_stolen` (`STATS_VERSION` 5) the same way.
 
 ## Weekly Title Belts
 

@@ -251,7 +251,7 @@ def test_group_card_jungle_section():
     jungle = next(section for section in sections if section.startswith("**Jungle**"))
     assert jungle == (
         "**Jungle**\n"
-        "**80** enemy jungle camps · ÇÛΜÌŃΜÝÄŠŠ · Vi · Jan 2025\n"
+        "**80** enemy jungle minions · ÇÛΜÌŃΜÝÄŠŠ · Vi · Jan 2025\n"
         "**15** buffs stolen · JonastCvuHU · Karthus · Jan 2025\n"
         "**6** dragons · ÇÛΜÌŃΜÝÄŠŠ · Vi · Jan 2025\n"
         "**1** baron · Gizhmo · Kaisa · Jan 2025\n"

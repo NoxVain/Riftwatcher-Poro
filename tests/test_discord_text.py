@@ -8,7 +8,17 @@ from src.discord_text import (
     format_streak_callout,
     format_user_error,
     recap_queue_label,
+    split_message_text,
 )
+
+
+def test_plain_text_chunks_are_lossless_and_within_discord_limit():
+    for text in ("", "short", "x" * 4500, "A line of text\n" * 400):
+        chunks = split_message_text(text)
+        assert "".join(chunks) == text
+        assert all(0 < len(chunk) <= 2000 for chunk in chunks)
+    # Splits prefer line breaks, so no line is cut in half.
+    assert all(chunk.endswith("\n") for chunk in split_message_text("A line of text\n" * 400))
 
 
 def test_recap_queue_label_drops_the_leading_icon():

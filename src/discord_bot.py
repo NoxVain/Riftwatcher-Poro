@@ -179,7 +179,7 @@ client = RiftwatcherClient(intents=intents)
 async def health_slash(interaction: discord.Interaction):
     await handle_health_slash(
         interaction,
-        events_channel_id=EVENTS_CHANNEL_ID,
+        commands_channel_id=cfg.COMMANDS_CHANNEL_ID,
         poro_service=poro_service,
         start_monotonic=START_MONOTONIC,
         worker_stats=WORKER_STATS,
@@ -544,6 +544,7 @@ async def background_wrapped():
         channel_id=EVENTS_CHANNEL_ID,
         tz=REPORT_TIMEZONE,
         log=log,
+        commands_channel_id=cfg.COMMANDS_CHANNEL_ID,
     )
 
 
@@ -671,6 +672,7 @@ async def on_ready():
     log(f"[startup] REPORT_CACHE_SECONDS={REPORT_CACHE_SECONDS}")
     log(f"[startup] MATCH_CACHE_RETENTION_DAYS={MATCH_CACHE_RETENTION_DAYS}")
     log(f"[startup] EVENTS_CHANNEL_ID={EVENTS_CHANNEL_ID}")
+    log(f"[startup] Commands channel={cfg.COMMANDS_CHANNEL_ID} (MANUAL_COMMANDS_CHANNEL_ID; events when unset)")
     log(f"[startup] WEEKLY_REPORT_CHANNEL_ID={WEEKLY_REPORT_CHANNEL_ID}")
     log(f"[startup] MATCH_RECAP_CHANNEL_ID={MATCH_RECAP_CHANNEL_ID}")
     log(f"[startup] MATCH_RECAP_POLL_SECONDS={MATCH_RECAP_POLL_SECONDS}")
@@ -784,6 +786,7 @@ async def on_message(message):
         db_iter_record_rows=db_iter_record_rows,
         db_iter_wrapped_rows=db_iter_wrapped_rows,
         db_load_all_ranked_states=db_load_all_ranked_states,
+        commands_channel_id=cfg.COMMANDS_CHANNEL_ID,
     )
 
 

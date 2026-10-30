@@ -137,6 +137,7 @@ Common optional variables:
 - `RIOT_REGIONAL_ROUTING`
 - `BACKFILL_STALE_THRESHOLD_SECONDS`
 - `ADMIN_ROLE_ID`
+- `MANUAL_COMMANDS_CHANNEL_ID`
 
 Low-resource hosting variables (optional):
 - `STARTUP_PREFER_SNAPSHOT`

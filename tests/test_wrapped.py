@@ -177,6 +177,11 @@ def test_group_cards_have_ranked_main_event_then_aram_and_arena():
     assert cards[-1][-1].endswith("open until 31 Jan")
 
 
+def test_group_post_points_to_the_commands_channel():
+    cards = format_group_cards(year_of([game("Nox#EUW")]), commands_channel_id=505)
+    assert cards[-1][-1] == "-# Your own year: `!wrapped Name` in <#505> · open until 31 Jan"
+
+
 def test_group_cards_skip_modes_nobody_played():
     cards = format_group_cards(year_of([game("Nox#EUW")]))
     text = "\n".join("\n".join(card) for card in cards)

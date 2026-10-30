@@ -87,6 +87,7 @@ RIOT_REGIONAL_ROUTING=europe
 
 Optional but commonly used:
 
+- `MANUAL_COMMANDS_CHANNEL_ID` - channel where commands run (`!analyze`, `!records`, `!help`, admin commands, `/health`), so the events channel keeps only automatic posts. Unset = `EVENTS_CHANNEL_ID`.
 - `ADMIN_ROLE_ID` - role allowed to run `!Add`/`!remove`/`!backfill`/`!tts on|off` (members with Manage Server or Administrator always can).
 - `NEWS_CHANNEL_ID` + `ESPORTS_API_KEY` - enable esports news. `ESPORTS_API_KEY` is the `x-api-key` header lolesports.com sends to `esports-api.lolesports.com` (browser DevTools -> Network). Pick leagues with `ESPORTS_LEAGUES` (default `worlds`).
 - `PATCH_NOTES_ENABLED` (default `true`), `PATCH_NOTES_POLL_SECONDS` (default `21600` = 6h), `PATCH_NOTES_LOCALE` (default `en-us`) - League patch-notes posts in `EVENTS_CHANNEL_ID`. No key needed; about 4 small page requests per day.

@@ -117,3 +117,40 @@ def test_enforce_command_channel_ignores_non_commands():
     blocked = asyncio.run(enforce_command_channel(ctx))
     assert blocked is False
     assert ctx.message.channel.sent_messages == []
+
+
+CHANNELS = dict(daily_channel_id=101, weekly_channel_id=202, events_channel_id=303, match_recap_channel_id=404)
+
+
+@pytest.mark.parametrize("content_lower", [
+    "!analyze nox", "!analyse nox", "!records", "!record nox", "!profile nox", "!score", "!help", "!health",
+    "!add nox#euw", "!remove nox#euw", "!backfill 2026-01-01 2026-01-31", "!debugplayer nox#euw", "!test",
+    "!riottest", "!wrapped nox",
+])
+def test_events_channel_commands_move_to_the_commands_channel(content_lower):
+    assert is_supported_command(content_lower)
+    assert command_channel_id(content_lower, commands_channel_id=505, **CHANNELS) == 505
+    # Unset, they stay in the events channel.
+    assert command_channel_id(content_lower, **CHANNELS) == 303
+
+
+def test_commands_channel_leaves_scoreboards_and_recap_commands_alone():
+    assert command_channel_id("!daily", commands_channel_id=505, **CHANNELS) == 101
+    assert command_channel_id("!weekly", commands_channel_id=505, **CHANNELS) == 202
+    assert command_channel_id("!streak nox", commands_channel_id=505, **CHANNELS) == 404
+    assert command_channel_id("!tts on", commands_channel_id=505, **CHANNELS) == (505, 404)
+
+
+def test_commands_typed_in_the_events_channel_point_to_the_commands_channel():
+    ctx = FakeContext(content="!analyze Nox", channel_id=303)
+    ctx.commands_channel_id = 505
+    assert asyncio.run(enforce_command_channel(ctx)) is True
+    assert ctx.message.channel.sent_messages == ["Use `!analyze` in <#505>."]
+
+
+def test_help_lists_the_commands_channel():
+    from src.commands.routing import format_help_text
+
+    text = format_help_text(report_day_start_hour=6, commands_channel_id=505, **CHANNELS)
+    assert "<#303>" not in text
+    assert "`!records [Name#Tag]`" in text and "(run in <#505>)" in text

@@ -85,7 +85,7 @@ def _run_health(interaction, service):
     asyncio.run(
         handle_health_slash(
             interaction,
-            events_channel_id=111,
+            commands_channel_id=111,
             poro_service=service,
             start_monotonic=0.0,
             worker_stats={},

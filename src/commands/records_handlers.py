@@ -8,26 +8,30 @@ import asyncio
 
 import discord
 
-from src.constants import RECORDS_COMMAND
-from src.discord_text import format_user_error
+from src.constants import RECORDS_ALIAS, RECORDS_COMMAND
+from src.discord_text import format_user_error, split_message_text
 from src.player_analysis import resolve_tracked_player
 from src.records import build_records_view, format_group_sections, format_personal_sections, load_record_book
 
 
-def _is_records_command(content_lower):
-    prefix = RECORDS_COMMAND.casefold()
-    return content_lower == prefix or content_lower.startswith(f"{prefix} ")
+def _matched_command(content_lower):
+    for command in (RECORDS_COMMAND, RECORDS_ALIAS):
+        prefix = command.casefold()
+        if content_lower == prefix or content_lower.startswith(f"{prefix} "):
+            return command
+    return None
 
 
 async def handle_records_commands(ctx):
-    if not _is_records_command(ctx.content_lower):
+    command = _matched_command(ctx.content_lower)
+    if command is None:
         return False
     channel = ctx.message.channel
     if not ctx.db_enabled or ctx.db_iter_record_rows is None:
         await channel.send("Records need the database, which isn't configured.")
         return True
 
-    query = ctx.content[len(RECORDS_COMMAND):].strip()
+    query = ctx.content[len(command):].strip()
     riot_id = None
     try:
         if query:
@@ -48,6 +52,7 @@ async def handle_records_commands(ctx):
         await channel.send(view=build_records_view(sections))
     except discord.HTTPException as exc:
         ctx.log(f"[records] Discord rejected the records card (HTTP {getattr(exc, 'status', '?')}); sending it as plain text.")
-        await channel.send("\n\n".join(sections))
+        for chunk in split_message_text("\n\n".join(sections)):
+            await channel.send(chunk)
     ctx.log(f"[records] Sent {'personal bests for ' + riot_id if riot_id else 'group records'}: games={book.games} matches={len(book.match_ids)}.")
     return True

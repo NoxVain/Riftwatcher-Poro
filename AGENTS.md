@@ -8,6 +8,7 @@ Read these before making changes:
 2. `ARCHITECTURE.md` (rest): runtime layers, worker model, data flow, persistence.
 3. `OPERATIONS.md`: logs to look for, stall alerts, incidents, LP-history analysis, memory/hosting cost.
 4. `IMPROVEMENT_BACKLOG.md`: what shipped recently and what's planned.
+5. `CONTRIBUTING.md`: how PRs and code should look (one change per PR, mockups for visible changes, tests, docs, no production data).
 
 Design priorities in one line each (details in ARCHITECTURE.md):
 - Recaps and scoreboards must never be lost or stuck. Optional enrichment (LP, portraits, baselines, cards) degrades or times out and never blocks posting.
@@ -48,7 +49,7 @@ This repository is a modular Python Discord bot.
 - `src/belts.py`: Weekly title belts: pure awards/defended-streak logic and the background task that posts the card in `EVENTS_CHANNEL_ID` once per closed report week.
 - `src/records.py`: Pure Hall of Fame logic (ranked-only group records, personal bests, streaks) for `!records` and the "New group record" and "Personal best" recap lines; the handler is `src/commands/records_handlers.py`.
 - `tests/`: Unit tests for pure logic, command routing/handlers, workers, and runtime helpers.
-- `README.md`, `ARCHITECTURE.md`, `OPERATIONS.md`, `SELF_HOSTING.md`: Runtime, design, runbook, and deployment documentation. `IMPROVEMENT_BACKLOG.md`: planned features and recently shipped work.
+- `README.md`, `ARCHITECTURE.md`, `OPERATIONS.md`, `SELF_HOSTING.md`: Runtime, design, runbook, and deployment documentation. `CONTRIBUTING.md` and `.github/pull_request_template.md`: contributor rules and the PR description template. `IMPROVEMENT_BACKLOG.md`: planned features and recently shipped work.
 - `.github/workflows/test.yml`: GitHub Actions CI (pytest on the `.python-version` Python for pushes/PRs to `main`); `.github/dependabot.yml`: weekly pip and GitHub Actions update PRs.
 - `.railway/railway.ts`: Railway Infrastructure as Code (start command, restart policy); applied with `railway config apply`, not on deploy. `Procfile`: start command for Procfile-based hosts (`python -m src.app`).
 - `.vs/`, `__pycache__/`, `build/`, `env/`, `.venv/`, `node_modules/`: Editor/build/venv artifacts; do not treat as source.

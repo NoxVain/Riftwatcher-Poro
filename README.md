@@ -324,6 +324,7 @@ If you find Riftwatcher Poro useful and would like to support its development, y
 
 ## Additional Documentation
 
+- `CONTRIBUTING.md` for how we like PRs and code to look (start here if you want to contribute).
 - `AGENTS.md` for contributor and coding-agent guidelines (structure, conventions, workflow).
 - `ARCHITECTURE.md` for design principles and module/runtime structure.
 - `OPERATIONS.md` for incident response and runbook steps.

@@ -9,7 +9,7 @@ import asyncio
 import discord
 
 from src.constants import RECORDS_COMMAND
-from src.discord_text import format_user_error
+from src.discord_text import format_user_error, split_message_text
 from src.player_analysis import resolve_tracked_player
 from src.records import build_records_view, format_group_sections, format_personal_sections, load_record_book
 
@@ -48,6 +48,7 @@ async def handle_records_commands(ctx):
         await channel.send(view=build_records_view(sections))
     except discord.HTTPException as exc:
         ctx.log(f"[records] Discord rejected the records card (HTTP {getattr(exc, 'status', '?')}); sending it as plain text.")
-        await channel.send("\n\n".join(sections))
+        for chunk in split_message_text("\n\n".join(sections)):
+            await channel.send(chunk)
     ctx.log(f"[records] Sent {'personal bests for ' + riot_id if riot_id else 'group records'}: games={book.games} matches={len(book.match_ids)}.")
     return True

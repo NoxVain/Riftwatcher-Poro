@@ -437,6 +437,18 @@ def test_records_command_falls_back_to_text():
     assert any("sending it as plain text" in line for line in logs)
 
 
+def test_long_records_fallback_is_split_without_losing_text(monkeypatch):
+    # The production group card reached 2,444 characters, over one plain message.
+    import src.commands.records_handlers as records_handlers
+
+    sections = ["🏆 **Hall of Fame**", "\n".join(f"**{i}** kills · Player {i}" for i in range(120))]
+    monkeypatch.setattr(records_handlers, "format_group_sections", lambda _book: sections)
+    channel = run_command("!records", channel=FakeChannel(reject_views=True))
+    assert len(channel.sent) >= 2
+    assert "".join(channel.sent) == "\n\n".join(sections)
+    assert all(len(message) <= 2000 for message in channel.sent)
+
+
 def test_records_command_only_in_events_channel():
     channel = run_command("!records", channel=FakeChannel(channel_id=5))
     assert channel.sent == ["Use `!records` in <#999>."]

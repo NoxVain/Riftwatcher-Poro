@@ -45,6 +45,7 @@ async def handle_incoming_message(
     db_iter_record_rows=None,
     db_iter_wrapped_rows=None,
     db_load_all_ranked_states=None,
+    commands_channel_id=None,
 ):
     content = message.content.strip()
     content_lower = content.casefold()
@@ -90,6 +91,7 @@ async def handle_incoming_message(
         db_iter_record_rows=db_iter_record_rows,
         db_iter_wrapped_rows=db_iter_wrapped_rows,
         db_load_all_ranked_states=db_load_all_ranked_states,
+        commands_channel_id=commands_channel_id or events_channel_id,
     )
 
     if await enforce_command_channel(ctx):

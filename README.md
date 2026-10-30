@@ -195,7 +195,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 - `!remove Name#Tag`
 - `!profile Name#Tag`
 - `!analyze Name#Tag [solo|flex]` (alias `!analyse`; the name alone works when it's unique)
-- `!records [Name#Tag]` (group Hall of Fame, or one player's personal bests; ranked games only)
+- `!records [Name#Tag]` (alias `!record`; group Hall of Fame, or one player's personal bests; ranked games only)
 - `!wrapped Name#Tag` (a player's Poro Wrapped for the year; open from 31 December 18:00 until the end of January, any time for admins; `!wrapped` alone previews the group post for admins)
 - `!DebugPlayer Name#Tag`
 - `!health`
@@ -207,7 +207,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 
 Slash commands:
 
-- `/health` - same output as `!health`; only answers in `EVENTS_CHANNEL_ID` (elsewhere it replies privately with a pointer)
+- `/health` - same output as `!health`; only answers in the commands channel (elsewhere it replies privately with a pointer)
 
 Run `!sync` once after deploying a new bot so slash commands appear immediately in your server.
 
@@ -217,10 +217,10 @@ Command routing:
 - `!Daily` in `DAILY_REPORT_CHANNEL_ID`
 - `!Weekly` in `WEEKLY_REPORT_CHANNEL_ID`
 - `!streak` in `MATCH_RECAP_CHANNEL_ID`
-- `!tts` in `EVENTS_CHANNEL_ID` or `MATCH_RECAP_CHANNEL_ID`
-- `!champdisplay` in `EVENTS_CHANNEL_ID` or `MATCH_RECAP_CHANNEL_ID`
+- `!tts` in the commands channel or `MATCH_RECAP_CHANNEL_ID`
+- `!champdisplay` in the commands channel or `MATCH_RECAP_CHANNEL_ID`
 - `!sync` in any server channel
-- all other commands (and `/health`) in `EVENTS_CHANNEL_ID`
+- all other commands (and `/health`) in the commands channel: `MANUAL_COMMANDS_CHANNEL_ID`, or `EVENTS_CHANNEL_ID` when unset. A command typed in the wrong channel gets a one-line pointer to the right one.
 
 Permissions:
 - `!Add`, `!remove`, `!backfill`, `!tts on|off`, and `!champdisplay name|icon|both` change shared state and require the **Manage Server** permission (or Administrator), or the optional `ADMIN_ROLE_ID` role
@@ -257,6 +257,7 @@ Optional (with defaults):
 - `RIOT_PLATFORM_ROUTING` (`euw1`)
 - `RIOT_REGIONAL_ROUTING` (`europe`) - regional host for account/match-v5 API calls (`europe`, `americas`, `asia`)
 - `BACKFILL_STALE_THRESHOLD_SECONDS` (`0` = auto: `max(300, backfill interval * 6)`) - stall watchdog threshold for the backfill worker
+- `MANUAL_COMMANDS_CHANNEL_ID` (unset = `EVENTS_CHANNEL_ID`) - channel where all `!commands` that would run in the events channel (reports, admin commands, `!help`) and `/health` run, so the events channel keeps only automatic posts
 - `ADMIN_ROLE_ID` (unset = permission-only) - role allowed to run `!Add`/`!remove`/`!backfill`/`!tts on|off`/`!champdisplay name|icon|both` in addition to Manage Server/Administrator
 
 Low-resource hosting (NAS/IoT), all optional:

@@ -449,3 +449,8 @@ def test_a_value_of_one_reads_singular():
     assert "**1** solo kill · Caitlyn" in text
     assert "**1** assist · Caitlyn" in text
     assert CATEGORIES_BY_KEY["kill_streak"].phrase(22) == "22 kills in a row"
+
+
+def test_record_alias_runs_records():
+    channel = run_command("!record NoxVain")
+    assert channel.sent[0].startswith("🏆 **NoxVain** · personal bests")

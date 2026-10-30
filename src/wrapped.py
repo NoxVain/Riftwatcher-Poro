@@ -491,7 +491,7 @@ def _arena_section(wrapped):
     return "\n".join(lines)
 
 
-def format_group_cards(wrapped):
+def format_group_cards(wrapped, commands_channel_id=None):
     """The group post: a list of cards, each a list of text sections."""
     match_seconds = sum(duration for _mode, duration in wrapped.matches.values())
     hours = _hours(match_seconds)
@@ -542,7 +542,8 @@ def format_group_cards(wrapped):
     if standings:
         standings.sort(key=lambda item: (-item[0][0], -item[0][1], item[1].casefold()))
         final.append("\n".join(f"**{text}** · {_name(riot_id)}" for _level, riot_id, text in standings))
-    final.append(f"-# Your own year: `!wrapped Name` in this channel · open until 31 Jan")
+    where = f"<#{commands_channel_id}>" if commands_channel_id else "this channel"
+    final.append(f"-# Your own year: `!wrapped Name` in {where} · open until 31 Jan")
     cards.append(final)
     return cards
 
@@ -765,7 +766,7 @@ async def send_sections(channel, sections, *, accent, log, what):
 
 async def post_wrapped_once(
     *, db_iter_wrapped_rows, db_load_all_ranked_states, db_get_state, db_set_state, resolve_channel, channel_id, tz,
-    now_utc, log,
+    now_utc, log, commands_channel_id=None,
 ):
     """One check: post the group Wrapped once its moment has come, once per year."""
     year, post_at, closes_at = wrapped_window(now_utc, tz)
@@ -780,7 +781,7 @@ async def post_wrapped_once(
         log(f"[wrapped] Channel {channel_id} not available; retrying next check.")
         return "no_channel"
     wrapped = await asyncio.to_thread(load_wrapped, db_iter_wrapped_rows, db_load_all_ranked_states, year, tz)
-    cards = format_group_cards(wrapped)
+    cards = format_group_cards(wrapped, commands_channel_id if commands_channel_id != channel_id else None)
     # Mark the year first: a failed send must not repost the whole thing every check.
     await asyncio.to_thread(db_set_state, WRAPPED_STATE_KEY, str(year))
     for card in cards:
@@ -802,6 +803,7 @@ async def run_wrapped_loop(
     channel_id,
     tz,
     log,
+    commands_channel_id=None,
     startup_delay_seconds=WRAPPED_STARTUP_DELAY_SECONDS,
     interval_seconds=WRAPPED_CHECK_SECONDS,
     max_passes=None,
@@ -823,6 +825,7 @@ async def run_wrapped_loop(
                 tz=tz,
                 now_utc=now(),
                 log=log,
+                commands_channel_id=commands_channel_id,
             )
         except Exception as exc:
             log(f"[wrapped] Wrapped check failed; retrying next check: {type(exc).__name__}: {exc}")

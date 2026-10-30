@@ -198,7 +198,7 @@ The first run on 2026-10-26 data: 12,415 cached matches, one old PUUID for each 
 
 `player_match_stats` holds one row per tracked player per cached match. It's built from `match_info_cache` by a background loop (`src/match_stats.py`), with no Riot requests. It's meant for analysis (`!analyze`, `!records`, weekly belts, and later `!vs`).
 
-`!analyze Name#Tag [solo|flex]` (events channel, anyone can run it) reads one player's last 12 months from this table and logs `[analyze] Sent <queue> analysis for <riot id>: games=… strengths=… tips=…`. If the card shows "Not enough … games", the player has fewer than 20 ranked games in that queue in the table. Check their rows with the query below before suspecting the rules. Thresholds and wording live in `src/player_analysis.py`.
+`!analyze Name#Tag [solo|flex]` (commands channel, anyone can run it) reads one player's last 12 months from this table and logs `[analyze] Sent <queue> analysis for <riot id>: games=… strengths=… tips=…`. If the card shows "Not enough … games", the player has fewer than 20 ranked games in that queue in the table. Check their rows with the query below before suspecting the rules. Thresholds and wording live in `src/player_analysis.py`.
 
 - The loop starts once the PUUID remap is done (about 5 minutes after startup), then runs every 10 minutes.
 - Logs: `[stats] Player match stats full sync: rows=… matches=… new=… elapsed=…` for a full rebuild, and an `incremental sync` line only when new matches were cached. Failures log `[stats] Player match stats sync failed; retrying next pass: …`.
@@ -217,7 +217,7 @@ GROUP BY 1 ORDER BY 2 DESC;
 
 ## Records
 
-`!records` and `!records Name` (events channel, anyone can run them) read all ranked rows (Solo/Duo, Flex, ranked 5v5; no remakes) from `player_match_stats` in pages of 1,000 and log `[records] Sent group records: games=… matches=…` or `[records] Sent personal bests for <riot id>: games=… matches=…` (`games` counts player-games, `matches` unique matches).
+`!records` and `!records Name` (alias `!record`; commands channel, anyone can run them) read all ranked rows (Solo/Duo, Flex, ranked 5v5; no remakes) from `player_match_stats` in pages of 1,000 and log `[records] Sent group records: games=… matches=…` or `[records] Sent personal bests for <riot id>: games=… matches=…` (`games` counts player-games, `matches` unique matches).
 
 Recaps of ranked games check for new group records and personal bests before posting:
 
@@ -245,7 +245,7 @@ The belts card for a report week posts in `EVENTS_CHANNEL_ID` about 20-30 minute
 The group Wrapped posts once in `EVENTS_CHANNEL_ID` on 31 December between 18:00 and about 18:10 Oslo (the task checks every 10 minutes), covering 1 January until 18:00. `!wrapped Name` is open from then until 31 January.
 
 - Logs: `[wrapped] Posted Wrapped <year> in channel <id>: cards=… games=… players=….` and `[wrapped] Sent Wrapped <year> for <riot id>: …` (`(admin preview)` when an admin runs it outside the window).
-- Preview before New Year's Eve: as an admin, run `!wrapped` (group cards) or `!wrapped Name` in the events channel. It posts there, so everyone can see it.
+- Preview before New Year's Eve: as an admin, run `!wrapped` (group cards) or `!wrapped Name` in the commands channel. It posts there, so everyone can see it.
 - `[wrapped] Channel … not available; retrying next check.` and `[wrapped] Wrapped check failed; retrying next check: …` retry every 10 minutes. If the bot is down at 18:00, the post goes out at the first check after startup (until the end of January).
 - The year is stored in `poro_wrapped_posted_year` before sending, so a send that fails after that is not retried. To repost, delete that key; the next check posts again.
 - Arena 3x6 placements came with `STATS_VERSION` 6 (the deploy rebuilds every row, about 2 minutes); before that, only queue 1700 Arena games had a placement.

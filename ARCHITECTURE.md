@@ -269,11 +269,12 @@ Schema creation and additive migrations (`ADD COLUMN IF NOT EXISTS`) run on ever
 
 - `DAILY_REPORT_CHANNEL_ID`: daily scoreboard + `!Daily` command
 - `WEEKLY_REPORT_CHANNEL_ID`: weekly scoreboard + `!Weekly` command
-- `EVENTS_CHANNEL_ID`: ops/admin commands (`!help`, `!health`, `/health`, `!score`, `!test`, `!riottest`, `!Add`, `!remove`, `!DebugPlayer`, `!profile`, `!analyze`, `!records`, `!wrapped`, `!backfill`, `!tts`, `!champdisplay`), rank alerts, patch-notes posts, weekly title belts, and Poro Wrapped
+- `EVENTS_CHANNEL_ID`: automatic posts: rank alerts, patch-notes posts, weekly title belts, Poro Wrapped, and Riot-key/stall alerts
+- `MANUAL_COMMANDS_CHANNEL_ID` (optional; `EVENTS_CHANNEL_ID` when unset): the commands channel for `!help`, `!health`, `/health`, `!score`, `!test`, `!riottest`, `!Add`, `!remove`, `!DebugPlayer`, `!profile`, `!analyze`, `!records`/`!record`, `!wrapped`, `!backfill`, `!tts`, `!champdisplay`
 - `MATCH_RECAP_CHANNEL_ID`: match recap posts, streak callouts, `!streak`, `!tts`, and `!champdisplay` commands
 - `NEWS_CHANNEL_ID` (optional): esports schedule and live/game/series updates; feature disabled when unset
 
-All required channels must be set and no channel fallback chain is used. `!sync` (administrators only) works in any server channel.
+All required channels must be set. The only fallback is the optional commands channel, which falls back to the events channel. `!sync` (administrators only) works in any server channel.
 
 Command authorization (`src/commands/permissions.py`) runs after channel routing: `!Add`, `!remove`, `!backfill`, `!tts on|off`, and `!champdisplay name|icon|both` require Manage Server/Administrator or the optional `ADMIN_ROLE_ID` role. The client is created with `AllowedMentions.none()`, so no outgoing message can ping. User-facing command errors go through `discord_text.format_user_error` (safe category + request ref); raw exception text is logged only.
 

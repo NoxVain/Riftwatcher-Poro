@@ -240,7 +240,7 @@ def test_group_card_sections():
     assert sections[-1].endswith("`!records Name` for personal bests")
 
 
-def test_group_card_jungle_section():
+def test_jungle_records_end_the_farm_section_and_objective_steals_sit_with_careers():
     rows = [
         row("ÇÛΜÌŃΜÝÄŠŠ#EUW", days=1, camps=80, buffs=2, dragons=6, steals=3, champion="Vi"),
         row("ÇÛΜÌŃΜÝÄŠŠ#EUW", days=2, steals=2),
@@ -248,18 +248,19 @@ def test_group_card_jungle_section():
         row("Gizhmo#EUW", days=4, barons=1, champion="Kaisa"),
     ]
     sections = format_group_sections(build_record_book(rows))
-    jungle = next(section for section in sections if section.startswith("**Jungle**"))
-    assert jungle == (
-        "**Jungle**\n"
-        "**80** enemy jungle minions · ÇÛΜÌŃΜÝÄŠŠ · Vi · Jan 2025\n"
+    farm = next(section for section in sections if section.startswith("**Farm, map and objectives**"))
+    assert farm.endswith(
+        "\n**80** enemy jungle minions · ÇÛΜÌŃΜÝÄŠŠ · Vi · Jan 2025\n"
         "**15** buffs stolen · JonastCvuHU · Karthus · Jan 2025\n"
         "**6** dragons · ÇÛΜÌŃΜÝÄŠŠ · Vi · Jan 2025\n"
-        "**1** baron · Gizhmo · Kaisa · Jan 2025\n"
-        "**5** objective steals (career) · ÇÛΜÌŃΜÝÄŠŠ · group total 6"
+        "**1** baron · Gizhmo · Kaisa · Jan 2025"
     )
-    # Jungle sits between Farm and map and Pain; it stays off personal cards.
-    order = [section.split("\n", 1)[0] for section in sections]
-    assert order.index("**Farm and map**") < order.index("**Jungle**") < order.index("**Pain**")
+    career = next(section for section in sections if section.startswith("**Streaks and career**"))
+    lines = career.split("\n")
+    # After the ranked streaks, before the rest of the career totals.
+    steals = lines.index("**5** objective steals · ÇÛΜÌŃΜÝÄŠŠ · group total 6")
+    assert "in a row" in lines[steals - 1] and lines[-1].startswith("**2** games")
+    assert not any(section.startswith("**Jungle**") for section in sections)
     personal = "\n\n".join(format_personal_sections(build_record_book(rows), "JonastCvuHU#UNC"))
     assert "buffs stolen" not in personal
 

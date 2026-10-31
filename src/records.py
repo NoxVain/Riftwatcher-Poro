@@ -21,8 +21,7 @@ MIN_GAMES_FOR_PERSONAL_BESTS = 50
 RECORDS_ACCENT = 0xF0B232
 
 SECTION_CARRY = "Carry"
-SECTION_FARM = "Farm and map"
-SECTION_JUNGLE = "Jungle"
+SECTION_FARM = "Farm, map and objectives"
 SECTION_PAIN = "Pain"
 
 
@@ -99,14 +98,14 @@ CATEGORIES = (
     RecordCategory("gold", "gold", SECTION_FARM, _column("gold_earned")),
     RecordCategory("vision", "vision score", SECTION_FARM, _column("vision_score"), personal="best"),
     RecordCategory("assists", "assists", SECTION_FARM, _column("assists"), personal="best", singular="assist"),
-    # Jungle records count in every role (a support can take 4 barons); group card only.
+    # Jungle and objective records count in every role (a support can take 4 barons); group card only.
     # Riot's totalEnemyJungleMinionsKilled counts monsters, not whole camps (a camp has several).
-    RecordCategory("enemy_jungle_camps", "enemy jungle minions", SECTION_JUNGLE, _column("enemy_jungle_camps")),
+    RecordCategory("enemy_jungle_camps", "enemy jungle minions", SECTION_FARM, _column("enemy_jungle_camps")),
     RecordCategory(
-        "buffs_stolen", "buffs stolen", SECTION_JUNGLE, _column("buffs_stolen"), singular="buff stolen"
+        "buffs_stolen", "buffs stolen", SECTION_FARM, _column("buffs_stolen"), singular="buff stolen"
     ),
-    RecordCategory("dragons", "dragons", SECTION_JUNGLE, _column("dragon_takedowns"), singular="dragon"),
-    RecordCategory("barons", "barons", SECTION_JUNGLE, _column("baron_takedowns"), singular="baron"),
+    RecordCategory("dragons", "dragons", SECTION_FARM, _column("dragon_takedowns"), singular="dragon"),
+    RecordCategory("barons", "barons", SECTION_FARM, _column("baron_takedowns"), singular="baron"),
     RecordCategory("deaths", "deaths", SECTION_PAIN, _column("deaths"), personal="worst", singular="death"),
     RecordCategory("damage_taken", "damage taken", SECTION_PAIN, _column("damage_taken")),
     RecordCategory(
@@ -369,18 +368,12 @@ def format_group_sections(book):
         f"🏆 **Hall of Fame**\n-# {len(book.match_ids):,} ranked games · {players} players · since {_month(book.first_at)}"
     )
     sections = [header]
-    total_steals = sum(career.objective_steals for career in book.careers.values())
-    for section in (SECTION_CARRY, SECTION_FARM, SECTION_JUNGLE, SECTION_PAIN):
+    for section in (SECTION_CARRY, SECTION_FARM, SECTION_PAIN):
         lines = []
         for category in CATEGORIES:
             holder = book.record(category.key) if category.section == section else None
             if holder is not None:
                 lines.append(_holder_line(category, holder))
-        if section == SECTION_JUNGLE and total_steals:
-            name, career = max(book.careers.items(), key=lambda item: (item[1].objective_steals, -item[1].games))
-            lines.append(
-                f"**{career.objective_steals:,}** objective steals (career) · {_name(name)} · group total {total_steals:,}"
-            )
         if lines:
             sections.append(f"**{section}**\n" + "\n".join(lines))
     lines = []
@@ -388,6 +381,10 @@ def format_group_sections(book):
         holder = book.record(kind)
         if holder is not None:
             lines.append(_streak_line(holder, kind))
+    total_steals = sum(career.objective_steals for career in book.careers.values())
+    if total_steals:
+        name, career = max(book.careers.items(), key=lambda item: (item[1].objective_steals, -item[1].games))
+        lines.append(f"**{career.objective_steals:,}** objective steals · {_name(name)} · group total {total_steals:,}")
     total_pentas = sum(career.pentakills for career in book.careers.values())
     if total_pentas:
         name, career = max(book.careers.items(), key=lambda item: (item[1].pentakills, -item[1].games))

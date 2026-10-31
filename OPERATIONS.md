@@ -80,6 +80,14 @@ If behavior looks merged:
 2. Check for custom/manual posting logic outside Riftwatcher Poro.
 3. Run tests: `python -m pytest -q tests/test_discord_recap_worker.py`.
 
+## Discord Refusing Messages (429 / Cloudflare)
+
+When Discord rate-limits the bot or its Cloudflare edge blocks the container's address, sends fail with `429 Too Many Requests` and an HTML "Access denied … banned you temporarily" page in the logs.
+
+- Recaps aren't lost: `[recap] Discord refused the recap (HTTP 429); holding back N match(es) for the next cycle: …`, then `[recap] Re-posted N held-back recap(s): …` once Discord accepts them. The Match scan summary shows `held_back_retries=N`. After 3 hours of refusals a recap is dropped with `[recap] Gave up re-posting …`.
+- Scoreboard edits and esports posts aren't held back; they catch up on their next cycle.
+- 2026-10-31: a new container was blocked from 18:28 to 18:49 UTC (13 login attempts, then 429s on every send) while the previous container, 15 minutes earlier, was fine, so the block was on the container's address. A `railway redeploy` (new container) cleared it at once. If a block lasts more than a few minutes, redeploy once; if the new container is blocked too, wait it out (these blocks usually clear within an hour) instead of redeploying again.
+
 ## Arena Recap Troubleshooting
 
 Expected behavior:

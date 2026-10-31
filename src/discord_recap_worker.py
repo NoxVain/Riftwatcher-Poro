@@ -1,8 +1,10 @@
 import asyncio
+import json
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+import aiohttp
 import discord
 import requests
 
@@ -147,6 +149,45 @@ class _SentBatch:
     messages: list
     waiting: list
     as_card: bool
+    match_ids: list
+
+
+# Recaps Discord refuses with a rate limit or server error wait here ({match_id: first refusal, unix
+# seconds}) and are re-posted on later cycles, until they go out or this long has passed.
+RECAP_RETRY_STATE_KEY = "recap_retry_queue"
+RECAP_RETRY_MAX_AGE_SECONDS = 3 * 3600
+
+
+def is_transient_discord_error(exc):
+    """A refusal worth retrying: rate limited (429), a Discord server error (5xx), or no connection.
+
+    Anything else (a 400 for a bad card, a 403 for missing permissions) would fail the same way again.
+    """
+    if isinstance(exc, discord.HTTPException):
+        status = getattr(exc, "status", None)
+        return status == 429 or (isinstance(status, int) and status >= 500)
+    return isinstance(exc, (aiohttp.ClientError, asyncio.TimeoutError))
+
+
+async def _save_held_back(db_set_state, *, retrying, held_ids, failed_match_ids, now):
+    """Store what's still held back: refused this cycle, or held from before and not fetchable this time.
+
+    Held-back matches that were fetched but produced no recap (a remake, no tracked player left) drop out.
+    """
+    still_held = {match_id: retrying.get(match_id, now) for match_id in held_ids}
+    still_held.update({match_id: at for match_id, at in retrying.items() if match_id in failed_match_ids})
+    if still_held != retrying:
+        await asyncio.to_thread(db_set_state, RECAP_RETRY_STATE_KEY, json.dumps(still_held))
+
+
+def _load_retry_queue(db_get_state, log):
+    try:
+        raw = db_get_state(RECAP_RETRY_STATE_KEY)
+        queue = json.loads(raw) if raw else {}
+        return {str(match_id): float(at) for match_id, at in queue.items()}
+    except Exception as exc:
+        log(f"[recap] Could not read held-back recaps; continuing without them: {type(exc).__name__}: {exc}")
+        return {}
 
 
 async def _send_recap_card(channel, card_message, section_separator, log):
@@ -154,16 +195,20 @@ async def _send_recap_card(channel, card_message, section_separator, log):
 
     The recap cursor is saved before sending, so a failure here can't make the bot
     re-post or retry this batch forever; the fallback keeps the recap from being lost.
+    A rate limit or server error is raised instead: the plain text would be refused the
+    same way, and the caller holds the recap back for the next cycle.
     """
     try:
         sent = await channel.send(view=card_message.view)
-        return _SentBatch([sent], card_message.waiting, as_card=True)
+        return _SentBatch([sent], card_message.waiting, as_card=True, match_ids=card_message.match_ids)
     except discord.HTTPException as exc:
+        if is_transient_discord_error(exc):
+            raise
         log(f"[recap] Discord rejected the recap card (HTTP {getattr(exc, 'status', '?')}); sending it as plain text.")
     sent_messages = []
     for text in _pack_sections_into_messages(card_message.text_sections, section_separator):
         sent_messages.append(await channel.send(text))
-    return _SentBatch(sent_messages, card_message.waiting, as_card=False)
+    return _SentBatch(sent_messages, card_message.waiting, as_card=False, match_ids=card_message.match_ids)
 
 
 async def _latest_message(channel, message):
@@ -375,6 +420,22 @@ async def process_recap_cycle(
         except requests.RequestException as exc:
             log(f"[recap] Failed while checking {riot_id}: {exc}")
 
+    # Recaps Discord refused on an earlier cycle go out again with this one.
+    held_back_before = await asyncio.to_thread(_load_retry_queue, db_get_state, log) if db_enabled else {}
+    now = time.time()
+    retrying = {}
+    for match_id, first_refused in sorted(held_back_before.items()):
+        if now - first_refused > RECAP_RETRY_MAX_AGE_SECONDS:
+            log(
+                f"[recap] Gave up re-posting {match_id}: Discord kept refusing it for "
+                f"{RECAP_RETRY_MAX_AGE_SECONDS // 3600} hours."
+            )
+        else:
+            retrying[match_id] = first_refused
+            matches_to_report.add(match_id)
+    if len(retrying) != len(held_back_before):
+        await asyncio.to_thread(db_set_state, RECAP_RETRY_STATE_KEY, json.dumps(retrying))
+
     if not matches_to_report:
         log(
             "[recap] No new matches to post: "
@@ -426,7 +487,7 @@ async def process_recap_cycle(
         "[recap] Match scan summary: "
         f"candidate_matches={len(matches_to_report)} prepared_matches={len(match_entries)} "
         f"failed_fetches={len(failed_match_ids)} skipped_no_tracked={skipped_no_tracked_participants} "
-        f"skipped_remakes={skipped_remakes}."
+        f"skipped_remakes={skipped_remakes} held_back_retries={len(retrying)}."
     )
 
     match_entries.sort(key=lambda row: row[0])
@@ -505,6 +566,7 @@ async def process_recap_cycle(
                 header=header,
                 accent=RESULT_ACCENTS[result],
                 players=card_players,
+                match_id=match_id,
             )
         )
         log(f"[recap] Prepared new match recap for {match_id} in channel {match_recap_channel_id}.")
@@ -531,6 +593,10 @@ async def process_recap_cycle(
         for riot_id, _participant in tracked_participants:
             affected_riot_ids.add(riot_id)
     if not affected_riot_ids:
+        if db_enabled:
+            await _save_held_back(
+                db_set_state, retrying=retrying, held_ids=[], failed_match_ids=failed_match_ids, now=now
+            )
         return
 
     streak_sections = []
@@ -559,15 +625,62 @@ async def process_recap_cycle(
             log(f"[recap] Streak callout skipped for {riot_id}: {exc}")
 
     sent_batches = []
+    held_back = []
+    refusal = None
     for index, card_message in enumerate(card_messages):
-        sent_batches.append(await _send_recap_card(channel, card_message, recap_section_separator, log))
+        if refusal is not None:
+            # Discord already refused this cycle; don't keep hitting it with the rest.
+            held_back.append(card_message)
+            continue
+        try:
+            sent_batches.append(await _send_recap_card(channel, card_message, recap_section_separator, log))
+        except Exception as exc:
+            if not is_transient_discord_error(exc):
+                raise
+            refusal = f"HTTP {exc.status}" if isinstance(exc, discord.HTTPException) else type(exc).__name__
+            held_back.append(card_message)
+            continue
         if index < len(card_messages) - 1:
             await asyncio.sleep(recap_split_spacing_seconds)
-    if card_messages:
+
+    posted_ids = {match_id for batch in sent_batches for match_id in batch.match_ids}
+    # A match split over two messages counts as posted once any part went out, so a retry can't repeat it.
+    held_ids = list(dict.fromkeys(
+        match_id for message in held_back for match_id in message.match_ids if match_id not in posted_ids
+    ))
+    if sent_batches:
         log(
             f"[recap] Posted recap batch in channel {match_recap_channel_id}: "
-            f"matches={len(card_matches)} messages={len(card_messages)}."
+            f"matches={len(posted_ids)} messages={len(sent_batches)}."
         )
+    reposted = [match_id for match_id in retrying if match_id in posted_ids]
+    if reposted:
+        log(f"[recap] Re-posted {len(reposted)} held-back recap(s): {', '.join(reposted)}.")
+    if held_ids:
+        log(
+            f"[recap] Discord refused the recap ({refusal}); holding back {len(held_ids)} match(es) "
+            f"for the next cycle: {', '.join(held_ids)}."
+        )
+    if db_enabled:
+        await _save_held_back(
+            db_set_state, retrying=retrying, held_ids=held_ids, failed_match_ids=failed_match_ids, now=now
+        )
+
+    # A streak callout waits for its player's held-back recap, which works it out again.
+    held_set = set(held_ids)
+    held_riot_ids = {
+        riot_id
+        for _end_ts, match_id, _queue_id, _duration_seconds, tracked_participants in match_entries
+        if match_id in held_set
+        for riot_id, _participant in tracked_participants
+    }
+    if held_riot_ids:
+        kept = [
+            (section, update) for section, update in zip(streak_sections, pending_streak_state_updates)
+            if update[2] not in held_riot_ids
+        ]
+        streak_sections = [section for section, _update in kept]
+        pending_streak_state_updates = [update for _section, update in kept]
     if lp_waiting:
         await _register_lp_waiting(
             sent_batches, channel, db_get_state=db_get_state, db_set_state=db_set_state, log=log

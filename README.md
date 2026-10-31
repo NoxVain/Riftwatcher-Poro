@@ -168,7 +168,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
   - posts streak callouts as separate messages (not merged into recap batches)
   - refreshes affected players' daily stats and forces daily + weekly scoreboard sync
 - Backfill worker (`max(120, DAILY_REFRESH_SECONDS * 2)`)
-  - runs every cycle, paging backwards through each player's match history
+  - pages backwards through each player's match history; once a pass reaches the end with everything cached, that player rests for 7 days (no Riot requests) before the next pass
   - caches up to 3 uncached older matches per player per cycle into the DB
   - uses `cache_in_memory=False` to avoid polluting in-memory cache
   - uses a smaller Riot request budget and pauses after `429`s so live features keep priority

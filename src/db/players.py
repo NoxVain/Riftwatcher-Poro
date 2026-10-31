@@ -44,12 +44,13 @@ def db_remove_player(riot_id):
     db_execute(
         """
         DELETE FROM bot_state
-        WHERE state_key IN (%s, %s, %s, %s);
+        WHERE state_key IN (%s, %s, %s, %s, %s);
         """,
         (
             f"last_seen_match_id::{riot_key}",
             f"last_announced_match_id::{riot_key}",
             f"last_announced_streak::{riot_key}",
             f"backfill_offset::{riot_key}",
+            f"backfill_done_at::{riot_key}",
         ),
     )

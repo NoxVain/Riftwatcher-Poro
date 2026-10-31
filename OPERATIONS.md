@@ -297,7 +297,7 @@ Implication:
 Check in this order:
 1. `DB: ok`
 2. `Workers` line shows `<worker>: <ok>ok/<err>err (<last>ms last/<avg>ms avg/<max>ms max)` for `refresh`, `rank`, `recap`, `backfill` (plus `esports` and `patch` when enabled), with ok counts increasing and low errors. `patch` only runs every few hours, so `0ok/0err` shortly after a restart is normal.
-3. `Backfill cursors active` and `Backfill max offset` are not growing unexpectedly for long periods.
+3. `Backfill cursors active` and `Backfill max offset` are not growing unexpectedly for long periods. Most of the time every player should be resting: the backfill `Cycle summary` ends with `resting=N/N`, and a finished pass logs `[backfill] History fully cached for <riot id> (<n> matches); next pass in 7 days.` To force a new pass for a player, delete their `backfill_done_at::<riot id>` key in `bot_state`.
 4. `Match cache entries` and `Report cache active` are sensible for current activity.
 5. `Gamer Score baselines` shows roles/samples once built (`not yet built` right after startup is normal).
 

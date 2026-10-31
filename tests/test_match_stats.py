@@ -123,6 +123,13 @@ def test_extract_reads_counter_jungle_stats():
     assert (row["enemy_jungle_camps"], row["buffs_stolen"]) == (80, 15)
 
 
+def test_extract_reads_pink_wards_placed_apart_from_bought():
+    payload = match("EUW1_11", [player(NOX, 100, "UTILITY", detectorWardsPlaced=17, visionWardsBoughtInGame=19)])
+    row = extract_player_match_rows(payload, TRACKED)[0]
+    assert (row["control_wards_placed"], row["control_wards_bought"]) == (17, 19)
+    assert extract_player_match_rows(ranked_match(), TRACKED)[0]["control_wards_placed"] is None
+
+
 def test_extract_computes_shares_without_challenges():
     rows = extract_player_match_rows(ranked_match(), {FRESH})
 

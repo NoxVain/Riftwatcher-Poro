@@ -97,6 +97,9 @@ CATEGORIES = (
     ),
     RecordCategory("gold", "gold", SECTION_FARM, _column("gold_earned")),
     RecordCategory("vision", "vision score", SECTION_FARM, _column("vision_score"), personal="best"),
+    RecordCategory(
+        "pink_wards", "pink wards", SECTION_FARM, _column("control_wards_placed"), personal="best", singular="pink ward"
+    ),
     RecordCategory("assists", "assists", SECTION_FARM, _column("assists"), personal="best", singular="assist"),
     # Jungle and objective records count in every role (a support can take 4 barons); group card only.
     # Riot's totalEnemyJungleMinionsKilled counts monsters, not whole camps (a camp has several).

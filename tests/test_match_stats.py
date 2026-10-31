@@ -130,6 +130,12 @@ def test_extract_reads_pink_wards_placed_apart_from_bought():
     assert extract_player_match_rows(ranked_match(), TRACKED)[0]["control_wards_placed"] is None
 
 
+def test_extract_reads_objective_damage():
+    payload = match("EUW1_12", [player(NOX, 100, "JUNGLE", damageDealtToObjectives=24512)])
+    assert extract_player_match_rows(payload, TRACKED)[0]["objective_damage"] == 24512
+    assert extract_player_match_rows(ranked_match(), TRACKED)[0]["objective_damage"] is None
+
+
 def test_extract_computes_shares_without_challenges():
     rows = extract_player_match_rows(ranked_match(), {FRESH})
 

@@ -21,7 +21,8 @@ MIN_GAMES_FOR_PERSONAL_BESTS = 50
 RECORDS_ACCENT = 0xF0B232
 
 SECTION_CARRY = "Carry"
-SECTION_FARM = "Farm, map and objectives"
+SECTION_FARM = "Farm and objectives"
+SECTION_VISION = "Vision"
 SECTION_PAIN = "Pain"
 
 
@@ -91,28 +92,30 @@ CATEGORIES = (
     RecordCategory(
         "solo_kills", "solo kills", SECTION_CARRY, _column("solo_kills"), personal="best", singular="solo kill"
     ),
+    RecordCategory("assists", "assists", SECTION_CARRY, _column("assists"), personal="best", singular="assist"),
     RecordCategory("cs", "CS", SECTION_FARM, _column("cs"), personal="best"),
     RecordCategory(
         "cs_per_minute", "CS/min", SECTION_FARM, _cs_per_minute, text=lambda v: f"{v:.1f}", personal="best"
     ),
     RecordCategory("gold", "gold", SECTION_FARM, _column("gold_earned")),
-    RecordCategory("vision", "vision score", SECTION_FARM, _column("vision_score"), personal="best"),
-    # Riot's wardsPlaced counts every ward (trinket, support item, pinks); wardsKilled every enemy ward destroyed.
-    RecordCategory(
-        "wards_placed", "wards placed", SECTION_FARM, _column("wards_placed"), personal="best", singular="ward placed"
-    ),
-    RecordCategory(
-        "wards_killed", "wards cleared", SECTION_FARM, _column("wards_killed"), personal="best", singular="ward cleared"
-    ),
-    RecordCategory(
-        "pink_wards", "pink wards", SECTION_FARM, _column("control_wards_placed"), personal="best", singular="pink ward"
-    ),
-    RecordCategory("assists", "assists", SECTION_FARM, _column("assists"), personal="best", singular="assist"),
+    # Riot's damageDealtToObjectives: turrets, inhibitors, dragons, barons, heralds, voidgrubs and Atakhan.
+    RecordCategory("objective_damage", "objective damage", SECTION_FARM, _column("objective_damage"), personal="best"),
     # Jungle records count in every role; group card only.
     # Riot's totalEnemyJungleMinionsKilled counts monsters, not whole camps (a camp has several).
     RecordCategory("enemy_jungle_camps", "enemy jungle minions", SECTION_FARM, _column("enemy_jungle_camps")),
     RecordCategory(
         "buffs_stolen", "buffs stolen", SECTION_FARM, _column("buffs_stolen"), singular="buff stolen"
+    ),
+    RecordCategory("vision", "vision score", SECTION_VISION, _column("vision_score"), personal="best"),
+    # Riot's wardsPlaced counts every ward (trinket, support item, pinks); wardsKilled every enemy ward destroyed.
+    RecordCategory(
+        "wards_placed", "wards placed", SECTION_VISION, _column("wards_placed"), personal="best", singular="ward placed"
+    ),
+    RecordCategory(
+        "wards_killed", "wards cleared", SECTION_VISION, _column("wards_killed"), personal="best", singular="ward cleared"
+    ),
+    RecordCategory(
+        "pink_wards", "pink wards", SECTION_VISION, _column("control_wards_placed"), personal="best", singular="pink ward"
     ),
     RecordCategory("deaths", "deaths", SECTION_PAIN, _column("deaths"), personal="worst", singular="death"),
     RecordCategory("damage_taken", "damage taken", SECTION_PAIN, _column("damage_taken")),
@@ -376,7 +379,7 @@ def format_group_sections(book):
         f"🏆 **Hall of Fame**\n-# {len(book.match_ids):,} ranked games · {players} players · since {_month(book.first_at)}"
     )
     sections = [header]
-    for section in (SECTION_CARRY, SECTION_FARM, SECTION_PAIN):
+    for section in (SECTION_CARRY, SECTION_FARM, SECTION_VISION, SECTION_PAIN):
         lines = []
         for category in CATEGORIES:
             holder = book.record(category.key) if category.section == section else None

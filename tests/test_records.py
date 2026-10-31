@@ -31,7 +31,7 @@ _counter = iter(range(1, 1_000_000))
 def row(riot_id="Nox#EUW", *, days=0, queue=420, win=True, kills=5, deaths=3, assists=8, minutes=30,
         champion="Lux", damage=20000, share=0.25, taken=20000, gold=12000, cs=200, vision=30,
         solo_kills=1, pentas=0, spree=3, camps=None, buffs=None, dragons=None, barons=None, steals=None, pinks=None,
-        wards=None, cleared=None, remake=False):
+        wards=None, cleared=None, objectives=None, remake=False):
     n = next(_counter)
     return {
         "match_id": f"EUW1_{n}",
@@ -62,6 +62,7 @@ def row(riot_id="Nox#EUW", *, days=0, queue=420, win=True, kills=5, deaths=3, as
         "control_wards_placed": pinks,
         "wards_placed": wards,
         "wards_killed": cleared,
+        "objective_damage": objectives,
     }
 
 
@@ -243,7 +244,7 @@ def test_group_card_sections():
     assert sections[-1].endswith("`!records Name` for personal bests")
 
 
-def test_jungle_records_end_the_farm_section_and_objective_steals_sit_with_careers():
+def test_jungle_records_end_the_farm_and_objectives_section_and_objective_steals_sit_with_careers():
     rows = [
         row("ÇÛΜÌŃΜÝÄŠŠ#EUW", days=1, camps=80, buffs=2, dragons=6, steals=3, champion="Vi"),
         row("ÇÛΜÌŃΜÝÄŠŠ#EUW", days=2, steals=2),
@@ -251,7 +252,7 @@ def test_jungle_records_end_the_farm_section_and_objective_steals_sit_with_caree
         row("Gizhmo#EUW", days=4, barons=1, champion="Kaisa"),
     ]
     sections = format_group_sections(build_record_book(rows))
-    farm = next(section for section in sections if section.startswith("**Farm, map and objectives**"))
+    farm = next(section for section in sections if section.startswith("**Farm and objectives**"))
     assert farm.endswith(
         "\n**80** enemy jungle minions · ÇÛΜÌŃΜÝÄŠŠ · Vi · Jan 2025\n"
         "**15** buffs stolen · JonastCvuHU · Karthus · Jan 2025"
@@ -300,9 +301,9 @@ def test_pink_wards_record_follows_vision_and_counts_as_a_personal_best():
         row("NoxVain#EUW", days=2, vision=80, pinks=1, champion="Swain"),
     ]
     book = build_record_book(rows)
-    farm = next(s for s in format_group_sections(book) if s.startswith("**Farm, map and objectives**"))
-    assert "**90** vision score · Tamarin · Rakan · Jan 2025\n" in farm
-    assert "\n**17** pink wards · Tamarin · Rakan · Jan 2025" in farm
+    vision = next(s for s in format_group_sections(book) if s.startswith("**Vision**"))
+    assert vision.startswith("**Vision**\n**90** vision score · Tamarin · Rakan · Jan 2025\n")
+    assert vision.endswith("\n**17** pink wards · Tamarin · Rakan · Jan 2025")
     personal = "\n\n".join(format_personal_sections(book, "NoxVain#EUW"))
     assert "**1** pink ward · Swain · Jan 2025 · #2 in the group" in personal
     assert CATEGORIES_BY_KEY["pink_wards"].personal == "best"
@@ -316,17 +317,32 @@ def test_wards_placed_and_cleared_follow_vision_and_count_as_personal_bests():
         row("NoxVain#EUW", days=2, vision=80, wards=1, cleared=14, pinks=1, champion="Swain"),
     ]
     book = build_record_book(rows)
-    farm = next(s for s in format_group_sections(book) if s.startswith("**Farm, map and objectives**"))
-    assert (
+    vision = next(s for s in format_group_sections(book) if s.startswith("**Vision**"))
+    assert vision == (
+        "**Vision**\n"
         "**90** vision score · Tamarin · Rakan · Jan 2025\n"
         "**41** wards placed · Tamarin · Rakan · Jan 2025\n"
         "**14** wards cleared · NoxVain · Swain · Jan 2025\n"
         "**17** pink wards · Tamarin · Rakan · Jan 2025"
-    ) in farm
+    )
     personal = "\n\n".join(format_personal_sections(book, "NoxVain#EUW"))
     assert "**1** ward placed · Swain · Jan 2025 · #2 in the group" in personal
     assert "**14** wards cleared · Swain · Jan 2025 · group record" in personal
     assert CATEGORIES_BY_KEY["wards_placed"].personal == CATEGORIES_BY_KEY["wards_killed"].personal == "best"
+
+
+def test_group_card_sections_in_order_with_assists_under_carry_and_objective_damage_under_farm():
+    rows = [row("NoxVain#EUW", assists=31, objectives=24_512, wards=20, camps=12, champion="Sejuani")]
+    sections = format_group_sections(build_record_book(rows))
+    titles = [section.split("\n", 1)[0] for section in sections[1:-1]]  # between header and footer
+    assert titles == ["**Carry**", "**Farm and objectives**", "**Vision**", "**Pain**", "**Streaks and career**"]
+    carry, farm = sections[1], sections[2]
+    assert carry.endswith("\n**31** assists · NoxVain · Sejuani · Jan 2025")
+    assert "\n**12,000** gold · NoxVain · Sejuani · Jan 2025\n**24,512** objective damage · NoxVain · Sejuani" in farm
+    assert farm.endswith("\n**12** enemy jungle minions · NoxVain · Sejuani · Jan 2025")
+    assert CATEGORIES_BY_KEY["objective_damage"].personal == "best"
+    # Rows from before STATS_VERSION 8 have no objective damage and never hold the record.
+    assert build_record_book([row(objectives=None)]).record("objective_damage") is None
 
 
 def test_personal_card_lists_kill_streak_cs_per_minute_longest_game_and_deathless_games():

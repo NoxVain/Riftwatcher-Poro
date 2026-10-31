@@ -110,6 +110,7 @@ RECORD_ROW_COLUMNS = (
     "enemy_jungle_camps",
     "buffs_stolen",
     "control_wards_placed",
+    "objective_damage",
 )
 RECORD_PAGE_ROWS = 1000
 

@@ -104,8 +104,6 @@ RECORD_ROW_COLUMNS = (
     "solo_kills",
     "penta_kills",
     "killing_spree",
-    "dragon_takedowns",
-    "baron_takedowns",
     "objective_steals",
     "enemy_jungle_camps",
     "buffs_stolen",

@@ -252,10 +252,10 @@ def test_jungle_records_end_the_farm_section_and_objective_steals_sit_with_caree
     farm = next(section for section in sections if section.startswith("**Farm, map and objectives**"))
     assert farm.endswith(
         "\n**80** enemy jungle minions · ÇÛΜÌŃΜÝÄŠŠ · Vi · Jan 2025\n"
-        "**15** buffs stolen · JonastCvuHU · Karthus · Jan 2025\n"
-        "**6** dragons · ÇÛΜÌŃΜÝÄŠŠ · Vi · Jan 2025\n"
-        "**1** baron · Gizhmo · Kaisa · Jan 2025"
+        "**15** buffs stolen · JonastCvuHU · Karthus · Jan 2025"
     )
+    # Dragon and baron takedowns are stored but no longer records.
+    assert "dragon" not in "\n".join(sections) and "baron" not in "\n".join(sections)
     career = next(section for section in sections if section.startswith("**Streaks and career**"))
     lines = career.split("\n")
     # After the ranked streaks, before the rest of the career totals.
@@ -267,10 +267,10 @@ def test_jungle_records_end_the_farm_section_and_objective_steals_sit_with_caree
 
 
 def test_teammates_tied_in_one_game_resolve_by_name():
-    nox = row("NoxVain#EUW", barons=4, champion="Amumu")
-    giz = dict(row("gizhmo#EUW", barons=4, champion="Kaisa"), match_id=nox["match_id"], game_end_at=nox["game_end_at"])
+    nox = row("NoxVain#EUW", buffs=4, champion="Amumu")
+    giz = dict(row("gizhmo#EUW", buffs=4, champion="Kaisa"), match_id=nox["match_id"], game_end_at=nox["game_end_at"])
     for rows in ([nox, giz], [giz, nox]):
-        assert build_record_book(rows).record("barons").riot_id == "gizhmo#EUW"
+        assert build_record_book(rows).record("buffs_stolen").riot_id == "gizhmo#EUW"
 
 
 def test_group_card_with_no_games():

@@ -101,14 +101,12 @@ CATEGORIES = (
         "pink_wards", "pink wards", SECTION_FARM, _column("control_wards_placed"), personal="best", singular="pink ward"
     ),
     RecordCategory("assists", "assists", SECTION_FARM, _column("assists"), personal="best", singular="assist"),
-    # Jungle and objective records count in every role (a support can take 4 barons); group card only.
+    # Jungle records count in every role; group card only.
     # Riot's totalEnemyJungleMinionsKilled counts monsters, not whole camps (a camp has several).
     RecordCategory("enemy_jungle_camps", "enemy jungle minions", SECTION_FARM, _column("enemy_jungle_camps")),
     RecordCategory(
         "buffs_stolen", "buffs stolen", SECTION_FARM, _column("buffs_stolen"), singular="buff stolen"
     ),
-    RecordCategory("dragons", "dragons", SECTION_FARM, _column("dragon_takedowns"), singular="dragon"),
-    RecordCategory("barons", "barons", SECTION_FARM, _column("baron_takedowns"), singular="baron"),
     RecordCategory("deaths", "deaths", SECTION_PAIN, _column("deaths"), personal="worst", singular="death"),
     RecordCategory("damage_taken", "damage taken", SECTION_PAIN, _column("damage_taken")),
     RecordCategory(

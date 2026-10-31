@@ -5,8 +5,9 @@ Thanks for helping out. This page is how we like changes to look, so your work c
 ## Before you write code
 
 - **Read the Design Principles** in `ARCHITECTURE.md` and skim `IMPROVEMENT_BACKLOG.md` (what's planned, and what shipped recently and why).
-- **Visible changes need the maintainer's OK first.** Anything a player sees in Discord is the maintainer's call: card layout and wording, new or removed sections, defaults (time windows, thresholds, which channel something posts in), new commands. Open an issue with a **mockup on real data** (a screenshot or the text the bot would send) and wait for a yes before opening the PR.
+- **Visible changes need the maintainer's OK first.** Anything a player sees in Discord is the maintainer's call: card layout and wording, new or removed sections, defaults (time windows, thresholds, which channel something posts in), new commands. Open an issue with a **mockup** (a screenshot or the text the bot would send) and wait for a yes before opening the PR. Use made-up names and numbers: contributors don't have production access, and the maintainer checks the change against real data before approving it.
 - **Don't undo recent decisions.** If something was added on purpose (check the backlog and `git log`), don't remove or rename it in passing. Raise it in an issue instead.
+- **Declined stays declined.** A change the maintainer has turned down (in a review or a closing comment) isn't proposed again unless the maintainer reopens it.
 - **Bigger ideas start as an issue.** A short description and a mockup save everyone a rewrite.
 
 ## One change per PR
@@ -19,8 +20,8 @@ Thanks for helping out. This page is how we like changes to look, so your work c
 ## What every change needs
 
 - **Offline tests** under `tests/` (`tests/test_<module>.py`, `test_<behaviour>`). Tests run without Discord, Riot or Postgres: pass fakes in. Never depend on today's date: give the code a clock it can be handed (`now=` or a module-level `_now()`), and freeze it in the test.
-- **A log line** for every behaviour change, so we can see it working in the Railway logs.
-- **Docs in the same PR:** `README.md` (features, commands, variables), `ARCHITECTURE.md` (how it works), `OPERATIONS.md` (logs to look for, what to do when it breaks), and a line under "Recently Completed" in `IMPROVEMENT_BACKLOG.md`. Keep each doc entry short and plain.
+- **A log line** for every behaviour change, so we can see it working in the Railway logs. Log what varies (counts, IDs, timings, what was skipped and why); a tag that's the same on every line tells us nothing.
+- **Docs in the same PR:** `README.md` (features, commands, variables), `ARCHITECTURE.md` (how it works), `OPERATIONS.md` (logs to look for, what to do when it breaks), and a line under "Recently Completed" in `IMPROVEMENT_BACKLOG.md`. Keep each doc entry short and plain, and update the paragraph that already describes the feature instead of adding a new one at the end of the file.
 - **No new Riot requests** when an existing poll or the match cache already has the data. The personal key's 100 requests per 120 s are shared by every worker.
 - **Mind memory:** page large database reads and never hold many match payloads at once.
 - **Never block recaps or scoreboards.** Optional extras get a timeout and a fallback, and log their failures instead of raising.
@@ -47,7 +48,7 @@ Thanks for helping out. This page is how we like changes to look, so your work c
 ## Data and privacy
 
 - Use read-only database sessions for any production analysis, and share **aggregates only**.
-- Don't paste production data (player stats, rank lists, real cards) into issues or PRs. Use made-up examples, or counts.
+- Don't paste production data (player stats, rank lists, real cards) into issues or PRs. Use made-up examples, or counts. The maintainer runs real-data checks privately.
 - Never print or commit credentials, tokens or connection strings.
 
 ## How review works
@@ -58,9 +59,10 @@ Thanks for helping out. This page is how we like changes to look, so your work c
 ## Quick checklist
 
 - [ ] One change in this PR, and visible changes were approved with a mockup
+- [ ] Nothing the maintainer declined before is back in this PR
 - [ ] Tests added or updated, offline, no dependence on today's date
 - [ ] `pytest -q` passes
-- [ ] Log line for the new behaviour
-- [ ] README / ARCHITECTURE / OPERATIONS / backlog updated
+- [ ] Log line for the new behaviour, with values that vary
+- [ ] README / ARCHITECTURE / OPERATIONS / backlog updated in the matching sections
 - [ ] No new Riot requests; large reads are paged
 - [ ] No secrets or production data in the diff or description

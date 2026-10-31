@@ -3,13 +3,19 @@ import json
 import time
 from datetime import datetime, timezone
 
+import aiohttp
 import discord
 import pytest
 import requests
 
 from discord_fakes import ComponentMessage, view_text
 from src.champion_icons import CHAMPION_DISPLAY_STATE_KEY
-from src.discord_recap_worker import process_recap_cycle
+from src.discord_recap_worker import (
+    RECAP_RETRY_MAX_AGE_SECONDS,
+    RECAP_RETRY_STATE_KEY,
+    is_transient_discord_error,
+    process_recap_cycle,
+)
 from src.match_stats import STATS_VERSION, STATS_VERSION_KEY
 from src.recap_cards import ACCENT_WIN
 from src.recap_lp import handle_lp_event, lp_events_state_key, lp_pending_state_key
@@ -785,7 +791,9 @@ class MessageReturningChannel(FakeChannel):
         return self.sent[message_id - 1]
 
 
-def _run_single_match_recap(channel, state, *, win, queue_id=420, champion_icons=None, champion_id=103):
+def _run_single_match_recap(
+    channel, state, *, win, queue_id=420, champion_icons=None, champion_id=103, logs=None, set_cursor=True
+):
     riot = FakeRiotClient()
     end_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000) - 60_000
     riot.puuid_by_riot_id = {"Alpha#NA1": "puuid-a"}
@@ -801,7 +809,8 @@ def _run_single_match_recap(channel, state, *, win, queue_id=420, champion_icons
         }
     }
     riot.mode_records_by_riot_id = {"Alpha#NA1": ({}, {})}
-    state[_state_key("Alpha#NA1")] = "NA1_1"
+    if set_cursor:
+        state[_state_key("Alpha#NA1")] = "NA1_1"
 
     async def edit_last_report_message(**_kwargs):
         return None
@@ -819,7 +828,7 @@ def _run_single_match_recap(channel, state, *, win, queue_id=420, champion_icons
             db_upsert_daily_stats=lambda *_args, **_kwargs: None,
             edit_last_report_message=edit_last_report_message,
             champion_icons=champion_icons,
-            log=lambda _msg: None,
+            log=(logs.append if logs is not None else (lambda _msg: None)),
         )
     )
     return end_ms / 1000
@@ -1018,6 +1027,112 @@ def test_rejected_card_falls_back_to_plain_text_and_lp_still_edits():
     )
     assert handled is True
     assert "**Ahri** Mid · Gold II · 40LP → **22LP\u00a0(-18)**\n" in channel.sent[0].display
+
+
+class RefusingChannel(MessageReturningChannel):
+    """Discord refusing every send with one HTTP status (429 like a Cloudflare block, 5xx, 400, ...)."""
+
+    def __init__(self, status=429):
+        super().__init__()
+        self.status = status
+        self.attempts = 0
+
+    async def send(self, message=None, tts=False, *, view=None):
+        self.attempts += 1
+        response = type("Response", (), {"status": self.status, "reason": "Refused"})()
+        raise discord.HTTPException(response, "You are being rate limited.")
+
+
+def test_rate_limited_recap_is_held_back_and_posted_on_the_next_cycle():
+    state, logs = {}, []
+    blocked = RefusingChannel(429)
+
+    _run_single_match_recap(blocked, state, win=False, logs=logs)
+
+    # No crash; the plain-text fallback isn't tried for a rate limit (it'd be refused the same way).
+    assert blocked.attempts == 1
+    assert state[_state_key("Alpha#NA1")] == "NA1_2"  # the cursor still advances
+    assert list(json.loads(state[RECAP_RETRY_STATE_KEY])) == ["NA1_2"]
+    assert any(
+        line == "[recap] Discord refused the recap (HTTP 429); holding back 1 match(es) for the next cycle: NA1_2."
+        for line in logs
+    )
+
+    working = MessageReturningChannel()
+    logs.clear()
+    _run_single_match_recap(working, state, win=False, logs=logs, set_cursor=False)
+
+    assert len(working.messages) == 1 and "Alpha" in working.messages[0]["content"]
+    assert json.loads(state[RECAP_RETRY_STATE_KEY]) == {}
+    assert "[recap] Re-posted 1 held-back recap(s): NA1_2." in logs
+    assert any("held_back_retries=1" in line for line in logs)
+
+    # Posted once: the next cycle has nothing to send.
+    _run_single_match_recap(working, state, win=False, set_cursor=False)
+    assert len(working.messages) == 1
+
+
+def test_server_errors_are_held_back_but_a_bad_card_is_not():
+    state = {}
+    _run_single_match_recap(RefusingChannel(503), state, win=True)
+    assert list(json.loads(state[RECAP_RETRY_STATE_KEY])) == ["NA1_2"]
+
+    # A 400 on both the card and the plain text fails the same way every time: no retry.
+    state = {}
+    with pytest.raises(discord.HTTPException):
+        _run_single_match_recap(RefusingChannel(400), state, win=True)
+    assert RECAP_RETRY_STATE_KEY not in state
+
+
+def test_held_back_recap_is_dropped_after_three_hours():
+    state, logs = {_state_key("Alpha#NA1"): "NA1_2"}, []
+    state[RECAP_RETRY_STATE_KEY] = json.dumps({"NA1_2": time.time() - RECAP_RETRY_MAX_AGE_SECONDS - 60})
+    channel = MessageReturningChannel()
+
+    _run_single_match_recap(channel, state, win=True, logs=logs, set_cursor=False)
+
+    assert channel.messages == []
+    assert json.loads(state[RECAP_RETRY_STATE_KEY]) == {}
+    assert "[recap] Gave up re-posting NA1_2: Discord kept refusing it for 3 hours." in logs
+
+
+def test_held_back_match_without_a_recap_any_more_drops_out():
+    # The player was removed meanwhile, so the held-back match no longer has a tracked participant.
+    riot = FakeRiotClient()
+    riot.puuid_by_riot_id = {"Alpha#NA1": "puuid-a"}
+    riot.recent_ids_by_puuid = {"puuid-a": ["NA1_1"]}
+    riot.match_info_by_id = {
+        "NA1_2": {"info": {"queueId": 420, "gameDuration": 1800, "gameEndTimestamp": int(time.time() * 1000),
+                           "participants": [_participant("puuid-gone", win=True)]}},
+    }
+    state = {_state_key("Alpha#NA1"): "NA1_1", RECAP_RETRY_STATE_KEY: json.dumps({"NA1_2": time.time() - 60})}
+    channel = MessageReturningChannel()
+
+    async def edit_last_report_message(**_kwargs):
+        return None
+
+    asyncio.run(process_recap_cycle(
+        friends=["Alpha#NA1"], riot_client=riot, poro_service=FakePoroService(), match_recap_channel_id=123,
+        channel=channel, db_enabled=True, db_get_state=state.get, db_set_state=state.__setitem__,
+        db_upsert_daily_stats=lambda *_args, **_kwargs: None, edit_last_report_message=edit_last_report_message,
+        log=lambda _msg: None,
+    ))
+
+    assert channel.messages == []
+    assert json.loads(state[RECAP_RETRY_STATE_KEY]) == {}
+
+
+@pytest.mark.parametrize("exc, transient", [
+    (discord.HTTPException(type("R", (), {"status": 429, "reason": ""})(), "x"), True),
+    (discord.HTTPException(type("R", (), {"status": 502, "reason": ""})(), "x"), True),
+    (discord.HTTPException(type("R", (), {"status": 400, "reason": ""})(), "x"), False),
+    (discord.HTTPException(type("R", (), {"status": 403, "reason": ""})(), "x"), False),
+    (aiohttp.ClientConnectionError("reset"), True),
+    (asyncio.TimeoutError(), True),
+    (ValueError("bug"), False),
+])
+def test_which_discord_errors_are_worth_retrying(exc, transient):
+    assert is_transient_discord_error(exc) is transient
 
 
 class MessageSnapshot:

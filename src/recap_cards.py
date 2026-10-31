@@ -73,6 +73,7 @@ class CardMatch:
     header: str
     accent: int
     players: list[CardPlayer]
+    match_id: str | None = None
 
 
 @dataclass
@@ -83,6 +84,8 @@ class CardMessage:
     # [{"riot_id", "pending"}] with the player's component_id added.
     waiting: list[dict] = field(default_factory=list)
     reserved_text: int = 0
+    # Matches with at least part of their card in this message, so a send Discord refuses can be retried.
+    match_ids: list[str] = field(default_factory=list)
 
 
 def _shorten(text, limit):
@@ -141,6 +144,8 @@ def build_card_messages(matches):
                 next_id += 2
                 current.view.add_item(container)
                 section_lines = [header]
+                if match.match_id is not None and match.match_id not in current.match_ids:
+                    current.match_ids.append(match.match_id)
             else:
                 container.add_item(
                     discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small, id=next_id)

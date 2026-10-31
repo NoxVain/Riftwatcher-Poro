@@ -18,7 +18,7 @@ Riftwatcher Poro is a Discord worker service that tracks ranked League results f
 These are the priorities behind most decisions in this repo. New changes should follow them; when one has to give, the order below is the order of importance.
 
 1. **Core posts never get lost or stuck.** Recaps and scoreboards are the product. Everything optional around them must degrade, never block:
-   - the recap cursor is saved *before* sending, so a bad message can't cause endless retries;
+   - the recap cursor is saved *before* sending, so a bad message can't cause endless retries; a recap Discord refuses with a rate limit or server error is held back and re-posted on later cycles instead of being lost;
    - a rejected card falls back to plain text, a missing portrait to the champion name, missing baselines to pure Wilson scoring, missing LP to no LP;
    - optional work (LP, portraits, baselines, LP history) runs with timeouts and logs its failures instead of raising.
 
@@ -138,7 +138,7 @@ All workers run continuously while connected, each with startup jitter and cycle
   - formats Arena (`1700`/`1710`/`1750`) recaps with placement/team, damage share, augments/items, and skillshot challenge stats
   - posts each match as a card (`src/recap_cards.py`, Discord Components V2): one container per match with the compact header (`-# queue · **result** · game length`, from `match_result`) and player lines (`format_recap_player_line`), result-coloured accent, one text component per player; packed within 40 components / 4000 characters per message (an LP reserve is kept per pending player; oversized text is shortened, never rejected), messages 3s apart
   - ranked games that set a group record get one `🏆 New group record` line per record under the player's stats, then one small `-# 📈 Personal best` line per Best category of `!records Name` the player beat (players with 50+ stored ranked games; not where the same game set the group record) (`src/records.py`)
-  - if Discord rejects a card (`HTTPException`), the same batch is sent as plain text (2000-char messages split at player boundaries). The recap cursor is still saved before sending, so a failed send can't cause endless retries
+  - if Discord rejects a card (`HTTPException`), the same batch is sent as plain text (2000-char messages split at player boundaries). The recap cursor is still saved before sending, so a failed send can't cause endless retries. A rate limit (429), Discord server error (5xx) or lost connection is different: the plain text would be refused the same way, so that message and the rest of the cycle's messages are held back in `bot_state` (`recap_retry_queue`: match ID and first refusal time) and re-posted with the next cycles until they go out or 3 hours pass (`RECAP_RETRY_MAX_AGE_SECONDS`). A match already partly posted isn't held back, so a retry can't repeat it. Streak callouts for players with a held-back recap wait for it
   - pending LP stores the player's card component ID; the LP edit (`edit_recap_with_lp`) rebuilds the card with `LayoutView.from_message` and edits only that component. Plain-text recaps still match the player's heading line. Fetch-then-edit runs under `LP_EDIT_LOCK` so two players' edits on one message can't overwrite each other
   - posts ranked win/loss streak callouts in `MATCH_RECAP_CHANNEL_ID` as separate messages (wins: 3-4 Momentum, 5-7 Heater Alert, 8-9 LEGENDARY, 10+ FINAL BOSS UNLOCKED; losses: 3-4 Cold Streak, 5-7 Tilt Watch, 8-9 FULL TILT, 10-12 UNINSTALL PROTOCOL, 13+ BIOHAZARD IN THE LOBBY); deduped by `last_announced_streak::{riot_id}` token
   - streak callouts use Discord TTS by default; toggle with `!tts on|off|status`
@@ -248,6 +248,7 @@ Badges (`report_builder.py`) are separate from the score: per-minute rates shrun
   - key/value operational state:
     - scoreboard message ids (`last_report_*`, `last_weekly_report_*`, previous-day message + cycle keys)
     - per-player cursors: `last_seen_match_id::`, `last_announced_match_id::`, `last_announced_streak::`, `backfill_offset::`
+    - `recap_retry_queue` (recaps Discord refused with a 429/5xx: match ID and first refusal time, retried for 3 hours)
     - per-player LP joins (JSON lists, 30-minute expiry): `recap_lp_pending::` (posted recap lines awaiting LP), `recap_lp_events::` (LP changes awaiting a recap)
     - `streak_tts_enabled`
     - `champion_display_mode` (`name` | `icon` | `both`; unset = `icon`)

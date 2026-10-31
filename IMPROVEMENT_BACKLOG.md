@@ -65,6 +65,7 @@ Checked 2026-10-27 against the 12,426 cached matches. These fields are in the ca
 
 - Match recaps:
   - LP gain/loss on Solo/Duo and Flex lines from the rank worker's existing polls (no extra Riot requests); edited into posted recaps; before-and-after LP and both ranks on promotions/demotions.
+  - Backfill rests a player for 7 days once a pass finds their whole history cached, instead of starting over at once (it re-read ~1,000 cached matches per player all day, cached nothing, and caused every Riot 429 on 2026-10-30/31).
   - Recaps Discord refuses with a 429 or 5xx (2026-10-31: a Cloudflare block lost one) are held back and re-posted on later cycles for up to 3 hours, instead of being lost.
   - Components V2 cards: one card per match with a result-coloured edge, compact header (queue, result, game length) and bold stat lines; plain-text fallback if Discord rejects a card; LP edits target the player's card component under an edit lock.
   - Champion portraits as application emojis named after the champion (`!champdisplay name|icon|both`, default portraits, name fallback); per-player result only in mixed-result games.

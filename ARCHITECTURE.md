@@ -149,7 +149,8 @@ All workers run continuously while connected, each with startup jitter and cycle
   - refreshes affected players' daily stats and forces daily + weekly scoreboard update
 - Backfill worker
   - interval: `max(120, DAILY_REFRESH_SECONDS * 2)`
-  - runs every cycle; pages backwards through each player's match history using a persisted `backfill_offset::{riot_id}` cursor
+  - pages backwards through each player's match history using a persisted `backfill_offset::{riot_id}` cursor
+  - when a pass reaches the end of the history Riot serves (an empty page), the player rests for 7 days (`backfill_done_at::{riot_id}`, `BACKFILL_REVISIT_SECONDS`) with no Riot requests, then a new pass starts from the newest games. New games are cached by the recap worker as they're played, so a pass only finds something after a gap (a new player, or the bot down for 20+ of a player's games). Until 2026-10-31 a finished pass started over at once, re-reading about 1,000 cached matches per player all day
   - caches up to 3 uncached older match payloads per player per cycle
   - stores only in DB cache for backfill fetches (`cache_in_memory=False`)
   - Riot requests use the `backfill` tier: capped at 80 of the 100-per-120s budget and paused for `max(120s, 3 x Retry-After)` after any `429`
@@ -247,7 +248,7 @@ Badges (`report_builder.py`) are separate from the score: per-minute rates shrun
 - `bot_state`
   - key/value operational state:
     - scoreboard message ids (`last_report_*`, `last_weekly_report_*`, previous-day message + cycle keys)
-    - per-player cursors: `last_seen_match_id::`, `last_announced_match_id::`, `last_announced_streak::`, `backfill_offset::`
+    - per-player cursors: `last_seen_match_id::`, `last_announced_match_id::`, `last_announced_streak::`, `backfill_offset::`, `backfill_done_at::` (when the last backfill pass finished)
     - `recap_retry_queue` (recaps Discord refused with a 429/5xx: match ID and first refusal time, retried for 3 hours)
     - per-player LP joins (JSON lists, 30-minute expiry): `recap_lp_pending::` (posted recap lines awaiting LP), `recap_lp_events::` (LP changes awaiting a recap)
     - `streak_tts_enabled`

@@ -1,6 +1,6 @@
 import asyncio
 
-from src.discord_backfill_worker import process_backfill_cycle
+from src.discord_backfill_worker import BACKFILL_REVISIT_SECONDS, BackfillCycleResult, process_backfill_cycle
 
 
 class FakeRiotClient:
@@ -9,13 +9,17 @@ class FakeRiotClient:
         self.page_ids_by_puuid = {}
         self.match_info_by_id = {}
         self.fetched_match_ids = []
+        self.puuid_requests = []
+        self.page_requests = []
 
     async def fetch_puuid(self, riot_id, *, request_tier="priority"):
         _ = request_tier
+        self.puuid_requests.append(riot_id)
         return self.puuid_by_riot_id[riot_id]
 
     async def fetch_match_ids_page(self, puuid, *, start=0, count=100, request_tier="priority", riot_id=None):
         _ = count, request_tier, riot_id
+        self.page_requests.append((puuid, start))
         pages = self.page_ids_by_puuid.get(puuid, {})
         return pages.get(start, [])
 
@@ -48,33 +52,73 @@ def test_backfill_fetches_missing_older_matches_up_to_limit_and_advances_offset(
     )
 
     assert riot.fetched_match_ids == ["m3", "m4", "m5"]
-    assert total == 3
+    assert total.cached == 3
     assert state["backfill_offset::alpha#euw"] == "5"
 
 
-def test_backfill_resets_offset_when_no_more_ids():
-    riot = FakeRiotClient()
-    riot.puuid_by_riot_id["Alpha#EUW"] = "puuid-alpha"
-    riot.page_ids_by_puuid["puuid-alpha"] = {
-        5: [],
-    }
-    state = {"backfill_offset::alpha#euw": "5"}
+NOW = 1_800_000_000
 
-    total = asyncio.run(
+
+def run_cycle(riot, state, *, now=NOW, logs=None, cached=None, friends=("Alpha#EUW",)):
+    cached = cached if cached is not None else {}
+    return asyncio.run(
         process_backfill_cycle(
-            friends=["Alpha#EUW"],
+            friends=list(friends),
             riot_client=riot,
             db_get_state=lambda key: state.get(key),
             db_set_state=lambda key, value: state.__setitem__(key, value),
-            db_get_match_info=lambda _match_id: None,
+            db_get_match_info=lambda match_id: cached.get(match_id),
             recent_ids_count=100,
             per_player_limit=2,
-            log=lambda _msg: None,
+            log=(logs.append if logs is not None else (lambda _msg: None)),
+            now=now,
         )
     )
 
-    assert total == 0
+
+def test_end_of_history_marks_the_player_done_instead_of_starting_over():
+    riot = FakeRiotClient()
+    riot.puuid_by_riot_id["Alpha#EUW"] = "puuid-alpha"
+    riot.page_ids_by_puuid["puuid-alpha"] = {5: []}
+    state = {"backfill_offset::alpha#euw": "5"}
+    logs = []
+
+    result = run_cycle(riot, state, logs=logs)
+
+    assert result == BackfillCycleResult(cached=0, resting=0)
     assert state["backfill_offset::alpha#euw"] == "0"
+    assert state["backfill_done_at::alpha#euw"] == str(NOW)
+    assert logs == ["[backfill] History fully cached for Alpha#EUW (5 matches); next pass in 7 days."]
+
+
+def test_done_players_rest_without_any_riot_request():
+    riot = FakeRiotClient()
+    riot.puuid_by_riot_id = {"Alpha#EUW": "puuid-alpha", "Bravo#EUW": "puuid-bravo"}
+    riot.page_ids_by_puuid["puuid-bravo"] = {0: ["b2", "b1"]}
+    state = {"backfill_done_at::alpha#euw": str(NOW - 3600)}
+
+    result = run_cycle(riot, state, friends=("Alpha#EUW", "Bravo#EUW"), cached={"b1": {}, "b2": {}})
+
+    assert result == BackfillCycleResult(cached=0, resting=1)
+    # Only Bravo, who has no finished pass yet, was looked up.
+    assert riot.puuid_requests == ["Bravo#EUW"]
+    assert riot.page_requests == [("puuid-bravo", 0)]
+    assert state["backfill_offset::bravo#euw"] == "2"
+
+
+def test_a_new_pass_starts_from_the_newest_games_after_the_rest():
+    riot = FakeRiotClient()
+    riot.puuid_by_riot_id["Alpha#EUW"] = "puuid-alpha"
+    riot.page_ids_by_puuid["puuid-alpha"] = {0: ["m2", "m1"]}
+    state = {"backfill_done_at::alpha#euw": str(NOW - BACKFILL_REVISIT_SECONDS - 1)}
+
+    result = run_cycle(riot, state, cached={"m1": {}})
+
+    # The gap (m2) is filled, and the pass carries on until it reaches the end again.
+    assert result == BackfillCycleResult(cached=1, resting=0)
+    assert riot.fetched_match_ids == ["m2"]
+    assert riot.page_requests == [("puuid-alpha", 0)]
+    assert state["backfill_offset::alpha#euw"] == "2"
 
 
 def test_backfill_does_not_skip_when_limit_reached_mid_page():
@@ -99,7 +143,7 @@ def test_backfill_does_not_skip_when_limit_reached_mid_page():
         )
     )
 
-    assert total_first == 2
+    assert total_first.cached == 2
     assert riot.fetched_match_ids == ["m2", "m3"]
     assert state["backfill_offset::alpha#euw"] == "0"
 
@@ -120,6 +164,16 @@ def test_backfill_does_not_skip_when_limit_reached_mid_page():
         )
     )
 
-    assert total_second == 2
+    assert total_second.cached == 2
     assert riot.fetched_match_ids == ["m4", "m5"]
     assert state["backfill_offset::alpha#euw"] == "5"
+
+
+def test_removing_a_player_clears_the_backfill_done_marker(monkeypatch):
+    import src.db.players as db_players
+
+    calls = []
+    monkeypatch.setattr(db_players, "db_execute", lambda query, params=None, **_kwargs: calls.append((query, params)))
+    db_players.db_remove_player("Alpha#EUW")
+    state_keys = next(params for query, params in calls if "bot_state" in query)
+    assert "backfill_done_at::alpha#euw" in state_keys and "backfill_offset::alpha#euw" in state_keys

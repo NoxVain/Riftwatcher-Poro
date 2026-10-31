@@ -326,7 +326,7 @@ async def background_match_cache_backfiller(
         token = request_id_context.set(create_request_id("backfill"))
         had_error = False
         try:
-            total_backfilled = await process_backfill_cycle(
+            cycle_result = await process_backfill_cycle(
                 friends=friends,
                 riot_client=riot_client,
                 db_get_state=db_get_state,
@@ -340,8 +340,9 @@ async def background_match_cache_backfiller(
             active_offsets = sum(1 for riot_id in friends if int(offsets.get(riot_id.casefold(), 0) or 0) > 0)
             max_offset = max((int(offsets.get(riot_id.casefold(), 0) or 0) for riot_id in friends), default=0)
             log(
-                f"[backfill] Cycle summary: cached={total_backfilled}, "
-                f"active_offsets={active_offsets}/{len(friends)}, max_offset={max_offset}."
+                f"[backfill] Cycle summary: cached={cycle_result.cached}, "
+                f"active_offsets={active_offsets}/{len(friends)}, max_offset={max_offset}, "
+                f"resting={cycle_result.resting}/{len(friends)}."
             )
         except Exception as exc:
             had_error = True

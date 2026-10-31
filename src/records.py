@@ -97,6 +97,13 @@ CATEGORIES = (
     ),
     RecordCategory("gold", "gold", SECTION_FARM, _column("gold_earned")),
     RecordCategory("vision", "vision score", SECTION_FARM, _column("vision_score"), personal="best"),
+    # Riot's wardsPlaced counts every ward (trinket, support item, pinks); wardsKilled every enemy ward destroyed.
+    RecordCategory(
+        "wards_placed", "wards placed", SECTION_FARM, _column("wards_placed"), personal="best", singular="ward placed"
+    ),
+    RecordCategory(
+        "wards_killed", "wards cleared", SECTION_FARM, _column("wards_killed"), personal="best", singular="ward cleared"
+    ),
     RecordCategory(
         "pink_wards", "pink wards", SECTION_FARM, _column("control_wards_placed"), personal="best", singular="pink ward"
     ),

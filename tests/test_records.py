@@ -31,7 +31,7 @@ _counter = iter(range(1, 1_000_000))
 def row(riot_id="Nox#EUW", *, days=0, queue=420, win=True, kills=5, deaths=3, assists=8, minutes=30,
         champion="Lux", damage=20000, share=0.25, taken=20000, gold=12000, cs=200, vision=30,
         solo_kills=1, pentas=0, spree=3, camps=None, buffs=None, dragons=None, barons=None, steals=None, pinks=None,
-        remake=False):
+        wards=None, cleared=None, remake=False):
     n = next(_counter)
     return {
         "match_id": f"EUW1_{n}",
@@ -60,6 +60,8 @@ def row(riot_id="Nox#EUW", *, days=0, queue=420, win=True, kills=5, deaths=3, as
         "baron_takedowns": barons,
         "objective_steals": steals,
         "control_wards_placed": pinks,
+        "wards_placed": wards,
+        "wards_killed": cleared,
     }
 
 
@@ -299,12 +301,32 @@ def test_pink_wards_record_follows_vision_and_counts_as_a_personal_best():
     ]
     book = build_record_book(rows)
     farm = next(s for s in format_group_sections(book) if s.startswith("**Farm, map and objectives**"))
-    assert "**90** vision score · Tamarin · Rakan · Jan 2025\n**17** pink wards · Tamarin · Rakan · Jan 2025" in farm
+    assert "**90** vision score · Tamarin · Rakan · Jan 2025\n" in farm
+    assert "\n**17** pink wards · Tamarin · Rakan · Jan 2025" in farm
     personal = "\n\n".join(format_personal_sections(book, "NoxVain#EUW"))
     assert "**1** pink ward · Swain · Jan 2025 · #2 in the group" in personal
     assert CATEGORIES_BY_KEY["pink_wards"].personal == "best"
     # Rows from before the column existed have no count and never hold the record.
     assert build_record_book([row(pinks=None)]).record("pink_wards") is None
+
+
+def test_wards_placed_and_cleared_follow_vision_and_count_as_personal_bests():
+    rows = [
+        row("Tamarin#EUW", days=1, vision=90, wards=41, cleared=9, pinks=17, champion="Rakan"),
+        row("NoxVain#EUW", days=2, vision=80, wards=1, cleared=14, pinks=1, champion="Swain"),
+    ]
+    book = build_record_book(rows)
+    farm = next(s for s in format_group_sections(book) if s.startswith("**Farm, map and objectives**"))
+    assert (
+        "**90** vision score · Tamarin · Rakan · Jan 2025\n"
+        "**41** wards placed · Tamarin · Rakan · Jan 2025\n"
+        "**14** wards cleared · NoxVain · Swain · Jan 2025\n"
+        "**17** pink wards · Tamarin · Rakan · Jan 2025"
+    ) in farm
+    personal = "\n\n".join(format_personal_sections(book, "NoxVain#EUW"))
+    assert "**1** ward placed · Swain · Jan 2025 · #2 in the group" in personal
+    assert "**14** wards cleared · Swain · Jan 2025 · group record" in personal
+    assert CATEGORIES_BY_KEY["wards_placed"].personal == CATEGORIES_BY_KEY["wards_killed"].personal == "best"
 
 
 def test_personal_card_lists_kill_streak_cs_per_minute_longest_game_and_deathless_games():

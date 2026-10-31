@@ -101,6 +101,8 @@ RECORD_ROW_COLUMNS = (
     "gold_earned",
     "cs",
     "vision_score",
+    "wards_placed",
+    "wards_killed",
     "solo_kills",
     "penta_kills",
     "killing_spree",

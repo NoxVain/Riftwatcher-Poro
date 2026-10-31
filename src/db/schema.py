@@ -211,5 +211,6 @@ def init_db():
         "enemy_jungle_camps",
         "buffs_stolen",
         "control_wards_placed",
+        "objective_damage",
     ):
         db_execute(f"ALTER TABLE player_match_stats ADD COLUMN IF NOT EXISTS {column} INTEGER NULL;")

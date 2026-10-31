@@ -78,6 +78,7 @@ Checked 2026-10-27 against the 12,426 cached matches. These fields are in the ca
 - Data:
   - `lp_history` table records every observed LP change for later analysis.
   - Old PUUIDs (from before the Feb 2026 Riot key change) in cached matches are rewritten to current ones by Riot ID, so all cached games are found by PUUID again.
+  - Expanded `!analyze` (Arnold's #46): a Last 20 games line in the header, a "How you play" section with main-role playstyle facts, and conservative recent-vs-earlier trends per champion and role. Missing measurements stay N/A; repeated metric topics are filtered; zero new Riot requests.
   - Cached matches are kept forever in production (`MATCH_CACHE_RETENTION_DAYS=0`): the cache holds history Riot no longer serves.
   - `player_match_stats`: per-player match numbers extracted from the cache in the background (no Riot requests), the data layer for player analysis.
   - Poro Wrapped: group year-in-review post in the events channel on 31 December at 18:00 (headline, Poro Awards with banter, ranked records of the year, ARAM and Arena, everyone's rank) and `!wrapped Name` from that post until the end of January (secret before then: no reply, not in `!help`). Arena 3x6 placements are now stored (`STATS_VERSION` 6).

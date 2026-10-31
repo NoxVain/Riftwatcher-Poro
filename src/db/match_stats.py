@@ -40,6 +40,16 @@ ANALYSIS_ROW_COLUMNS = (
     "opponent_gold_diff",
     "opponent_cs_diff",
     "tracked_teammates",
+    "cs",
+    "lane_cs_10",
+    "kill_participation",
+    "damage_share",
+    "vision_score",
+    "wards_killed",
+    "time_dead_seconds",
+    "buffs_stolen",
+    "ally_saves",
+    "enemy_jungle_camps",
 )
 RANKED_QUEUE_IDS = [420, 440]
 

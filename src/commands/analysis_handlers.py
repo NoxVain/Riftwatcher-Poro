@@ -97,6 +97,6 @@ async def handle_analysis_commands(ctx):
             await channel.send(chunk)
     ctx.log(
         f"[analyze] Sent {queue} analysis for {riot_id}: months={months} games={analysis.games} "
-        f"strengths={len(analysis.strengths)} tips={len(analysis.tips)}."
+        f"strengths={len(analysis.strengths)} tips={len(analysis.tips)} profile={bool(analysis.profile)}."
     )
     return True

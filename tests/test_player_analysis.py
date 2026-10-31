@@ -106,7 +106,9 @@ def test_default_window_is_three_months_and_trends_split_it_in_half():
     )
     assert analysis.months == 3 and analysis.games == 50
     assert any(tip.startswith("Last 46 days 36% (25), 80% before") for tip in analysis.tips)
-    assert format_analysis_sections(analysis)[0].endswith("-# Last 3 months · Solo/Duo 29W-21L (58%)")
+    header = format_analysis_sections(analysis)[0]
+    assert header.split("\n")[1] == "-# Last 3 months · Solo/Duo 29W-21L (58%)"
+    assert header.split("\n")[2].startswith("-# Last 20 games: 7W-13L (35%)")
 
 
 TRACKED = [("NoxVain#EUW", "nox"), ("Rayke#EUW", "rayke"), ("Rayke#NA1", "rayke-na")]
@@ -134,11 +136,11 @@ def test_too_few_games_gives_no_findings_and_points_to_other_queue():
     sections = format_analysis_sections(analysis)
 
     assert not analysis.enough_games and analysis.strengths == [] and analysis.tips == []
-    assert len(sections) == 2
-    assert "Not enough Solo/Duo games to analyze yet: 10 in the last 12 months, 20 needed." in sections[1]
-    assert "`!analyze NoxVain 12 flex`" in sections[1]
+    assert len(sections) == 3
+    assert "Not enough Solo/Duo games to analyze yet: 10 in the last 12 months, 20 needed." in sections[-1]
+    assert "`!analyze NoxVain 12 flex`" in sections[-1]
     # Already the longest window, so no hint to look further back.
-    assert "further back" not in sections[1]
+    assert "further back" not in sections[-1]
     short = format_analysis_sections(analyze(games, months=3))[1]
     assert short.endswith("Or look further back: `!analyze NoxVain 12`.")
 
@@ -262,16 +264,18 @@ def test_sections_header_footer_and_escaping():
         riot_id="xX_snake_Xx#EUW", games=games, queue="solo", role_baselines={}, names_by_puuid={},
         now=NOW, tz=UTC, day_start_hour=6, months=12,
     )
-    header, strengths, tips, footer = format_analysis_sections(analysis)
+    header, profile, strengths, tips, footer = format_analysis_sections(analysis)
 
     assert header == (
         "**xX\\_snake\\_Xx#EUW** · Solo/Duo analysis\n"
-        "-# Last 12 months · Solo/Duo 12W-10L (55%) · Flex 30W-25L (55%)"
+        "-# Last 12 months · Solo/Duo 12W-10L (55%) · Flex 30W-25L (55%)\n"
+        # These test rows carry no CS or kill participation, so both read N/A.
+        "-# Last 20 games: 11W-9L (55%) · N/A CS/min · KDA 3.33 · KP N/A"
     )
     assert strengths == "**Strengths**\nNothing stands out yet."
     assert tips == "**Work on**\nNo clear weak spots in these games."
     assert footer.startswith("-# Solo/Duo games since 31 Dec 2025 · tips need 10+ games · ")
-    assert footer.endswith("`!analyze xX\\_snake\\_Xx 12 flex` for Flex · add 1-12 for months")
+    assert footer.splitlines()[0].endswith("`!analyze xX\\_snake\\_Xx 12 flex` for Flex · add 1-12 for months")
 
 
 def test_header_without_other_queue_games():
@@ -289,7 +293,34 @@ def test_build_analysis_view_is_one_accented_container():
     container = view.children[0]
     assert getattr(container.accent_colour, "value", container.accent_colour) == ANALYSIS_ACCENT
     assert view_text(view) == format_analysis_text(analysis)
-    assert sum(1 for item in container.walk_children() if isinstance(item, discord.ui.Separator)) == 3
+    assert sum(1 for item in container.walk_children() if isinstance(item, discord.ui.Separator)) == 4
+
+
+def test_playstyle_and_findings_use_only_selected_queue_and_period_with_topic_variety():
+    from tests.test_analysis_metrics import match
+
+    # Use the local fixed clock, not the helper module's different date.
+    games = [dict(match(i), game_end_at=NOW - timedelta(hours=40 - i),
+                  cs=180 if i < 20 else 240, lane_cs_10=60 if i < 20 else 75,
+                  vision_score=30 if i < 20 else 9, deaths=3 if i < 20 else 6,
+                  kill_participation=0.4 if i < 20 else 0.7,
+                  tracked_teammates=[], opponent_gold_diff=0, opponent_cs_diff=0) for i in range(40)]
+    games += [dict(games[0], queue_id=440, cs=900),
+              dict(games[0], game_end_at=NOW - timedelta(days=400), cs=900),
+              dict(games[0], game_end_at=NOW + timedelta(days=1), cs=900)]
+    analysis = analyze(games, months=3)
+    assert analysis.games == 40 and "40/40 games" in analysis.profile
+    assert analysis.recent.startswith("Last 20 games: 10W-10L (50%) · 8.0 CS/min")
+    assert len(analysis.strengths) == 2  # one farming insight, not both CS metrics
+    assert any("kill participation" in text for text in analysis.strengths)
+    assert len(analysis.tips) == 2 and all("Review" in text for text in analysis.tips)
+    assert len(format_analysis_text(analysis)) < 4000
+    sections = format_analysis_sections(analysis)
+    # Last 20 games is a line in the header; the profile is the only new section.
+    assert "\n-# Last 20 games: " in sections[0]
+    assert sections[1].startswith("**How you play")
+    assert sections[2].startswith("**Strengths**")
+    assert "Patterns describe" not in sections[-1]
 
 
 class FakeChannel:
@@ -374,7 +405,7 @@ def test_analyze_command_sends_card_for_tracked_player():
     three_months = datetime(2026, 7, 27, 12, tzinfo=UTC)
     assert calls == [("rows", "nox", three_months, NOW), ("totals", 440, three_months, NOW)]
     assert len(channel.sent) == 1 and channel.sent[0].startswith("**NoxVain#EUW** · Flex analysis")
-    assert logs[-1] == "[analyze] Sent flex analysis for NoxVain#EUW: months=3 games=0 strengths=0 tips=0."
+    assert logs[-1] == "[analyze] Sent flex analysis for NoxVain#EUW: months=3 games=0 strengths=0 tips=0 profile=False."
 
 
 def test_analyze_command_takes_a_month_count_and_rejects_bad_ones():

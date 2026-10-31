@@ -1,8 +1,8 @@
 """`!analyze`: one player's recent ranked games (3 months unless asked) turned into strengths and tips.
 
 Pure logic over `player_match_stats` rows (see src/match_stats.py); no Discord, Riot or
-DB access. Every finding is guarded: it needs a minimum number of games on each side
-of a comparison and a clear gap, so small or noisy samples never become advice.
+DB access. Findings need minimum samples and clear gaps. Metric comparisons also
+apply a noise guard; observed associations do not establish causes.
 Candidates are ranked by gap size weighted by sample size, and the card shows at most
 three strengths and three things to work on, each with its record.
 
@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 import discord
+
+from src.analysis_metrics import ROLE_NAMES, metric_findings, playstyle_summary, recent_summary
 
 QUEUES = {
     "solo": {"queue_id": 420, "label": "Solo/Duo"},
@@ -49,7 +51,6 @@ MAX_FINDINGS = 3
 
 ANALYSIS_ACCENT = 0x378ADD
 
-ROLE_NAMES = {"TOP": "Top", "JUNGLE": "Jungle", "MIDDLE": "Mid", "BOTTOM": "ADC", "UTILITY": "Support"}
 ROLE_IN_SENTENCE = {"TOP": "top", "JUNGLE": "jungle", "MIDDLE": "mid", "BOTTOM": "ADC", "UTILITY": "support"}
 ROLE_PLURALS = {"TOP": "top laners", "JUNGLE": "junglers", "MIDDLE": "mid laners", "BOTTOM": "ADCs", "UTILITY": "supports"}
 
@@ -58,6 +59,7 @@ ROLE_PLURALS = {"TOP": "top laners", "JUNGLE": "junglers", "MIDDLE": "mid laners
 class Finding:
     text: str
     score: float
+    topic: str | None = None
 
 
 @dataclass
@@ -72,6 +74,8 @@ class PlayerAnalysis:
     months: int = DEFAULT_MONTHS
     strengths: list = field(default_factory=list)
     tips: list = field(default_factory=list)
+    profile: str = ""
+    recent: str = ""
 
     @property
     def enough_games(self):
@@ -361,7 +365,16 @@ def _session_findings(games, tz, day_start_hour):
 
 
 def _top(findings):
-    return [f.text for f in sorted(findings, key=lambda f: f.score, reverse=True)[:MAX_FINDINGS]]
+    selected, topics = [], set()
+    for finding in sorted(findings, key=lambda finding: finding.score, reverse=True):
+        if finding.topic is not None and finding.topic in topics:
+            continue
+        selected.append(finding.text)
+        if finding.topic is not None:
+            topics.add(finding.topic)
+        if len(selected) == MAX_FINDINGS:
+            break
+    return selected
 
 
 def analyze_player(
@@ -389,11 +402,16 @@ def analyze_player(
         other_queue_wins=other_wins,
         since=min((g["game_end_at"] for g in queue_games), default=None),
         months=months,
+        profile=playstyle_summary(queue_games),
+        recent=recent_summary(queue_games),
     )
     if not analysis.enough_games:
         return analysis
     overall_pct = _pct(wins, n)
     strengths, tips = [], []
+    metric_strengths, metric_tips = metric_findings(queue_games)
+    strengths.extend(Finding(*finding) for finding in metric_strengths)
+    tips.extend(Finding(*finding) for finding in metric_tips)
     for found_strengths, found_tips in (
         _champion_findings(queue_games, overall_pct),
         _role_findings(queue_games, role_baselines, now, trend_days),
@@ -425,6 +443,9 @@ def format_analysis_sections(analysis):
         records.append(_queue_record(other_label, analysis.other_queue_wins, analysis.other_queue_games))
     period = f"last {analysis.months} month{'s' if analysis.months != 1 else ''}"
     header = f"**{name}** · {label} analysis\n-# {period.capitalize()} · {' · '.join(records)}"
+    if analysis.recent:
+        header += f"\n-# {analysis.recent}"
+    overview = [analysis.profile] if analysis.profile else []
     command_name = discord.utils.escape_markdown(analysis.riot_id.split("#", 1)[0])
     # Keep a non-default month count in suggested commands.
     months_arg = f" {analysis.months}" if analysis.months != DEFAULT_MONTHS else ""
@@ -434,7 +455,7 @@ def format_analysis_sections(analysis):
             body += f" Try `!analyze {command_name}{months_arg} {other}`."
         if analysis.months < MAX_ANALYSIS_MONTHS:
             body += f" Or look further back: `!analyze {command_name} {MAX_ANALYSIS_MONTHS}`."
-        return [header, body]
+        return [header, *overview, body]
     strengths = "\n".join(f"✅ {line}" for line in analysis.strengths) or "Nothing stands out yet."
     tips = "\n".join(f"⚠️ {line}" for line in analysis.tips) or "No clear weak spots in these games."
     since = analysis.since.strftime("%d %b %Y").lstrip("0") if analysis.since else "?"
@@ -442,7 +463,7 @@ def format_analysis_sections(analysis):
         f"-# {label} games since {since} · tips need {MIN_GROUP_GAMES}+ games · "
         f"`!analyze {command_name}{months_arg} {other}` for {other_label} · add 1-12 for months"
     )
-    return [header, f"**Strengths**\n{strengths}", f"**Work on**\n{tips}", footer]
+    return [header, *overview, f"**Strengths**\n{strengths}", f"**Work on**\n{tips}", footer]
 
 
 def format_analysis_text(analysis):

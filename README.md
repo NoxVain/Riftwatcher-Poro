@@ -194,7 +194,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 - `!Add Name#Tag`
 - `!remove Name#Tag`
 - `!profile Name#Tag`
-- `!analyze Name#Tag [months] [solo|flex]` (alias `!analyse`; the last 3 months of Solo/Duo by default, `!analyze Name 12 flex` for a year of Flex; the name alone works when it's unique)
+- `!analyze Name#Tag [months] [solo|flex] [role]` (alias `!analyse`; the last 3 months of Solo/Duo in every role by default, `!analyze Name 12 flex` for a year of Flex, `!analyze Name mid` for mid games only (`top`, `jungle`/`jg`, `mid`, `adc`/`bot`, `support`/`supp`); the name alone works when it's unique)
   - The header adds a "Last 20 games" line, and a "How you play" section sums up the main role: champion pool, farming, fights, vision, survival, plus jungle invades or support saves. Strengths and Work on also use recent-vs-earlier trends on the same champion and role; no filler advice. Missing measurements stay N/A. All inputs come from stored stats, with zero new Riot requests.
 - `!records [Name#Tag]` (alias `!record`; group Hall of Fame, or one player's personal bests; ranked games only)
 - `!wrapped Name#Tag` (a player's Poro Wrapped for the year; a surprise: it only works after the group post on 31 December 18:00 until the end of January, gets no reply at all otherwise, and isn't in `!help`)

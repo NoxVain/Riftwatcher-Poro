@@ -1,4 +1,4 @@
-"""`!analyze Name#Tag [months] [solo|flex]`: strengths and tips from recent ranked games (3 months by default).
+"""`!analyze Name#Tag [months] [solo|flex] [role]`: strengths and tips from recent ranked games (3 months by default).
 
 Read-only: one indexed query on `player_match_stats` plus one per-role aggregate, so it
 needs no Riot requests and answers in milliseconds.
@@ -15,6 +15,7 @@ from src.discord_text import format_user_error, split_message_text
 from src.player_analysis import (
     DEFAULT_MONTHS,
     QUEUES,
+    ROLE_ARG_NAMES,
     analysis_start,
     analyze_player,
     build_analysis_view,
@@ -44,8 +45,9 @@ async def handle_analysis_commands(ctx):
     raw = ctx.content[len(command):].strip()
     if not raw:
         await channel.send(
-            f"Usage: `{ANALYZE_COMMAND} Name#Tag [months] [solo|flex]` "
-            f"(last {DEFAULT_MONTHS} months of Solo/Duo unless you say otherwise; 1-12 months)."
+            f"Usage: `{ANALYZE_COMMAND} Name#Tag [months] [solo|flex] [role]` "
+            f"(last {DEFAULT_MONTHS} months of Solo/Duo in every role unless you say otherwise; 1-12 months; "
+            "role is top, jungle, mid, adc or support)."
         )
         return True
     if not ctx.db_enabled or ctx.db_load_player_analysis_rows is None:
@@ -56,7 +58,7 @@ async def handle_analysis_commands(ctx):
     try:
         tracked = [(riot_id, puuid) for riot_id, puuid in await asyncio.to_thread(ctx.db_load_tracked_puuids) if puuid]
         try:
-            query, queue, months = parse_analyze_args(raw, tracked)
+            query, queue, months, role = parse_analyze_args(raw, tracked)
         except ValueError as exc:
             await channel.send(str(exc))
             return True
@@ -84,6 +86,7 @@ async def handle_analysis_commands(ctx):
             tz=ZoneInfo(ctx.report_timezone_name),
             day_start_hour=ctx.report_day_start_hour,
             months=months,
+            role=role,
         )
     except Exception as exc:
         await channel.send(format_user_error("Analysis failed", exc, ctx.request_id_context.get()))
@@ -96,7 +99,8 @@ async def handle_analysis_commands(ctx):
         for chunk in split_message_text(format_analysis_text(analysis)):
             await channel.send(chunk)
     ctx.log(
-        f"[analyze] Sent {queue} analysis for {riot_id}: months={months} games={analysis.games} "
+        f"[analyze] Sent {queue} analysis for {riot_id}: months={months} role={ROLE_ARG_NAMES.get(role, 'all')} "
+        f"games={analysis.games} "
         f"strengths={len(analysis.strengths)} tips={len(analysis.tips)} profile={bool(analysis.profile)}."
     )
     return True

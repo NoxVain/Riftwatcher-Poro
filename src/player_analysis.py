@@ -53,6 +53,15 @@ ANALYSIS_ACCENT = 0x378ADD
 
 ROLE_IN_SENTENCE = {"TOP": "top", "JUNGLE": "jungle", "MIDDLE": "mid", "BOTTOM": "ADC", "UTILITY": "support"}
 ROLE_PLURALS = {"TOP": "top laners", "JUNGLE": "junglers", "MIDDLE": "mid laners", "BOTTOM": "ADCs", "UTILITY": "supports"}
+# `!analyze Name mid`: the words a player may type for each Riot team position.
+ROLE_ARGS = {
+    "top": "TOP",
+    "jungle": "JUNGLE", "jg": "JUNGLE", "jgl": "JUNGLE", "jungler": "JUNGLE",
+    "mid": "MIDDLE", "middle": "MIDDLE",
+    "adc": "BOTTOM", "bot": "BOTTOM", "bottom": "BOTTOM",
+    "support": "UTILITY", "supp": "UTILITY", "sup": "UTILITY",
+}
+ROLE_ARG_NAMES = {"TOP": "top", "JUNGLE": "jungle", "MIDDLE": "mid", "BOTTOM": "adc", "UTILITY": "support"}
 
 
 @dataclass
@@ -72,6 +81,8 @@ class PlayerAnalysis:
     other_queue_wins: int
     since: object = None
     months: int = DEFAULT_MONTHS
+    # A Riot team position when the player asked for one role; None covers every role.
+    role: str | None = None
     strengths: list = field(default_factory=list)
     tips: list = field(default_factory=list)
     profile: str = ""
@@ -95,44 +106,48 @@ def analysis_start(now, months=DEFAULT_MONTHS):
 
 
 def _parse_options(words):
-    """Pop a trailing queue word and month count, in either order."""
-    queue, months, seen = DEFAULT_QUEUE, DEFAULT_MONTHS, set()
+    """Pop a trailing queue word, month count and role, in any order."""
+    queue, months, role, seen = DEFAULT_QUEUE, DEFAULT_MONTHS, None, set()
     while words:
         token = words[-1].casefold()
         if token in QUEUES:
             kind = "queue"
+        elif token in ROLE_ARGS:
+            kind = "role"
         elif token.lstrip("+-").replace(".", "", 1).isdigit():
             kind = "months"
         else:
             break
         if kind in seen:
-            raise ValueError("Use one month count and one queue, like `!analyze Name 6 flex`.")
+            raise ValueError("Use one month count, one queue and one role, like `!analyze Name 6 flex mid`.")
         seen.add(kind)
         words.pop()
         if kind == "queue":
             queue = token
+        elif kind == "role":
+            role = ROLE_ARGS[token]
         elif not token.isdecimal() or not 1 <= int(token) <= MAX_ANALYSIS_MONTHS:
             raise ValueError(MONTHS_ERROR)
         else:
             months = int(token)
-    return " ".join(words), queue, months
+    return " ".join(words), queue, months, role
 
 
 def parse_analyze_args(raw, tracked=()):
-    """`"Not a snake 6 flex"` -> ("Not a snake", "flex", 6); months and queue are optional.
+    """`"Not a snake 6 flex mid"` -> ("Not a snake", "flex", 6, "MIDDLE"); months, queue and role are optional.
 
     A tracked player's name wins over options, so "Player 2" stays a name; raises
     ValueError with a user-facing message for a bad month count.
     """
     words = raw.split()
-    for options in range(min(2, len(words) - 1) + 1):
+    for options in range(min(3, len(words) - 1) + 1):
         name = " ".join(words[:len(words) - options])
         wanted = name.casefold()
         if not any(wanted in (riot_id.casefold(), riot_id.split("#", 1)[0].casefold()) for riot_id, _puuid in tracked):
             continue
-        rest, queue, months = _parse_options(words[len(words) - options:])
+        rest, queue, months, role = _parse_options(words[len(words) - options:])
         if not rest:
-            return name, queue, months
+            return name, queue, months, role
     return _parse_options(words)
 
 
@@ -379,14 +394,16 @@ def _top(findings):
 
 def analyze_player(
     *, riot_id, games, queue, role_baselines, names_by_puuid, now, tz, day_start_hour, months=DEFAULT_MONTHS,
+    role=None,
 ):
     """Build the analysis for one queue from the player's ranked rows (both queues, no remakes).
 
     Only games in the last `months` count; trends split that window at 90 days, or in
-    half when the window is shorter than 180 days.
+    half when the window is shorter than 180 days. With a `role`, every part of the card
+    (records, Last 20, playstyle, findings) uses only games played in that role.
     """
     since = analysis_start(now, months)
-    games = [g for g in games if since < g["game_end_at"] <= now]
+    games = [g for g in games if since < g["game_end_at"] <= now and (role is None or g["team_position"] == role)]
     trend_days = min(TREND_DAYS, (now - since).days // 2)
     queue_id = QUEUES[queue]["queue_id"]
     queue_games = [g for g in games if g["queue_id"] == queue_id]
@@ -402,6 +419,7 @@ def analyze_player(
         other_queue_wins=other_wins,
         since=min((g["game_end_at"] for g in queue_games), default=None),
         months=months,
+        role=role,
         profile=playstyle_summary(queue_games),
         recent=recent_summary(queue_games),
     )
@@ -438,30 +456,38 @@ def format_analysis_sections(analysis):
     other = "flex" if analysis.queue == "solo" else "solo"
     other_label = QUEUES[other]["label"]
     name = discord.utils.escape_markdown(analysis.riot_id)
+    role_label = f"{ROLE_NAMES.get(analysis.role, analysis.role)} " if analysis.role else ""
     records = [_queue_record(label, analysis.wins, analysis.games)]
     if analysis.other_queue_games:
         records.append(_queue_record(other_label, analysis.other_queue_wins, analysis.other_queue_games))
     period = f"last {analysis.months} month{'s' if analysis.months != 1 else ''}"
-    header = f"**{name}** · {label} analysis\n-# {period.capitalize()} · {' · '.join(records)}"
+    header = f"**{name}** · {role_label}{label} analysis\n-# {period.capitalize()} · {' · '.join(records)}"
     if analysis.recent:
         header += f"\n-# {analysis.recent}"
     overview = [analysis.profile] if analysis.profile else []
     command_name = discord.utils.escape_markdown(analysis.riot_id.split("#", 1)[0])
-    # Keep a non-default month count in suggested commands.
+    # Keep a non-default month count and the chosen role in suggested commands.
     months_arg = f" {analysis.months}" if analysis.months != DEFAULT_MONTHS else ""
+    role_arg = f" {ROLE_ARG_NAMES[analysis.role]}" if analysis.role else ""
     if not analysis.enough_games:
-        body = f"Not enough {label} games to analyze yet: {analysis.games} in the {period}, {MIN_QUEUE_GAMES} needed."
+        body = (
+            f"Not enough {role_label}{label} games to analyze yet: {analysis.games} in the {period}, "
+            f"{MIN_QUEUE_GAMES} needed."
+        )
         if analysis.other_queue_games >= MIN_QUEUE_GAMES:
-            body += f" Try `!analyze {command_name}{months_arg} {other}`."
+            body += f" Try `!analyze {command_name}{months_arg} {other}{role_arg}`."
         if analysis.months < MAX_ANALYSIS_MONTHS:
-            body += f" Or look further back: `!analyze {command_name} {MAX_ANALYSIS_MONTHS}`."
+            body += f" Or look further back: `!analyze {command_name} {MAX_ANALYSIS_MONTHS}{role_arg}`."
+        if analysis.role:
+            body += f" Or every role: `!analyze {command_name}{months_arg}`."
         return [header, *overview, body]
     strengths = "\n".join(f"✅ {line}" for line in analysis.strengths) or "Nothing stands out yet."
     tips = "\n".join(f"⚠️ {line}" for line in analysis.tips) or "No clear weak spots in these games."
     since = analysis.since.strftime("%d %b %Y").lstrip("0") if analysis.since else "?"
     footer = (
-        f"-# {label} games since {since} · tips need {MIN_GROUP_GAMES}+ games · "
-        f"`!analyze {command_name}{months_arg} {other}` for {other_label} · add 1-12 for months"
+        f"-# {role_label}{label} games since {since} · tips need {MIN_GROUP_GAMES}+ games · "
+        f"`!analyze {command_name}{months_arg} {other}{role_arg}` for {other_label} · "
+        "add 1-12 for months or a role"
     )
     return [header, *overview, f"**Strengths**\n{strengths}", f"**Work on**\n{tips}", footer]
 

@@ -51,7 +51,7 @@ def games_with(wins, losses, **kwargs):
     return [game(start - i, result, **kwargs) for i, result in enumerate(results)]
 
 
-def analyze(games, *, queue="solo", baselines=None, names=None, months=12):
+def analyze(games, *, queue="solo", baselines=None, names=None, months=12, role=None):
     # The rule tests spread games over a year; the 3-month default has its own tests.
     return analyze_player(
         riot_id="NoxVain#EUW",
@@ -63,25 +63,46 @@ def analyze(games, *, queue="solo", baselines=None, names=None, months=12):
         tz=UTC,
         day_start_hour=6,
         months=months,
+        role=role,
     )
 
 
 def test_parse_analyze_args_takes_optional_months_and_queue():
-    assert parse_analyze_args("Not a snake flex") == ("Not a snake", "flex", 3)
-    assert parse_analyze_args("NoxVain#EUW SOLO") == ("NoxVain#EUW", "solo", 3)
-    assert parse_analyze_args("NoxVain") == ("NoxVain", "solo", 3)
-    assert parse_analyze_args("NoxVain 6 flex") == ("NoxVain", "flex", 6)
-    assert parse_analyze_args("NoxVain flex 12") == ("NoxVain", "flex", 12)
+    assert parse_analyze_args("Not a snake flex") == ("Not a snake", "flex", 3, None)
+    assert parse_analyze_args("NoxVain#EUW SOLO") == ("NoxVain#EUW", "solo", 3, None)
+    assert parse_analyze_args("NoxVain") == ("NoxVain", "solo", 3, None)
+    assert parse_analyze_args("NoxVain 6 flex") == ("NoxVain", "flex", 6, None)
+    assert parse_analyze_args("NoxVain flex 12") == ("NoxVain", "flex", 12, None)
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("NoxVain mid", ("NoxVain", "solo", 3, "MIDDLE")),
+    ("NoxVain 6 flex Jungle", ("NoxVain", "flex", 6, "JUNGLE")),
+    ("NoxVain jg 12", ("NoxVain", "solo", 12, "JUNGLE")),
+    ("NoxVain ADC flex", ("NoxVain", "flex", 3, "BOTTOM")),
+    ("NoxVain bot", ("NoxVain", "solo", 3, "BOTTOM")),
+    ("NoxVain supp", ("NoxVain", "solo", 3, "UTILITY")),
+    ("Not a snake top 6", ("Not a snake", "solo", 6, "TOP")),
+])
+def test_parse_analyze_args_takes_an_optional_role_in_any_order(raw, expected):
+    assert parse_analyze_args(raw) == expected
 
 
 def test_parse_analyze_args_keeps_tracked_names_that_end_in_a_number():
     tracked = [("Player 2#EUW", "p2")]
-    assert parse_analyze_args("Player 2", tracked) == ("Player 2", "solo", 3)
-    assert parse_analyze_args("player 2 6", tracked) == ("player 2", "solo", 6)
-    assert parse_analyze_args("Player 2#EUW flex", tracked) == ("Player 2#EUW", "flex", 3)
+    assert parse_analyze_args("Player 2", tracked) == ("Player 2", "solo", 3, None)
+    assert parse_analyze_args("player 2 6", tracked) == ("player 2", "solo", 6, None)
+    assert parse_analyze_args("Player 2#EUW flex", tracked) == ("Player 2#EUW", "flex", 3, None)
+    assert parse_analyze_args("Player 2 6 flex mid", tracked) == ("Player 2", "flex", 6, "MIDDLE")
 
 
-@pytest.mark.parametrize("raw", ["NoxVain 0", "NoxVain 13", "NoxVain 2.5", "NoxVain -1", "NoxVain 3 6"])
+def test_parse_analyze_args_keeps_tracked_names_that_end_in_a_role_word():
+    tracked = [("Mister Top#EUW", "top")]
+    assert parse_analyze_args("Mister Top", tracked) == ("Mister Top", "solo", 3, None)
+    assert parse_analyze_args("Mister Top mid", tracked) == ("Mister Top", "solo", 3, "MIDDLE")
+
+
+@pytest.mark.parametrize("raw", ["NoxVain 0", "NoxVain 13", "NoxVain 2.5", "NoxVain -1", "NoxVain 3 6", "NoxVain mid top"])
 def test_parse_analyze_args_rejects_bad_month_counts(raw):
     with pytest.raises(ValueError):
         parse_analyze_args(raw)
@@ -275,7 +296,46 @@ def test_sections_header_footer_and_escaping():
     assert strengths == "**Strengths**\nNothing stands out yet."
     assert tips == "**Work on**\nNo clear weak spots in these games."
     assert footer.startswith("-# Solo/Duo games since 31 Dec 2025 · tips need 10+ games · ")
-    assert footer.splitlines()[0].endswith("`!analyze xX\\_snake\\_Xx 12 flex` for Flex · add 1-12 for months")
+    assert footer.splitlines()[0].endswith("`!analyze xX\\_snake\\_Xx 12 flex` for Flex · add 1-12 for months or a role")
+
+
+def test_role_keeps_only_that_roles_games_everywhere_on_the_card():
+    games = (
+        games_with(16, 4, champion="Ahri", role="MIDDLE")
+        + games_with(2, 10, champion="Garen", role="TOP", start_days_ago=200)
+        + games_with(5, 5, champion="Ahri", role="MIDDLE", queue=440)
+    )
+
+    everything = analyze(games)
+    mid = analyze(games, role="MIDDLE")
+
+    # Without a role, the weak top games show up as an off-role tip.
+    assert everything.games == 32 and any(tip.startswith("Stay on mid") for tip in everything.tips)
+    assert mid.role == "MIDDLE" and (mid.games, mid.wins) == (20, 16)
+    assert (mid.other_queue_games, mid.other_queue_wins) == (10, 5)
+    assert "Mid · 20/20 games" in mid.profile and "Garen" not in format_analysis_text(mid)
+    assert not any(tip.startswith("Stay on") for tip in mid.tips)
+    header, *_rest, footer = format_analysis_sections(mid)
+    assert header.startswith("**NoxVain#EUW** · Mid Solo/Duo analysis\n-# Last 12 months · Solo/Duo 16W-4L (80%) · Flex 5W-5L (50%)")
+    assert footer.startswith("-# Mid Solo/Duo games since ")
+    assert footer.endswith("`!analyze NoxVain 12 flex mid` for Flex · add 1-12 for months or a role")
+
+
+def test_too_few_games_in_a_role_keeps_the_role_in_suggestions():
+    recent = {"start_days_ago": 100}
+    games = (
+        games_with(16, 4, role="MIDDLE", **recent)
+        + games_with(3, 2, role="TOP", **recent)
+        + games_with(12, 13, role="TOP", queue=440, **recent)
+    )
+
+    body = format_analysis_sections(analyze(games, months=6, role="TOP"))[-1]
+
+    assert body == (
+        "Not enough Top Solo/Duo games to analyze yet: 5 in the last 6 months, 20 needed. "
+        "Try `!analyze NoxVain 6 flex top`. Or look further back: `!analyze NoxVain 12 top`. "
+        "Or every role: `!analyze NoxVain 6`."
+    )
 
 
 def test_header_without_other_queue_games():
@@ -405,7 +465,17 @@ def test_analyze_command_sends_card_for_tracked_player():
     three_months = datetime(2026, 7, 27, 12, tzinfo=UTC)
     assert calls == [("rows", "nox", three_months, NOW), ("totals", 440, three_months, NOW)]
     assert len(channel.sent) == 1 and channel.sent[0].startswith("**NoxVain#EUW** · Flex analysis")
-    assert logs[-1] == "[analyze] Sent flex analysis for NoxVain#EUW: months=3 games=0 strengths=0 tips=0 profile=False."
+    assert logs[-1] == "[analyze] Sent flex analysis for NoxVain#EUW: months=3 role=all games=0 strengths=0 tips=0 profile=False."
+
+
+def test_analyze_command_takes_a_role():
+    rows = default_rows() + games_with(4, 8, champion="Ahri", role="MIDDLE", start_days_ago=150)
+    logs = []
+    channel, _calls = run_command("!analyze NoxVain 12 mid", rows=rows, logs=logs)
+
+    assert channel.sent[0].startswith("**NoxVain#EUW** · Mid Solo/Duo analysis")
+    assert "Zyra" not in channel.sent[0]
+    assert logs[-1].startswith("[analyze] Sent solo analysis for NoxVain#EUW: months=12 role=mid games=12 ")
 
 
 def test_analyze_command_takes_a_month_count_and_rejects_bad_ones():
@@ -432,7 +502,8 @@ def test_analyze_falls_back_to_plain_text_when_card_is_rejected():
 
 
 @pytest.mark.parametrize("content, expected", [
-    ("!analyze", "Usage: `!analyze Name#Tag [months] [solo|flex]` (last 3 months of Solo/Duo unless you say otherwise; 1-12 months)."),
+    ("!analyze", "Usage: `!analyze Name#Tag [months] [solo|flex] [role]` (last 3 months of Solo/Duo in every role "
+                 "unless you say otherwise; 1-12 months; role is top, jungle, mid, adc or support)."),
     ("!analyze Pending", "`Pending` isn't a tracked player."),
     ("!analyze Nobody#EUW solo", "`Nobody#EUW` isn't a tracked player."),
 ])
@@ -464,7 +535,8 @@ def test_analyze_routing_and_help():
         assert is_supported_command(content)
         assert command_channel_id(content, daily_channel_id=1, weekly_channel_id=2, events_channel_id=3) == 3
     help_text = format_help_text(report_day_start_hour=6, daily_channel_id=1, weekly_channel_id=2, events_channel_id=3)
-    assert "`!analyze Name#Tag [months] [solo|flex]`" in help_text
+    assert "`!analyze Name#Tag [months] [solo|flex] [role]`" in help_text
+    assert "`top`, `jungle`, `mid`, `adc` or `support`" in help_text
 
 
 def test_db_analysis_queries_map_rows(monkeypatch):

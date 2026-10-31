@@ -36,7 +36,8 @@ _counter = iter(range(1, 1_000_000))
 
 
 def game(riot_id, *, day=10, hour=20, queue=420, win=True, champion="Lux", kills=5, deaths=3, assists=8, minutes=30,
-         position="UTILITY", pings=5, dead=120, mates=(), placement=None, match_id=None, damage=20000, vision=30):
+         position="UTILITY", pings=5, dead=120, mates=(), placement=None, match_id=None, damage=20000, vision=30,
+         pinks=None):
     n = next(_counter)
     end = datetime(YEAR, 3, 1, hour, tzinfo=OSLO) + timedelta(days=day, minutes=minutes)
     return {
@@ -66,6 +67,7 @@ def game(riot_id, *, day=10, hour=20, queue=420, win=True, champion="Lux", kills
         "time_dead_seconds": dead,
         "tracked_teammates": [mate.split("#")[0].lower() for mate in mates],
         "arena_placement": placement,
+        "control_wards_placed": pinks,
     }
 
 
@@ -150,6 +152,40 @@ def test_awards_pick_holders_and_mark_all_mode_awards():
     assert awards["Dream Duo"].holder == "Duo#EUW + Pair#EUW"
     assert awards["Cursed Duo"].holder == "Fizz#EUW + Pair#EUW" and awards["Cursed Duo"].text == "4-21 together"
     assert awards["Worst Day"].holder == "Pair#EUW" and "losses on" in awards["Worst Day"].text
+
+
+def test_pink_ward_patron_and_fog_of_war_enthusiast():
+    rows = [game("Patron#EUW", day=i, pinks=3) for i in range(MIN_AWARD_GAMES)]
+    rows += [game("Middle#EUW", day=i, pinks=1) for i in range(MIN_AWARD_GAMES)]
+    # Foggy plays a lot and rarely places one: 48 of 60 games without a pink (0.2 a game).
+    rows += [game("Foggy#EUW", day=i, pinks=0 if i % 5 else 1) for i in range(MIN_AWARD_GAMES * 3)]
+    # Rare has the lowest rate (none at all) but fewer pinkless games, so Foggy wins.
+    rows += [game("Rare#EUW", day=i, pinks=0) for i in range(MIN_AWARD_GAMES + 5)]
+    # Older games without a stored count don't drag anyone's average down.
+    rows += [game("Patron#EUW", day=100 + i) for i in range(30)]
+    awards = {award.title: award for award in compute_awards(year_of(rows))}
+    assert awards["Pink Ward Patron"].holder == "Patron#EUW"
+    assert awards["Pink Ward Patron"].text == "3.0 pink wards a game"
+    assert awards["Pink Ward Patron"].banter == "Every bush on the map is under your management."
+    assert awards["Fog of War Enthusiast"].holder == "Foggy#EUW"
+    assert awards["Fog of War Enthusiast"].text == "48 ranked games without a pink ward"
+    assert awards["Fog of War Enthusiast"].banter == "Pink wards? Never heard of them."
+
+
+def test_fog_of_war_needs_a_low_rate_not_just_volume():
+    # Busy skips a pink in 30 of 60 games but places 1.5 a game overall: not a fog enthusiast.
+    rows = [game("Busy#EUW", day=i, pinks=0 if i % 2 else 3) for i in range(MIN_AWARD_GAMES * 3)]
+    rows += [game("Rare#EUW", day=i, pinks=0) for i in range(MIN_AWARD_GAMES)]
+    awards = {award.title: award for award in compute_awards(year_of(rows))}
+    assert awards["Fog of War Enthusiast"].holder == "Rare#EUW"
+    assert awards["Fog of War Enthusiast"].text == "20 ranked games without a pink ward"
+
+
+def test_no_fog_of_war_award_when_everyone_buys_pinks():
+    rows = [game("A#EUW", day=i, pinks=2) for i in range(MIN_AWARD_GAMES)]
+    rows += [game("B#EUW", day=i, pinks=1) for i in range(MIN_AWARD_GAMES)]
+    titles = [award.title for award in compute_awards(year_of(rows))]
+    assert "Pink Ward Patron" in titles and "Fog of War Enthusiast" not in titles
 
 
 def test_players_under_the_minimum_win_no_awards():

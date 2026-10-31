@@ -20,7 +20,7 @@ from src.report_logic import get_match_duration_seconds, get_match_end_unix_seco
 from src.runtime.memory import release_freed_memory
 
 # Bump when extraction changes, so the next pass rebuilds every row.
-STATS_VERSION = 6
+STATS_VERSION = 7
 STATS_FINGERPRINT_KEY = "player_match_stats_fingerprint"
 STATS_WATERMARK_KEY = "player_match_stats_cached_through"
 # STATS_VERSION of the last completed full pass; until it matches, a rebuild is under way
@@ -81,6 +81,7 @@ STATS_COLUMNS = (
     "killing_spree",
     "enemy_jungle_camps",
     "buffs_stolen",
+    "control_wards_placed",
 )
 
 
@@ -228,6 +229,8 @@ def extract_player_match_rows(payload, tracked_puuids):
             # Counter-jungling: camps taken on the enemy side, and enemy red/blue buffs.
             "enemy_jungle_camps": _int(me.get("totalEnemyJungleMinionsKilled")),
             "buffs_stolen": _int(challenges.get("buffsStolen")),
+            # Pink wards placed (control_wards_bought counts the ones bought).
+            "control_wards_placed": _int(me.get("detectorWardsPlaced")),
         })
     return rows
 

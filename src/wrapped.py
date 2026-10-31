@@ -34,6 +34,8 @@ MIN_MODE_RATE_GAMES = 10
 # Only a top-5 place in the group makes a personal "Highs" line.
 MAX_HIGH_RANK = 5
 NIGHT_END_HOUR = 5
+# The shame award only goes to someone who really skips pink wards.
+FOG_MAX_PINKS_PER_GAME = 0.5
 WRAPPED_CHECK_SECONDS = 600
 WRAPPED_STARTUP_DELAY_SECONDS = 900
 # Discord allows 4,000 characters of text per message; leave room for separators.
@@ -142,6 +144,14 @@ class _PlayerYear:
     night_games: int = 0
     pings: int = 0
     dead_seconds: int = 0
+    # Ranked games with a pink ward count stored, and the pink wards placed in them.
+    pink_games: int = 0
+    pink_wards: int = 0
+    pinkless_games: int = 0
+
+    @property
+    def pinks_per_game(self):
+        return self.pink_wards / self.pink_games if self.pink_games else None
 
     def mode(self, name):
         return self.modes.setdefault(name, _ModeTotals())
@@ -203,6 +213,10 @@ class WrappedYear:
             player.ranked_loss_days[local_end.date()] += 1
         player.pings += int(row.get("pings") or 0)
         player.dead_seconds += int(row.get("time_dead_seconds") or 0)
+        if row.get("control_wards_placed") is not None:
+            player.pink_games += 1
+            player.pink_wards += int(row["control_wards_placed"])
+            player.pinkless_games += int(row["control_wards_placed"] == 0)
         mine = row.get("puuid")
         for mate in row.get("tracked_teammates") or []:
             if mine and mate and mine < mate:
@@ -348,6 +362,26 @@ def compute_awards(wrapped):
         awards.append(Award(
             "Grey Screen Enjoyer", player.riot_id, f"{hours:,} hours spent dead",
             f"That's {value / 86400:.1f} days of watching your teammates play." if hours >= 24 else None,
+        ))
+    # Pink wards: per ranked game, among players with enough games that have a count stored.
+    pinks = sorted(
+        (p for p in ranked if p.pink_games >= MIN_AWARD_GAMES),
+        key=lambda p: (-p.pinks_per_game, -p.pink_games, p.riot_id.casefold()),
+    )
+    if pinks and pinks[0].pinks_per_game > 0:
+        patron = pinks[0]
+        awards.append(Award(
+            "Pink Ward Patron", patron.riot_id, f"{patron.pinks_per_game:.1f} pink wards a game",
+            "Every bush on the map is under your management." if patron.pinks_per_game >= 2 else None,
+        ))
+    # The most ranked games without a single pink ward, among players who rarely place one at all,
+    # so a heavy player who places one most games can't win it on volume alone.
+    foggy = [p for p in pinks if p.pinks_per_game < FOG_MAX_PINKS_PER_GAME and p.pinkless_games]
+    if foggy:
+        fog = min(foggy, key=lambda p: (-p.pinkless_games, p.pinks_per_game, p.riot_id.casefold()))
+        awards.append(Award(
+            "Fog of War Enthusiast", fog.riot_id, f"{fog.pinkless_games:,} ranked games without a pink ward",
+            "Pink wards? Never heard of them.",
         ))
     best = _max_award(everyone, lambda p: p.night_games)
     if best:

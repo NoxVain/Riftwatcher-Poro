@@ -147,6 +147,7 @@ class _PlayerYear:
     # Ranked games with a pink ward count stored, and the pink wards placed in them.
     pink_games: int = 0
     pink_wards: int = 0
+    pinkless_games: int = 0
 
     @property
     def pinks_per_game(self):
@@ -215,6 +216,7 @@ class WrappedYear:
         if row.get("control_wards_placed") is not None:
             player.pink_games += 1
             player.pink_wards += int(row["control_wards_placed"])
+            player.pinkless_games += int(row["control_wards_placed"] == 0)
         mine = row.get("puuid")
         for mate in row.get("tracked_teammates") or []:
             if mine and mate and mine < mate:
@@ -372,13 +374,15 @@ def compute_awards(wrapped):
             "Pink Ward Patron", patron.riot_id, f"{patron.pinks_per_game:.1f} pink wards a game",
             "Every bush on the map is under your management." if patron.pinks_per_game >= 2 else None,
         ))
-    if len(pinks) > 1:
-        lowest = min(pinks, key=lambda p: (p.pinks_per_game, -p.pink_games, p.riot_id.casefold()))
-        if lowest.pinks_per_game < FOG_MAX_PINKS_PER_GAME:
-            awards.append(Award(
-                "Fog of War Enthusiast", lowest.riot_id, f"{lowest.pinks_per_game:.1f} pink wards a game",
-                "Pink wards? Never heard of them.",
-            ))
+    # The most ranked games without a single pink ward, among players who rarely place one at all,
+    # so a heavy player who places one most games can't win it on volume alone.
+    foggy = [p for p in pinks if p.pinks_per_game < FOG_MAX_PINKS_PER_GAME and p.pinkless_games]
+    if foggy:
+        fog = min(foggy, key=lambda p: (-p.pinkless_games, p.pinks_per_game, p.riot_id.casefold()))
+        awards.append(Award(
+            "Fog of War Enthusiast", fog.riot_id, f"{fog.pinkless_games:,} ranked games without a pink ward",
+            "Pink wards? Never heard of them.",
+        ))
     best = _max_award(everyone, lambda p: p.night_games)
     if best:
         value, player = best

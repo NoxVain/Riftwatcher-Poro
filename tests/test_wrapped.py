@@ -157,7 +157,10 @@ def test_awards_pick_holders_and_mark_all_mode_awards():
 def test_pink_ward_patron_and_fog_of_war_enthusiast():
     rows = [game("Patron#EUW", day=i, pinks=3) for i in range(MIN_AWARD_GAMES)]
     rows += [game("Middle#EUW", day=i, pinks=1) for i in range(MIN_AWARD_GAMES)]
-    rows += [game("Foggy#EUW", day=i, pinks=0 if i % 5 else 1) for i in range(MIN_AWARD_GAMES)]
+    # Foggy plays a lot and rarely places one: 48 of 60 games without a pink (0.2 a game).
+    rows += [game("Foggy#EUW", day=i, pinks=0 if i % 5 else 1) for i in range(MIN_AWARD_GAMES * 3)]
+    # Rare has the lowest rate (none at all) but fewer pinkless games, so Foggy wins.
+    rows += [game("Rare#EUW", day=i, pinks=0) for i in range(MIN_AWARD_GAMES + 5)]
     # Older games without a stored count don't drag anyone's average down.
     rows += [game("Patron#EUW", day=100 + i) for i in range(30)]
     awards = {award.title: award for award in compute_awards(year_of(rows))}
@@ -165,8 +168,17 @@ def test_pink_ward_patron_and_fog_of_war_enthusiast():
     assert awards["Pink Ward Patron"].text == "3.0 pink wards a game"
     assert awards["Pink Ward Patron"].banter == "Every bush on the map is under your management."
     assert awards["Fog of War Enthusiast"].holder == "Foggy#EUW"
-    assert awards["Fog of War Enthusiast"].text == "0.2 pink wards a game"
+    assert awards["Fog of War Enthusiast"].text == "48 ranked games without a pink ward"
     assert awards["Fog of War Enthusiast"].banter == "Pink wards? Never heard of them."
+
+
+def test_fog_of_war_needs_a_low_rate_not_just_volume():
+    # Busy skips a pink in 30 of 60 games but places 1.5 a game overall: not a fog enthusiast.
+    rows = [game("Busy#EUW", day=i, pinks=0 if i % 2 else 3) for i in range(MIN_AWARD_GAMES * 3)]
+    rows += [game("Rare#EUW", day=i, pinks=0) for i in range(MIN_AWARD_GAMES)]
+    awards = {award.title: award for award in compute_awards(year_of(rows))}
+    assert awards["Fog of War Enthusiast"].holder == "Rare#EUW"
+    assert awards["Fog of War Enthusiast"].text == "20 ranked games without a pink ward"
 
 
 def test_no_fog_of_war_award_when_everyone_buys_pinks():

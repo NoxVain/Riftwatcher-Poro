@@ -107,18 +107,19 @@ def test_modes_unique_matches_and_night_games():
     wrapped = year_of([
         game("Nox#EUW", match_id=shared, mates=["Tam#EUW"]),
         game("Tam#EUW", match_id=shared, mates=["Nox#EUW"]),
-        game("Nox#EUW", queue=450, hour=1),  # ARAM, started after midnight
+        game("Nox#EUW", queue=450, hour=1),  # ARAM after midnight: not a night game, ranked only
+        game("Nox#EUW", hour=2),  # ranked, started after midnight
         game("Nox#EUW", queue=1750, placement=1),
         game("Nox#EUW", queue=400),
     ])
     nox = wrapped.players["Nox#EUW"]
     assert set(nox.modes) == {"ranked", "aram", "arena", "other"}
-    assert len(wrapped.matches) == 4
+    assert len(wrapped.matches) == 5
     assert nox.night_games == 1
     assert nox.modes["arena"].firsts == 1
     assert list(wrapped.duos.values()) == [[1, 1]]
     # Only ranked games feed the year's records.
-    assert wrapped.book.games == 2
+    assert wrapped.book.games == 3
 
 
 def _awards_year():
@@ -146,12 +147,30 @@ def test_awards_pick_holders_and_mark_all_mode_awards():
     assert awards["Backseat Gamer of the Year"].text == "800 pings, 40 a game"
     assert awards["Backseat Gamer of the Year"].banter
     assert awards["Grey Screen Enjoyer"].holder == "Pair#EUW"
-    assert awards["Night Owl"].holder == "Pair#EUW" and awards["Night Owl"].text.startswith("25 games")
+    assert awards["Night Owl"].holder == "Pair#EUW"
+    assert awards["Night Owl"].text == "25 ranked games started between midnight and 5"
+    assert not awards["Night Owl"].all_modes
     assert awards["One-Trick Pony"].holder == "Fizz#EUW"
-    assert awards["Champion Ocean"].holder == "Grind#EUW"
+    # Grind has 40 champions across all modes but only 20 in ranked; Duo has 25 in ranked.
+    assert awards["Champion Ocean"].holder == "Duo#EUW"
+    assert awards["Champion Ocean"].text == "25 different champions in ranked"
+    assert not awards["Champion Ocean"].all_modes
     assert awards["Dream Duo"].holder == "Duo#EUW + Pair#EUW"
     assert awards["Cursed Duo"].holder == "Fizz#EUW + Pair#EUW" and awards["Cursed Duo"].text == "4-21 together"
     assert awards["Worst Day"].holder == "Pair#EUW" and "losses on" in awards["Worst Day"].text
+
+
+def test_night_owl_ignores_other_modes():
+    # Aram plays 30 ARAM games after midnight; Owl only 20 ranked ones.
+    rows = [game("Aram#EUW", day=i, queue=450, hour=1) for i in range(30)]
+    rows += [game("Aram#EUW", day=i) for i in range(MIN_AWARD_GAMES)]
+    rows += [game("Owl#EUW", day=i, hour=2) for i in range(MIN_AWARD_GAMES)]
+    awards = {award.title: award for award in compute_awards(year_of(rows))}
+    assert awards["Night Owl"].holder == "Owl#EUW" and awards["Night Owl"].text.startswith("20 ranked games")
+    # The personal title follows: late ARAM doesn't make a Night Owl.
+    wrapped = year_of(rows)
+    assert format_personal_sections(wrapped, "Owl#EUW")[-1].startswith("Your title: **The Night Owl**")
+    assert "Night Owl" not in format_personal_sections(wrapped, "Aram#EUW")[-1]
 
 
 def test_pink_ward_patron_and_fog_of_war_enthusiast():

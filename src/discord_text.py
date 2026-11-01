@@ -202,7 +202,8 @@ def format_recap_role(participant):
         "UTILITY": "Support",
         "SUPPORT": "Support",
     }
-    return role_labels.get(role_key, "Unknown Role")
+    # ARAM and other modes without lanes have no position; the heading then skips the role.
+    return role_labels.get(role_key)
 
 
 def get_arena_placement(participant):
@@ -325,14 +326,15 @@ def format_recap_player_line(
     # The card edge shows a shared win/loss; only mixed games name each player's result.
     result_text = f" \u00B7 **{'Win' if won else 'Loss'}**" if show_result else ""
     role_name = format_recap_role(participant)
-    cs = int(participant.get("totalMinionsKilled", 0) or 0) + int(participant.get("neutralMinionsKilled", 0) or 0)
+    role_text = f" {role_name}" if role_name else ""
+    cs =int(participant.get("totalMinionsKilled", 0) or 0) + int(participant.get("neutralMinionsKilled", 0) or 0)
     minutes = max(1.0, float(match_duration_seconds) / 60.0)
     cs_per_min = cs / minutes
     objective_damage = int(participant.get("damageDealtToObjectives", 0) or 0)
     vision_score = int(participant.get("visionScore", 0) or 0)
     # The first line is the player's heading: LP is appended to it later (recap_lp).
     return (
-        f"**{lol_name}** \u00B7 {champion_display} {role_name}{result_text}\n"
+        f"**{lol_name}** \u00B7 {champion_display}{role_text}{result_text}\n"
         f"**{kills}/{deaths}/{assists}** KDA \u00B7 **{cs_per_min:.1f}** CS/min \u00B7 **{vision_score}** Vision\n"
         f"Damage **{player_damage:,}** \u00B7 Objectives **{objective_damage:,}**\n"
         f"Taken **{damage_taken:,}** \u00B7 Healing **{healing:,}**"

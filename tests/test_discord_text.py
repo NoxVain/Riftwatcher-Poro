@@ -195,3 +195,16 @@ def test_format_recap_player_line_names_result_only_when_asked():
     assert plain.split("\n")[0] == "**Alpha** · **Ahri** Mid"
     assert mixed.split("\n")[0] == "**Alpha** · **Ahri** Mid · **Loss**"
     assert "✅" not in plain + mixed and "❌" not in plain + mixed
+
+
+def test_format_recap_player_line_skips_the_role_in_modes_without_lanes():
+    # ARAM: Riot leaves teamPosition empty and individualPosition "Invalid".
+    aram = {"win": True, "championName": "Lux", "teamPosition": "", "individualPosition": "Invalid",
+            "lane": "NONE", "role": "NONE"}
+
+    line = format_recap_player_line("Alpha#NA1", aram, 1200, queue_id=450)
+    mixed = format_recap_player_line("Alpha#NA1", aram, 1200, queue_id=450, show_result=True)
+
+    assert line.split("\n")[0] == "**Alpha** · **Lux**"
+    assert mixed.split("\n")[0] == "**Alpha** · **Lux** · **Win**"
+    assert "Unknown" not in line + mixed

@@ -141,6 +141,7 @@ class _PlayerYear:
     roles: Counter = field(default_factory=Counter)
     days: Counter = field(default_factory=Counter)
     ranked_loss_days: Counter = field(default_factory=Counter)
+    # Ranked games started between midnight and NIGHT_END_HOUR.
     night_games: int = 0
     pings: int = 0
     dead_seconds: int = 0
@@ -201,12 +202,12 @@ class WrappedYear:
         duration = int(row.get("duration_seconds") or 0)
         local_end = end.astimezone(self.tz)
         player.days[local_end.date()] += 1
-        if (end - timedelta(seconds=duration)).astimezone(self.tz).hour < NIGHT_END_HOUR:
-            player.night_games += 1
         self.matches.setdefault(row.get("match_id"), (mode, duration))
         if mode != RANKED:
             return
         self.book.add(row)
+        if (end - timedelta(seconds=duration)).astimezone(self.tz).hour < NIGHT_END_HOUR:
+            player.night_games += 1
         if row.get("team_position"):
             player.roles[row["team_position"]] += 1
         if not row.get("win"):
@@ -383,13 +384,13 @@ def compute_awards(wrapped):
             "Fog of War Enthusiast", fog.riot_id, f"{fog.pinkless_games:,} ranked games without a pink ward",
             "Pink wards? Never heard of them.",
         ))
-    best = _max_award(everyone, lambda p: p.night_games)
+    best = _max_award(ranked, lambda p: p.night_games)
     if best:
         value, player = best
         awards.append(Award(
-            "Night Owl", player.riot_id, f"{_plural(value, 'game')} started between midnight and {NIGHT_END_HOUR}",
+            "Night Owl", player.riot_id,
+            f"{_plural(value, 'ranked game')} started between midnight and {NIGHT_END_HOUR}",
             "The poros were asleep. You were not." if value >= 20 else None,
-            all_modes=True,
         ))
 
     def top_share(player):
@@ -404,13 +405,12 @@ def compute_awards(wrapped):
             "One-Trick Pony", player.riot_id, f"{champ} in {games} of {player.ranked.games} ranked games",
             f"{champ} has asked for some time apart." if games / player.ranked.games >= 0.25 else None,
         ))
-    best = _max_award(everyone, lambda p: len(p.champions))
+    best = _max_award(ranked, lambda p: len(p.ranked.champions))
     if best:
         value, player = best
         awards.append(Award(
-            "Champion Ocean", player.riot_id, f"{value} different champions",
+            "Champion Ocean", player.riot_id, f"{value} different champions in ranked",
             "Main role: yes." if value >= 80 else None,
-            all_modes=True,
         ))
     duos = wrapped.duo_list()
     if duos:
@@ -598,7 +598,7 @@ def _main_label(player):
 
 def _title(player):
     ranked = player.ranked
-    if player.games and player.night_games / player.games >= 0.15:
+    if ranked.games >= MIN_MODE_RATE_GAMES and player.night_games / ranked.games >= 0.15:
         return "The Night Owl"
     top = ranked.top_champions(1)
     if ranked.games >= MIN_AWARD_GAMES and top and top[0][1][0] / ranked.games >= 0.25:

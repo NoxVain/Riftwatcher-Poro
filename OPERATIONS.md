@@ -225,7 +225,7 @@ GROUP BY 1 ORDER BY 2 DESC;
 
 ## Records
 
-`!records` and `!records Name` (alias `!record`; commands channel, anyone can run them) read all ranked rows (Solo/Duo, Flex, ranked 5v5; no remakes) from `player_match_stats` in pages of 1,000 and log `[records] Sent group records: games=… matches=…` or `[records] Sent personal bests for <riot id>: games=… matches=…` (`games` counts player-games, `matches` unique matches).
+`!records` and `!records Name` (alias `!record`; commands channel, anyone can run them) read all ranked rows (Solo/Duo, Flex, ranked 5v5; no remakes) from `player_match_stats` in pages of 1,000 and log `[records] Sent group records: games=… matches=…` or `[records] Sent personal records for <riot id>: games=… matches=…` (`games` counts player-games, `matches` unique matches).
 
 Recaps of ranked games check for new group records and personal bests before posting:
 
@@ -233,7 +233,7 @@ Recaps of ranked games check for new group records and personal bests before pos
 - A failure or a check slower than 10 seconds logs `[records] Record check skipped; recap posts without it: …` and the recap goes out without record or personal-best lines. While the stats table rebuilds after a `STATS_VERSION` bump (about 140 s after the deploy), the reason is `player_match_stats is rebuilding (built v<old>, need v<new>)`.
 - The worker then stores the recap's ranked games in `player_match_stats`; if that fails it logs `[records] Could not store recap games …` and the stats sync adds them on its next pass.
 - No record lines are posted while fewer than 200 ranked games are stored (fresh install), and no personal-best lines for a player with fewer than 50 stored ranked games.
-- Personal bests cover the Best categories of `!records Name` (kills, kills in a row, damage, solo kills, CS, CS/min, vision, pink wards, assists) and are skipped where the same game set the group record.
+- Personal bests cover the categories marked `personal="best"` in `src/records.py` (kills, kills in a row, damage, solo kills, assists, CS, CS/min, objective damage, vision, wards placed, wards cleared, pink wards) and are skipped where the same game set the group record. `!records Name` shows every category, but only these get recap lines.
 - A replay of the 12 months to 2026-10-27 gave 8 recaps with record lines (13 lines) out of 3,412 ranked matches. A replay of the year to 2026-10-28 gave 75 personal-best lines in 70 recaps (at most 4 in one recap), about 6 a month.
 
 Pentakills come from the `penta_kills` column, added with `STATS_VERSION` 2. The first stats pass after that deploy rebuilds every row (140 s in production on 2026-10-27); until it finishes, the pentakill line is missing from `!records`. Kills in a row come from `killing_spree` (`STATS_VERSION` 4, 2026-10-29) and are missing from `!records` until that rebuild finishes. The enemy jungle minions and buffs stolen records (in "Farm and objectives") come from `enemy_jungle_camps` and `buffs_stolen` (`STATS_VERSION` 5) the same way, and pink wards from `control_wards_placed` (`STATS_VERSION` 7, 2026-10-31): until that rebuild finishes, the pink wards record and Wrapped's pink-ward awards are missing. Objective damage comes from `objective_damage` (`STATS_VERSION` 8, 2026-11-01) and is missing from `!records` until that rebuild finishes.

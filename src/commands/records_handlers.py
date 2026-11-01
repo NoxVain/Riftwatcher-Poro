@@ -1,4 +1,4 @@
-"""`!records [Name#Tag]`: the group's Hall of Fame, or one player's personal bests.
+"""`!records [Name#Tag]`: the group's Hall of Fame, or one player's personal records.
 
 Read-only: pages through ranked rows in `player_match_stats` (src/records.py), so it
 needs no Riot requests.
@@ -54,5 +54,5 @@ async def handle_records_commands(ctx):
         ctx.log(f"[records] Discord rejected the records card (HTTP {getattr(exc, 'status', '?')}); sending it as plain text.")
         for chunk in split_message_text("\n\n".join(sections)):
             await channel.send(chunk)
-    ctx.log(f"[records] Sent {'personal bests for ' + riot_id if riot_id else 'group records'}: games={book.games} matches={len(book.match_ids)}.")
+    ctx.log(f"[records] Sent {'personal records for ' + riot_id if riot_id else 'group records'}: games={book.games} matches={len(book.match_ids)}.")
     return True

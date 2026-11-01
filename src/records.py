@@ -1,11 +1,11 @@
-"""Hall of Fame: group records and personal bests from ranked games.
+"""Hall of Fame: group records, personal records and personal bests from ranked games.
 
 Pure logic over `player_match_stats` rows (see src/match_stats.py); no Discord, Riot or
 DB access. Only ranked games count (Solo/Duo, Flex and ranked 5v5), remakes excluded.
 
 `RecordBook` reads rows in game order and keeps each player's best per category,
 their ranked streaks and career totals. The same book drives `!records` (group card),
-`!records Name` (personal bests) and the "New group record" and "Personal best" lines
+`!records Name` (personal records) and the "New group record" and "Personal best" lines
 in match recaps.
 """
 
@@ -43,7 +43,7 @@ class RecordCategory:
     # Row -> value, or None when the game doesn't qualify for this category.
     value: object
     text: object = _int_text
-    # Shown on `!records Name`; "best" or "worst" section, or None to leave it out.
+    # "best": recap "Personal best" lines and Wrapped highs use it; "worst" or None: they don't.
     personal: str | None = None
     # Label for a value of exactly 1 ("1 kill"); None when the label reads the same.
     singular: str | None = None
@@ -256,7 +256,7 @@ def detect_record_breaks(book, matches):
     `matches` is [(match_id, [row, ...])] oldest first; each row is a stats row with
     `riot_id`. Only a value strictly above the record counts; when several tracked
     players in one game pass it, the best of them takes the record. Personal bests
-    cover the "best" categories of `!records Name`, need MIN_GAMES_FOR_PERSONAL_BESTS
+    cover the categories marked personal="best", need MIN_GAMES_FOR_PERSONAL_BESTS
     earlier ranked games, and are skipped where the same game set the group record.
     Each match is added to the book afterwards, so a later game must beat an earlier one.
     Returns {(match_id, riot_id): [RecordBreak, ...]}, group records first.
@@ -324,30 +324,26 @@ def format_record_break(record_break):
     )
 
 
-def _holder_line(category, holder, *, with_name=True, rank=None):
+def _holder_line(category, holder, *, with_name=True, place=None):
     parts = [f"**{category.text(holder.value)}** {category.label_for(holder.value)}"]
     if with_name:
         parts.append(_name(holder.riot_id))
     if holder.champion:
         parts.append(holder.champion)
     parts.append(_month(holder.at))
-    if rank == 1:
-        parts.append("group record")
-    elif rank in (2, 3):
-        parts.append(f"#{rank} in the group")
+    if place:
+        parts.append(place)
     return " · ".join(parts)
 
 
-def _streak_line(holder, kind, *, with_name=True, rank=None):
+def _streak_line(holder, kind, *, with_name=True, place=None):
     word = "wins" if kind == "win" else "losses"
     parts = [f"**{int(holder.value)}** ranked {word} in a row"]
     if with_name:
         parts.append(_name(holder.riot_id))
     parts.append(_month(holder.at))
-    if rank == 1:
-        parts.append("group record")
-    elif rank in (2, 3):
-        parts.append(f"#{rank} in the group")
+    if place:
+        parts.append(place)
     return " · ".join(parts)
 
 
@@ -355,12 +351,18 @@ def _deathless_text(count):
     return f"**{count:,}** deathless game{'s' if count != 1 else ''}"
 
 
-def _rank_suffix(rank):
+def _place(rank, players, *, holds_record):
+    """"group record", "tied group record" (someone else got there first) or "#4 of 12"."""
     if rank == 1:
-        return " · group record"
-    if rank in (2, 3):
-        return f" · #{rank} in the group"
-    return ""
+        return "group record" if holds_record else "tied group record"
+    return f"#{rank} of {players}"
+
+
+def _career_leader(book, field_name):
+    """The player the group card names for a career total: a tie goes to fewer games."""
+    if field_name == "games":
+        return max(book.careers.items(), key=lambda item: item[1].games)[0]
+    return max(book.careers.items(), key=lambda item: (getattr(item[1], field_name), -item[1].games))[0]
 
 
 def _hours(seconds):
@@ -394,55 +396,76 @@ def format_group_sections(book):
             lines.append(_streak_line(holder, kind))
     total_steals = sum(career.objective_steals for career in book.careers.values())
     if total_steals:
-        name, career = max(book.careers.items(), key=lambda item: (item[1].objective_steals, -item[1].games))
-        lines.append(f"**{career.objective_steals:,}** objective steals · {_name(name)} · group total {total_steals:,}")
+        name = _career_leader(book, "objective_steals")
+        steals = book.careers[name].objective_steals
+        lines.append(f"**{steals:,}** objective steals · {_name(name)} · group total {total_steals:,}")
     total_pentas = sum(career.pentakills for career in book.careers.values())
     if total_pentas:
-        name, career = max(book.careers.items(), key=lambda item: (item[1].pentakills, -item[1].games))
-        lines.append(f"**{career.pentakills}** pentakills · {_name(name)} · group total {total_pentas}")
+        name = _career_leader(book, "pentakills")
+        lines.append(f"**{book.careers[name].pentakills}** pentakills · {_name(name)} · group total {total_pentas}")
     total_deathless = sum(career.deathless for career in book.careers.values())
     if total_deathless:
-        name, career = max(book.careers.items(), key=lambda item: (item[1].deathless, -item[1].games))
-        lines.append(f"{_deathless_text(career.deathless)} · {_name(name)} · group total {total_deathless:,}")
-    name, career = max(book.careers.items(), key=lambda item: item[1].games)
+        name = _career_leader(book, "deathless")
+        lines.append(f"{_deathless_text(book.careers[name].deathless)} · {_name(name)} · group total {total_deathless:,}")
+    name = _career_leader(book, "games")
+    career = book.careers[name]
     lines.append(f"**{career.games:,}** games, {_hours(career.seconds)} hours · {_name(name)}")
     sections.append("**Streaks and career**\n" + "\n".join(lines))
-    sections.append(f"{FOOTER} · `!records Name` for personal bests")
+    sections.append(f"{FOOTER} · `!records Name` for personal records")
     return sections
 
 
 def format_personal_sections(book, riot_id):
-    """Text blocks for one player's personal bests, with their place in the group."""
+    """Text blocks for one player's records, laid out like the Hall of Fame.
+
+    Every line carries the player's place in the group; zero values are hidden.
+    """
     name = _name(riot_id)
     career = book.careers.get(riot_id)
     if career is None:
-        return [f"🏆 **{name}** · personal bests", "No ranked games recorded yet."]
+        return [f"🏆 **{name}** · personal records", "No ranked games recorded yet."]
     header = (
-        f"🏆 **{name}** · personal bests\n"
+        f"🏆 **{name}** · personal records\n"
         f"-# {career.games:,} ranked games · {career.wins:,} wins · since {_month(career.first_at)}"
     )
-    best, worst = [], []
-    for category in CATEGORIES:
-        holder = book.bests.get(category.key, {}).get(riot_id)
-        if category.personal is None or holder is None or not holder.value:
-            continue
-        line = _holder_line(category, holder, with_name=False, rank=book.group_rank(category.key, riot_id))
-        (best if category.personal == "best" else worst).append(line)
-    win_run = book.streaks["win"].get(riot_id)
-    if win_run is not None:
-        best.append(_streak_line(win_run, "win", with_name=False, rank=book.group_rank("win", riot_id)))
-    if career.pentakills:
-        best.append(f"**{career.pentakills}** pentakill{'s' if career.pentakills != 1 else ''}")
-    if career.deathless:
-        best.append(_deathless_text(career.deathless) + _rank_suffix(book.career_rank("deathless", riot_id)))
-    loss_run = book.streaks["loss"].get(riot_id)
-    if loss_run is not None:
-        worst.append(_streak_line(loss_run, "loss", with_name=False, rank=book.group_rank("loss", riot_id)))
     sections = [header]
-    if best:
-        sections.append("**Best**\n" + "\n".join(best))
-    if worst:
-        sections.append("**Worst**\n" + "\n".join(worst))
+    for section in (SECTION_CARRY, SECTION_FARM, SECTION_VISION, SECTION_PAIN):
+        lines = []
+        for category in CATEGORIES:
+            holders = book.bests.get(category.key, {}) if category.section == section else {}
+            holder = holders.get(riot_id)
+            if holder is None or not holder.value:
+                continue
+            place = _place(
+                book.group_rank(category.key, riot_id), len(holders),
+                holds_record=book.record(category.key).riot_id == riot_id,
+            )
+            lines.append(_holder_line(category, holder, with_name=False, place=place))
+        if lines:
+            sections.append(f"**{section}**\n" + "\n".join(lines))
+    lines = []
+    for kind in ("win", "loss"):
+        holder = book.streaks[kind].get(riot_id)
+        if holder is not None:
+            place = _place(
+                book.group_rank(kind, riot_id), len(book.streaks[kind]), holds_record=book.record(kind).riot_id == riot_id
+            )
+            lines.append(_streak_line(holder, kind, with_name=False, place=place))
+    players = len(book.careers)
+
+    def career_place(field_name):
+        return _place(
+            book.career_rank(field_name, riot_id), players, holds_record=_career_leader(book, field_name) == riot_id
+        )
+
+    if career.objective_steals:
+        lines.append(f"**{career.objective_steals:,}** objective steals · {career_place('objective_steals')}")
+    if career.pentakills:
+        lines.append(f"**{career.pentakills}** pentakill{'s' if career.pentakills != 1 else ''} · {career_place('pentakills')}")
+    if career.deathless:
+        lines.append(f"{_deathless_text(career.deathless)} · {career_place('deathless')}")
+    lines.append(f"**{career.games:,}** games, {_hours(career.seconds)} hours · {career_place('games')}")
+    sections.append("**Streaks and career**\n" + "\n".join(lines))
     sections.append(f"{FOOTER} · `!records` for the group")
     return sections
 

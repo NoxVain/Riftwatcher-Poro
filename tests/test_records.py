@@ -9,6 +9,7 @@ import discord
 from src.discord_command_handlers import handle_incoming_message
 from src.match_stats import extract_player_match_rows
 from src.records import (
+    CATEGORIES,
     CATEGORIES_BY_KEY,
     MIN_GAMES_FOR_PERSONAL_BESTS,
     MIN_GAMES_FOR_RECAP_RECORDS,
@@ -241,7 +242,7 @@ def test_group_card_sections():
     assert "**3** pentakills" not in text
     assert "**2** pentakills · Freshwhite · group total 3" in text
     assert "**2** deathless games · Not a snake · group total 2" in text
-    assert sections[-1].endswith("`!records Name` for personal bests")
+    assert sections[-1].endswith("`!records Name` for personal records")
 
 
 def test_jungle_records_end_the_farm_and_objectives_section_and_objective_steals_sit_with_careers():
@@ -266,7 +267,8 @@ def test_jungle_records_end_the_farm_and_objectives_section_and_objective_steals
     assert "in a row" in lines[steals - 1] and lines[-1].startswith("**2** games")
     assert not any(section.startswith("**Jungle**") for section in sections)
     personal = "\n\n".join(format_personal_sections(build_record_book(rows), "JonastCvuHU#UNC"))
-    assert "buffs stolen" not in personal
+    assert "**15** buffs stolen · Karthus · Jan 2025 · group record" in personal
+    assert "**1** objective steals · #2 of 3" in personal
 
 
 def test_teammates_tied_in_one_game_resolve_by_name():
@@ -287,12 +289,60 @@ def test_personal_card_shows_place_in_group_and_hides_empty_bests():
         row("NoxVain#EUW", days=3, win=False, deaths=19, solo_kills=0),
     ]
     text = "\n\n".join(format_personal_sections(build_record_book(rows), "NoxVain#EUW"))
-    assert "🏆 **NoxVain** · personal bests\n-# 2 ranked games · 1 wins · since Jan 2025" in text
-    assert "**155** vision score · Rakan · Jan 2025 · #2 in the group" in text
+    assert "🏆 **NoxVain** · personal records\n-# 2 ranked games · 1 wins · since Jan 2025" in text
+    assert "**155** vision score · Rakan · Jan 2025 · #2 of 2" in text
     assert "**23** kills · Rakan · Jan 2025 · group record" in text
-    assert "**Worst**\n**19** deaths" in text
+    assert "**Pain**\n**19** deaths" in text
     assert "pentakill" not in text
     assert "deathless" not in text
+    assert "objective steal" not in text
+
+
+def test_personal_card_has_the_hall_of_fame_sections_and_categories():
+    rows = [
+        row("NoxVain#EUW", days=1, camps=12, buffs=2, steals=1, pinks=3, wards=20, cleared=5, objectives=9000, solo_kills=2),
+        row("Tamarin#EUW", days=2, kills=30, win=False),
+    ]
+    book = build_record_book(rows)
+    sections = format_personal_sections(book, "NoxVain#EUW")
+    titles = [section.split("\n", 1)[0] for section in sections[1:-1]]  # between header and footer
+    assert titles == ["**Carry**", "**Farm and objectives**", "**Vision**", "**Pain**", "**Streaks and career**"]
+    personal = "\n\n".join(sections)
+    group = "\n\n".join(format_group_sections(book))
+    # Every category, in the same order on both cards.
+    labels = [category.label for category in CATEGORIES]
+    assert [label for label in labels if f"** {label} ·" in personal] == labels
+    assert [label for label in labels if f"** {label} ·" in group] == labels
+    assert "**5** kills · Lux · Jan 2025 · #2 of 2" in personal
+    assert "**25.0%** of team damage · Lux · Jan 2025 · group record" in personal
+    assert "**20,000** damage taken · Lux · Jan 2025 · group record" in personal
+    assert sections[-2].split("\n")[1:] == [
+        "**1** ranked wins in a row · Jan 2025 · group record",
+        "**1** objective steals · group record",
+        "**1** games, 0 hours · group record",
+    ]
+    assert sections[-1].endswith("`!records` for the group")
+
+
+def test_personal_card_says_tied_when_someone_else_got_the_record_first():
+    rows = [
+        row("ÇÛΜÌŃΜÝÄŠŠ#EUW", days=1, cleared=29, deaths=0),
+        row("NoxVain#EUW", days=2, cleared=29, deaths=0),
+        row("NoxVain#EUW", days=3, cleared=4, deaths=0),
+    ]
+    book = build_record_book(rows)
+    assert "**29** wards cleared · ÇÛΜÌŃΜÝÄŠŠ" in "\n\n".join(format_group_sections(book))
+    nox = "\n\n".join(format_personal_sections(book, "NoxVain#EUW"))
+    assert "**29** wards cleared · Lux · Jan 2025 · tied group record" in nox
+    assert "**2** deathless games · group record" in nox
+    other = "\n\n".join(format_personal_sections(book, "ÇÛΜÌŃΜÝÄŠŠ#EUW"))
+    assert "**29** wards cleared · Lux · Jan 2025 · group record" in other
+    assert "**1** deathless game · #2 of 2" in other
+    # Equal career totals: the group card names the player with fewer games, and so does the tie wording.
+    tied = build_record_book([row("Ana#EUW", days=1, deaths=0), row("Bo#EUW", days=2, deaths=0), row("Bo#EUW", days=3)])
+    assert "deathless game · Ana · group total 2" in "\n\n".join(format_group_sections(tied))
+    assert "**1** deathless game · group record" in "\n\n".join(format_personal_sections(tied, "Ana#EUW"))
+    assert "**1** deathless game · tied group record" in "\n\n".join(format_personal_sections(tied, "Bo#EUW"))
 
 
 def test_pink_wards_record_follows_vision_and_counts_as_a_personal_best():
@@ -305,7 +355,7 @@ def test_pink_wards_record_follows_vision_and_counts_as_a_personal_best():
     assert vision.startswith("**Vision**\n**90** vision score · Tamarin · Rakan · Jan 2025\n")
     assert vision.endswith("\n**17** pink wards · Tamarin · Rakan · Jan 2025")
     personal = "\n\n".join(format_personal_sections(book, "NoxVain#EUW"))
-    assert "**1** pink ward · Swain · Jan 2025 · #2 in the group" in personal
+    assert "**1** pink ward · Swain · Jan 2025 · #2 of 2" in personal
     assert CATEGORIES_BY_KEY["pink_wards"].personal == "best"
     # Rows from before the column existed have no count and never hold the record.
     assert build_record_book([row(pinks=None)]).record("pink_wards") is None
@@ -326,7 +376,7 @@ def test_wards_placed_and_cleared_follow_vision_and_count_as_personal_bests():
         "**17** pink wards · Tamarin · Rakan · Jan 2025"
     )
     personal = "\n\n".join(format_personal_sections(book, "NoxVain#EUW"))
-    assert "**1** ward placed · Swain · Jan 2025 · #2 in the group" in personal
+    assert "**1** ward placed · Swain · Jan 2025 · #2 of 2" in personal
     assert "**14** wards cleared · Swain · Jan 2025 · group record" in personal
     assert CATEGORIES_BY_KEY["wards_placed"].personal == CATEGORIES_BY_KEY["wards_killed"].personal == "best"
 
@@ -353,17 +403,19 @@ def test_personal_card_lists_kill_streak_cs_per_minute_longest_game_and_deathles
         row("Tamarin#EUW", days=4, deaths=0),
     ]
     sections = format_personal_sections(build_record_book(rows), "NoxVain#EUW")
-    best = next(section for section in sections if section.startswith("**Best**"))
-    worst = next(section for section in sections if section.startswith("**Worst**"))
-    assert "**11** kills in a row · Ahri · Jan 2025 · group record" in best
-    assert best.endswith("\n**1** deathless game · #2 in the group")
-    assert "**8.2** CS/min · Ahri · Jan 2025 · group record" in best
-    assert "**52:00** longest game · Rakan · Jan 2025 · group record" in worst
+    carry, farm, pain, career = (
+        next(section for section in sections if section.startswith(title))
+        for title in ("**Carry**", "**Farm and objectives**", "**Pain**", "**Streaks and career**")
+    )
+    assert "**11** kills in a row · Ahri · Jan 2025 · group record" in carry
+    assert "\n**1** deathless game · #2 of 2\n" in career
+    assert "**8.2** CS/min · Ahri · Jan 2025 · group record" in farm
+    assert "**52:00** longest game · Rakan · Jan 2025 · group record" in pain
 
 
 def test_personal_card_for_player_without_games():
     sections = format_personal_sections(build_record_book([]), "New#EUW")
-    assert sections == ["🏆 **New** · personal bests", "No ranked games recorded yet."]
+    assert sections == ["🏆 **New** · personal records", "No ranked games recorded yet."]
 
 
 def test_records_view_is_one_container():
@@ -459,11 +511,11 @@ def test_records_command_sends_group_card():
     assert logs[-1] == "[records] Sent group records: games=2 matches=2."
 
 
-def test_records_command_sends_personal_bests():
+def test_records_command_sends_personal_records():
     channel = run_command("!RECORDS noxvain")
-    assert channel.sent[0].startswith("🏆 **NoxVain** · personal bests")
+    assert channel.sent[0].startswith("🏆 **NoxVain** · personal records")
     assert "**23** kills · Lux" in channel.sent[0]
-    assert "#2 in the group" in channel.sent[0]
+    assert "#2 of 2" in channel.sent[0]
 
 
 def test_records_command_unknown_player():
@@ -520,4 +572,4 @@ def test_a_value_of_one_reads_singular():
 
 def test_record_alias_runs_records():
     channel = run_command("!record NoxVain")
-    assert channel.sent[0].startswith("🏆 **NoxVain** · personal bests")
+    assert channel.sent[0].startswith("🏆 **NoxVain** · personal records")

@@ -8,7 +8,6 @@ from src.db.cache import (
     db_upsert_match_info,
 )
 from src.db.match_stats import (
-    db_delete_player_match_stats_except,
     db_iter_record_rows,
     db_iter_wrapped_rows,
     db_load_belt_rows,

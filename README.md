@@ -192,7 +192,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 - `!tts on|off|status`
 - `!champdisplay name|icon|both|status`
 - `!Add Name#Tag`
-- `!remove Name#Tag`
+- `!remove Name#Tag` (stops tracking and recaps, and hides the player from scoreboards, records, belts, Wrapped and `!analyze`; their history is kept and comes back if they're added again)
 - `!profile Name#Tag`
 - `!analyze Name#Tag [months] [solo|flex] [role]` (alias `!analyse`; the last 3 months of Solo/Duo in every role by default, `!analyze Name 12 flex` for a year of Flex, `!analyze Name mid` for mid games only (`top`, `jungle`/`jg`, `mid`, `adc`/`bot`, `support`/`supp`); the name alone works when it's unique)
   - The header adds a "Last 20 games" line, and a "How you play" section sums up the main role: champion pool, farming, fights, vision, survival, plus jungle invades or support saves. Strengths and Work on also use recent-vs-earlier trends on the same champion and role; no filler advice. Missing measurements stay N/A. All inputs come from stored stats, with zero new Riot requests.

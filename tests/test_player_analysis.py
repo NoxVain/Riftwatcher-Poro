@@ -247,6 +247,19 @@ def test_only_the_best_duo_partner_is_named():
     assert "gizhmo" not in text
 
 
+def test_a_removed_duo_partner_is_not_named_or_counted():
+    # Games stored while "snake" was tracked; after !remove they're no longer in names.
+    games = (
+        games_with(20, 5, teammates=["snake"], champion="A", start_days_ago=300)
+        + games_with(10, 10, champion="A", start_days_ago=220)
+    )
+
+    analysis = analyze(games, names={})
+
+    assert not any(line.startswith("Duo with") for line in analysis.strengths)
+    assert "a friend" not in format_analysis_text(analysis)
+
+
 def test_role_kda_and_deaths_compare_against_group_baseline():
     baselines = {"UTILITY": {"games": 400, "kills": 800, "deaths": 1200, "assists": 2800, "minutes": 12000}}
     strong = games_with(15, 15, kills=3, deaths=2, assists=12)
@@ -560,6 +573,8 @@ def test_db_analysis_queries_map_rows(monkeypatch):
     assert rows == [dict(zip(db_match_stats.ANALYSIS_ROW_COLUMNS, range(len(db_match_stats.ANALYSIS_ROW_COLUMNS))))]
     assert queries[0][1] == ("nox", [420, 440], NOW) and "NOT remake" in queries[0][0]
     assert totals == {"UTILITY": {"games": 10, "kills": 20, "deaths": 30, "assists": 80, "minutes": 300.0}}
-    assert queries[1][1] == (440, NOW) and "GROUP BY team_position" in queries[1][0]
+    assert queries[1][1] == (440, NOW) and "GROUP BY s.team_position" in queries[1][0]
+    # Removed players' rows stay in the table; the join keeps them out of the group baseline.
+    assert "JOIN tracked_players t ON t.puuid = s.puuid" in queries[1][0]
     assert queries[2][1] == ("nox", [420, 440], NOW, NOW + timedelta(days=1)) and "game_end_at <= %s" in queries[2][0]
-    assert queries[3][1] == (440, NOW, NOW + timedelta(days=1)) and "game_end_at <= %s" in queries[3][0]
+    assert queries[3][1] == (440, NOW, NOW + timedelta(days=1)) and "s.game_end_at <= %s" in queries[3][0]

@@ -183,7 +183,6 @@ class FakeStore:
         self.state = dict(state or {})
         self.fail_upsert = fail_upsert
         self.upserts = []
-        self.deletes = []
         self.since_calls = []
 
     def load_tracked(self):
@@ -203,7 +202,6 @@ class FakeStore:
             load_tracked=self.load_tracked,
             iter_cached_matches=self.iter_cached,
             upsert_rows=self.upsert,
-            delete_rows_except=self.deletes.append,
             get_state=self.state.get,
             set_state=self.state.__setitem__,
         )
@@ -219,10 +217,24 @@ def test_first_sync_rebuilds_everything_and_saves_state():
 
     assert summary["mode"] == "full" and summary["matches"] == 2 and summary["rows"] == 4
     assert store.since_calls == [None]
-    assert store.deletes == [sorted(TRACKED)]
     assert store.state[STATS_FINGERPRINT_KEY] == stats_fingerprint(TRACKED)
     assert store.state[STATS_VERSION_KEY] == str(STATS_VERSION)
     assert store.state[STATS_WATERMARK_KEY] == (T0 + timedelta(minutes=5)).isoformat()
+
+
+def test_full_sync_after_a_player_is_removed_keeps_their_rows():
+    # Removing a player changes the fingerprint; the full pass must not delete anything,
+    # so their history is still there (hidden by the tracked_players join) if they're re-added.
+    store = FakeStore(
+        [("EUW1_1", T0, ranked_match("EUW1_1"))],
+        state={STATS_FINGERPRINT_KEY: stats_fingerprint(TRACKED | {"removed-puuid"})},
+    )
+
+    summary = store.sync()
+
+    # The sync takes no delete callback at all; it only upserts tracked players' rows.
+    assert summary["mode"] == "full" and summary["rows"] == 2
+    assert all(row["puuid"] in TRACKED for batch in store.upserts for row in batch)
 
 
 def test_later_sync_reads_only_recent_matches_with_overlap():
@@ -237,7 +249,6 @@ def test_later_sync_reads_only_recent_matches_with_overlap():
     assert summary["mode"] == "incremental" and summary["matches"] == 1 and summary["new_matches"] == 1
     assert summary["rows"] == 2
     assert store.since_calls == [watermark - timedelta(seconds=WATERMARK_OVERLAP_SECONDS)]
-    assert store.deletes == []
     assert store.state[STATS_WATERMARK_KEY] == (T0 + timedelta(minutes=30)).isoformat()
 
 
@@ -299,7 +310,7 @@ def test_sync_without_tracked_puuids_does_nothing():
     store.load_tracked = lambda: [("Pending#EUW", None)]
 
     assert store.sync() is None
-    assert store.since_calls == [] and store.deletes == []
+    assert store.since_calls == []
 
 
 def run_loop(store, logs, **kwargs):
@@ -307,7 +318,6 @@ def run_loop(store, logs, **kwargs):
         db_load_tracked_puuids=store.load_tracked,
         db_iter_cached_matches=store.iter_cached,
         db_upsert_player_match_stats=store.upsert,
-        db_delete_player_match_stats_except=store.deletes.append,
         db_get_state=store.state.get,
         db_set_state=store.state.__setitem__,
         log=logs.append,
@@ -332,8 +342,7 @@ def test_sync_loop_waits_for_remap_then_logs_full_pass(monkeypatch):
             db_load_tracked_puuids=store.load_tracked,
             db_iter_cached_matches=store.iter_cached,
             db_upsert_player_match_stats=store.upsert,
-            db_delete_player_match_stats_except=store.deletes.append,
-            db_get_state=store.state.get,
+                db_get_state=store.state.get,
             db_set_state=store.state.__setitem__,
             log=logs.append,
             wait_for=asyncio.ensure_future(remap()),
@@ -403,15 +412,6 @@ def test_db_upsert_player_match_stats_builds_one_statement(monkeypatch):
     assert query.startswith(f"INSERT INTO player_match_stats ({', '.join(STATS_COLUMNS)}) VALUES (")
     assert "ON CONFLICT (puuid, match_id) DO UPDATE SET" in query and "match_id = EXCLUDED" not in query
     assert len(params) == 2 * len(STATS_COLUMNS) == query.count("%s")
-
-
-def test_db_delete_player_match_stats_except_passes_puuid_list(monkeypatch):
-    fake = FakeDb()
-    monkeypatch.setattr(db_match_stats, "db_execute", fake.execute)
-
-    db_match_stats.db_delete_player_match_stats_except([NOX, FRESH])
-
-    assert fake.queries == [("DELETE FROM player_match_stats WHERE NOT (puuid = ANY(%s));", ([NOX, FRESH],))]
 
 
 def test_db_iter_wrapped_rows_pages_all_queues_in_the_period(monkeypatch):

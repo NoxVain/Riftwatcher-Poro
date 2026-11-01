@@ -22,11 +22,6 @@ def db_upsert_player_match_stats(rows):
     )
 
 
-def db_delete_player_match_stats_except(puuids):
-    """Drop rows for PUUIDs that are no longer tracked (removed players, rotated keys)."""
-    db_execute("DELETE FROM player_match_stats WHERE NOT (puuid = ANY(%s));", (list(puuids),))
-
-
 ANALYSIS_ROW_COLUMNS = (
     "queue_id",
     "game_end_at",
@@ -68,13 +63,17 @@ def db_load_player_analysis_rows(puuid, since, *, until=None):
 
 
 def db_load_role_group_totals(queue_id, since, *, until=None):
-    """Per-role totals across all tracked players in one queue: the group baseline, same window as the player."""
-    until_sql = " AND game_end_at <= %s" if until is not None else ""
+    """Per-role totals across all tracked players in one queue: the group baseline, same window as the player.
+
+    Removed players' rows stay in the table, so the join keeps them out.
+    """
+    until_sql = " AND s.game_end_at <= %s" if until is not None else ""
     rows = db_execute(
-        "SELECT team_position, count(*), sum(kills), sum(deaths), sum(assists), sum(duration_seconds) / 60.0 "
-        "FROM player_match_stats "
-        f"WHERE queue_id = %s AND NOT remake AND game_end_at > %s{until_sql} AND team_position IS NOT NULL "
-        "GROUP BY team_position;",
+        "SELECT s.team_position, count(*), sum(s.kills), sum(s.deaths), sum(s.assists), "
+        "sum(s.duration_seconds) / 60.0 "
+        "FROM player_match_stats s JOIN tracked_players t ON t.puuid = s.puuid "
+        f"WHERE s.queue_id = %s AND NOT s.remake AND s.game_end_at > %s{until_sql} AND s.team_position IS NOT NULL "
+        "GROUP BY s.team_position;",
         (queue_id, since, *([until] if until is not None else [])),
         fetch=True,
     ) or []

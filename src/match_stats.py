@@ -249,7 +249,6 @@ def sync_player_match_stats(
     load_tracked,
     iter_cached_matches,
     upsert_rows,
-    delete_rows_except,
     get_state,
     set_state,
 ):
@@ -274,9 +273,8 @@ def sync_player_match_stats(
         full = watermark is None
 
     started = time.monotonic()
-    if full:
-        # Rows for removed players or rotated PUUIDs; the rebuild re-adds current ones.
-        delete_rows_except(sorted(tracked_puuids))
+    # A full pass rewrites tracked players' rows and deletes nothing: removed players'
+    # rows stay (every reader joins tracked_players), so re-adding brings them back.
     match_count = 0
     new_match_count = 0
     row_count = 0
@@ -317,7 +315,6 @@ async def run_match_stats_sync_loop(
     db_load_tracked_puuids,
     db_iter_cached_matches,
     db_upsert_player_match_stats,
-    db_delete_player_match_stats_except,
     db_get_state,
     db_set_state,
     log,
@@ -345,7 +342,6 @@ async def run_match_stats_sync_loop(
                 load_tracked=db_load_tracked_puuids,
                 iter_cached_matches=db_iter_cached_matches,
                 upsert_rows=db_upsert_player_match_stats,
-                delete_rows_except=db_delete_player_match_stats_except,
                 get_state=db_get_state,
                 set_state=db_set_state,
             )

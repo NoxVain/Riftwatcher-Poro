@@ -358,7 +358,7 @@ async def handle_player_commands(ctx):
                 f"Total tracked players: {len(ctx.friends)}"
             )
         )
-        ctx.log(f"[remove] Removed player {riot_id}.")
+        ctx.log(f"[remove] Removed player {riot_id}; their stats history is kept and hidden until re-added.")
         return True
 
     return False

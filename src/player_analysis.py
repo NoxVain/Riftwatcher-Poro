@@ -306,7 +306,9 @@ def _partner_findings(games, overall_pct, names_by_puuid):
     by_partner = defaultdict(list)
     for g in games:
         for partner in g["tracked_teammates"] or ():
-            by_partner[partner].append(g)
+            # Teammates stored when the game was played; skip anyone no longer tracked.
+            if partner in names_by_puuid:
+                by_partner[partner].append(g)
     best = None
     for partner, partner_games in by_partner.items():
         wins, n = _record(partner_games)
@@ -318,7 +320,7 @@ def _partner_findings(games, overall_pct, names_by_puuid):
     if best is None:
         return []
     score, partner, wins, n, pct = best
-    name = names_by_puuid.get(partner, "a friend").split("#", 1)[0]
+    name = names_by_puuid[partner].split("#", 1)[0]
     return [Finding(f"Duo with {_bold(name)}: {wins}/{n} ({pct}%)", score)]
 
 

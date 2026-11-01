@@ -210,7 +210,7 @@ The first run on 2026-10-26 data: 12,415 cached matches, one old PUUID for each 
 
 - The loop starts once the PUUID remap is done (about 5 minutes after startup), then runs every 10 minutes.
 - Logs: `[stats] Player match stats full sync: rows=… matches=… new=… elapsed=…` for a full rebuild, and an `incremental sync` line only when new matches were cached. Failures log `[stats] Player match stats sync failed; retrying next pass: …`.
-- A full rebuild happens on the first run, when a player is added or removed, when PUUIDs change, or when `STATS_VERSION` is bumped. It also deletes rows of PUUIDs that are no longer tracked.
+- A full rebuild happens on the first run, when a player is added or removed, when PUUIDs change, or when `STATS_VERSION` is bumped. It rewrites tracked players' rows and deletes nothing: rows of removed players (and of PUUIDs from an old Riot key) stay, and every reader joins `tracked_players` or filters by a tracked PUUID, so they're hidden until the player is added again. Rows of a player removed before a `STATS_VERSION` bump keep their old columns (NULL in new ones) until a rebuild after they're re-added.
 - In production on 2026-10-27, a full rebuild of 12,426 cached matches took 140 s and gave 16,411 rows (about 12 MB; bot memory peaked at 197 MB). A local copy of the same data took 24 s, so expect production to be several times slower than a local test. A per-player year query takes about 1 ms.
 - To force a rebuild, delete the `player_match_stats_fingerprint` row in `bot_state`. The table can always be rebuilt from the cache, so it's safe to truncate.
 - Example (read-only): champion records for one player over the last year of ranked games:

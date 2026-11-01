@@ -106,7 +106,6 @@ db_iter_record_rows = dbm.db_iter_record_rows
 db_iter_wrapped_rows = dbm.db_iter_wrapped_rows
 db_load_all_ranked_states = dbm.db_load_all_ranked_states
 db_load_belt_rows = dbm.db_load_belt_rows
-db_delete_player_match_stats_except = dbm.db_delete_player_match_stats_except
 db_delete_ranked_state_queue = dbm.db_delete_ranked_state_queue
 db_insert_lp_change = dbm.db_insert_lp_change
 db_set_last_report_message = dbm.db_set_last_report_message
@@ -512,7 +511,6 @@ async def background_match_stats():
         db_load_tracked_puuids=db_load_tracked_puuids,
         db_iter_cached_matches=db_iter_cached_matches,
         db_upsert_player_match_stats=db_upsert_player_match_stats,
-        db_delete_player_match_stats_except=db_delete_player_match_stats_except,
         db_get_state=db_get_state,
         db_set_state=db_set_state,
         log=log,

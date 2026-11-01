@@ -37,9 +37,15 @@ def db_load_tracked_puuids():
 
 
 def db_remove_player(riot_id):
+    """Stop tracking a player but keep their history.
+
+    Daily stats, per-game stats (`player_match_stats`) and `lp_history` stay; every
+    report, record and Wrapped reads only tracked players, so they drop out until the
+    player is added again. The rank snapshot and the recap/backfill cursors go: kept,
+    a re-add would announce a stale rank change and recap every game in between.
+    """
     riot_key = str(riot_id).strip().casefold()
     db_execute("DELETE FROM tracked_players WHERE lower(riot_id) = %s;", (riot_key,))
-    db_execute("DELETE FROM player_daily_stats WHERE lower(riot_id) = %s;", (riot_key,))
     db_execute("DELETE FROM player_ranked_state WHERE lower(riot_id) = %s;", (riot_key,))
     db_execute(
         """

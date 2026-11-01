@@ -169,7 +169,7 @@ def test_backfill_does_not_skip_when_limit_reached_mid_page():
     assert state["backfill_offset::alpha#euw"] == "5"
 
 
-def test_removing_a_player_clears_the_backfill_done_marker(monkeypatch):
+def test_removing_a_player_clears_cursors_and_rank_snapshot_but_keeps_history(monkeypatch):
     import src.db.players as db_players
 
     calls = []
@@ -177,3 +177,7 @@ def test_removing_a_player_clears_the_backfill_done_marker(monkeypatch):
     db_players.db_remove_player("Alpha#EUW")
     state_keys = next(params for query, params in calls if "bot_state" in query)
     assert "backfill_done_at::alpha#euw" in state_keys and "backfill_offset::alpha#euw" in state_keys
+    assert "last_seen_match_id::alpha#euw" in state_keys
+    # History stays: daily stats, per-game stats and LP history are never deleted.
+    deleted_tables = {query.split("DELETE FROM", 1)[1].split()[0] for query, _params in calls if "DELETE FROM" in query}
+    assert deleted_tables == {"tracked_players", "player_ranked_state", "bot_state"}

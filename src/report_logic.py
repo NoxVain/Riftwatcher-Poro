@@ -127,6 +127,23 @@ def derive_primary_role(performance_totals):
     return max(role_votes, key=role_votes.get)
 
 
+def pick_week_primary_role(role_games):
+    """Return the role played most over a week from ``(role, ranked_games)`` pairs.
+
+    Each day stores only its most-played role, so a day's ranked games count toward
+    that role. Ties go to the alphabetically first role so the pick is stable.
+    """
+    totals = {}
+    for role, games in role_games:
+        if not role:
+            continue
+        role = str(role).upper()
+        totals[role] = totals.get(role, 0) + int(games or 0)
+    if not totals:
+        return None
+    return min(totals, key=lambda role: (-totals[role], role))
+
+
 def compute_role_baselines(match_payloads):
     """Build per-role, per-minute stat distributions from cached match payloads.
 

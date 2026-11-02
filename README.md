@@ -85,6 +85,7 @@ Start with:
   - 65% Wilson lower bound of the ranked win rate (z = 1.40) + 35% role-relative performance percentile
   - the performance share ramps in over the first 8 ranked games of the window
   - performance percentiles compare per-minute stats against same-role baselines built from cached ranked matches (`BASELINE_MATCH_LIMIT`)
+  - the weekly scoreboard scores the same way, using the role each player played most that week
   - falls back to pure Wilson when no baseline or role is available yet
   - `!score` shows the breakdown per player
 - Match recap posts in `MATCH_RECAP_CHANNEL_ID` for any queue a tracked player finishes (remakes are skipped):

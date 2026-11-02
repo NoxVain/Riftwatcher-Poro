@@ -18,6 +18,7 @@ from src.report_logic import (
     get_mode_totals,
     is_remake_match,
     is_match_in_report_cycle,
+    pick_week_primary_role,
     rank_sort_key,
     wilson_lower_bound,
 )
@@ -229,3 +230,15 @@ def test_is_remake_match_detects_early_surrender_or_short_duration():
     assert is_remake_match(early_surrender)
     assert is_remake_match(short_game)
     assert not is_remake_match(normal_game)
+
+
+def test_pick_week_primary_role_counts_ranked_games_per_role():
+    # Two MIDDLE days (2 + 2 games) beat one 3-game JUNGLE day.
+    assert pick_week_primary_role([("MIDDLE", 2), ("jungle", 3), ("MIDDLE", 2)]) == "MIDDLE"
+    assert pick_week_primary_role([("TOP", 4), ("JUNGLE", 1)]) == "TOP"
+
+
+def test_pick_week_primary_role_ties_and_empty():
+    assert pick_week_primary_role([("UTILITY", 2), ("BOTTOM", 2)]) == "BOTTOM"
+    assert pick_week_primary_role([(None, 5)]) is None
+    assert pick_week_primary_role([]) is None

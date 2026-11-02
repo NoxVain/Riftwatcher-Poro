@@ -37,7 +37,7 @@ _counter = iter(range(1, 1_000_000))
 
 def game(riot_id, *, day=10, hour=20, queue=420, win=True, champion="Lux", kills=5, deaths=3, assists=8, minutes=30,
          position="UTILITY", pings=5, dead=120, mates=(), placement=None, match_id=None, damage=20000, vision=30,
-         pinks=None):
+         pinks=None, damage_taken=20000):
     n = next(_counter)
     end = datetime(YEAR, 3, 1, hour, tzinfo=OSLO) + timedelta(days=day, minutes=minutes)
     return {
@@ -56,7 +56,7 @@ def game(riot_id, *, day=10, hour=20, queue=420, win=True, champion="Lux", kills
         "assists": assists,
         "damage_to_champions": damage,
         "damage_share": 0.25,
-        "damage_taken": 20000,
+        "damage_taken": damage_taken,
         "gold_earned": 12000,
         "cs": 200,
         "vision_score": vision,
@@ -274,6 +274,22 @@ def test_arena_group_lines_chase_pool_damage_and_duos():
     assert "Highest damage/min: **Reo** · 3,000" in text
     assert "Duo of the year: **Fresh** & **Reo** · 12 games together · 4 crowns" in text
     assert "Best duo: **Fresh** & **Nox** · avg placement 2.0" in text
+
+
+def test_frontline_uses_the_typical_game_not_one_runaway_game():
+    # Tank takes 3,000/min every game; Nasus takes 1,000/min but one game of 12 million.
+    rows = [game("Tank#EUW", queue=1750, placement=3, damage_taken=90000) for _ in range(10)]
+    rows += [game("Nasus#EUW", queue=1750, placement=1, damage_taken=30000) for _ in range(9)]
+    rows.append(game("Nasus#EUW", queue=1750, placement=1, damage_taken=12_000_000))
+    rows.append(game("Few#EUW", queue=1750, placement=2, damage_taken=500000))
+    text = "\n\n".join("\n\n".join(card) for card in format_group_cards(year_of(rows)))
+    assert "Frontline: **Tank** · 3,000 damage taken/min" in text
+
+
+def test_frontline_needs_ten_games():
+    rows = [game("Tank#EUW", queue=1750, placement=3, damage_taken=90000) for _ in range(9)]
+    text = "\n\n".join("\n\n".join(card) for card in format_group_cards(year_of(rows)))
+    assert "Frontline" not in text
 
 
 def test_arena_partners_on_the_personal_card():

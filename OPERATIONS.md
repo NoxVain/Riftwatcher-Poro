@@ -252,7 +252,7 @@ The belts card for a report week posts in `EVENTS_CHANNEL_ID` about 20-30 minute
 
 The group Wrapped posts once in `EVENTS_CHANNEL_ID` on 31 December between 18:00 and about 18:10 Oslo (the task checks every 10 minutes), covering 1 January until 18:00. `!wrapped Name` is open from then until 31 January.
 
-- Logs: `[wrapped] Posted Wrapped <year> in channel <id>: cards=… games=… players=….` and `[wrapped] Sent Wrapped <year> for <riot id>: …`.
+- Logs: `[wrapped] Posted Wrapped <year> in channel <id>: cards=… games=… players=… arena_games=… aram_games=….` (`arena_games` counts Arena games with a placement, which the Arena duo lines are built from) and `[wrapped] Sent Wrapped <year> for <riot id>: …`.
 - Wrapped is a surprise: until the group post has gone out (`poro_wrapped_posted_year` is this year) and before February, `!wrapped` gets no reply for anyone, admins included, and logs `[wrapped] Ignored !wrapped: Wrapped isn't open …`. There is no preview in Discord; check the cards with a local read-only render instead.
 - `[wrapped] Channel … not available; retrying next check.` and `[wrapped] Wrapped check failed; retrying next check: …` retry every 10 minutes. If the bot is down at 18:00, the post goes out at the first check after startup (until the end of January).
 - The year is stored in `poro_wrapped_posted_year` before sending, so a send that fails after that is not retried. To repost, delete that key; the next check posts again.

@@ -246,6 +246,74 @@ def test_group_cards_skip_modes_nobody_played():
     assert "ARAM" not in text and "Arena" not in text
 
 
+def arena_team(names, *, placement, match_id, champions, damage=20000):
+    """One Arena game where the named tracked players were on the same team."""
+    return [game(name, queue=1750, placement=placement, match_id=match_id, champion=champion, damage=damage)
+            for name, champion in zip(names, champions)]
+
+
+def arena_year():
+    rows = []
+    # Reo and Fresh: 12 games together, 4 crowns, Reo on a new champion each crown.
+    for i in range(12):
+        place = 1 if i < 4 else 5
+        rows += arena_team(["Reo#EUW"], placement=place, match_id=f"A{i}",
+                           champions=[f"C{i}" if i < 4 else "Lux"], damage=90000)
+        rows += arena_team(["Fresh#EUW"], placement=place, match_id=f"A{i}",
+                           champions=["Lux" if i < 4 else f"F{i}"])
+    # Nox and Fresh: 10 games together, always 2nd.
+    for i in range(10):
+        rows += arena_team(["Nox#EUW", "Fresh#EUW"], placement=2, match_id=f"B{i}", champions=["Lux", f"G{i}"])
+    return year_of(rows)
+
+
+def test_arena_group_lines_chase_pool_damage_and_duos():
+    text = "\n\n".join("\n\n".join(card) for card in format_group_cards(arena_year()))
+    assert "Arena God chase: **Reo** · 1st place with 4 different champions" in text
+    assert "Deepest pool: **Fresh** · 19 different champions" in text
+    assert "Highest damage/min: **Reo** · 3,000" in text
+    assert "Duo of the year: **Fresh** & **Reo** · 12 games together · 4 crowns" in text
+    assert "Best duo: **Fresh** & **Nox** · avg placement 2.0" in text
+
+
+def test_arena_partners_on_the_personal_card():
+    text = "\n\n".join(format_personal_sections(arena_year(), "Fresh#EUW"))
+    assert "Most games with **Reo** (12) · best with **Nox** (avg 2.0)" in text
+
+
+def test_arena_lines_need_enough_games_and_champions():
+    rows = arena_team(["Nox#EUW", "Tam#EUW"], placement=1, match_id="X1", champions=["Lux", "Ahri"])
+    text = "\n\n".join("\n\n".join(card) for card in format_group_cards(year_of(rows)))
+    for line in ("Arena God chase", "Deepest pool", "Highest damage/min", "Duo of the year", "Best duo"):
+        assert line not in text
+    # Partners still show on the personal card, without a "best with" until 10 games.
+    personal = "\n\n".join(format_personal_sections(year_of(rows), "Nox#EUW"))
+    assert "Most games with **Tam** (1)\n" in personal
+
+
+def test_aram_group_lines_highs_and_together():
+    rows = []
+    for i in range(10):
+        rows += [game(name, queue=450, match_id=f"T{i}", win=i < 6) for name in ("Nox#EUW", "Tam#EUW")]
+    rows += [game("Nox#EUW", queue=450, win=i < 3, damage=78511 if i == 0 else 20000, champion="Udyr" if i == 0 else "Lux")
+             for i in range(10)]
+    rows.append(game("Tam#EUW", queue=450, deaths=21, champion="Locke"))
+    text = "\n\n".join("\n\n".join(card) for card in format_group_cards(year_of(rows)))
+    assert "Most damage in a game: **78,511** · Nox · Udyr" in text
+    assert "Most deaths in a game: **21** · Tam · Locke" in text
+    # Tam's extra solo game makes 11 alone: 3 wins + Tam's 1.
+    assert "Together: **60%** wins in 10 games · alone: **36%**" in text
+    personal = "\n\n".join(format_personal_sections(year_of(rows), "Nox#EUW"))
+    # 20 games, 30 minutes each: (19 x 20,000 + 78,511) / 600 minutes.
+    assert "**100 / 60 / 160** KDA · **764** damage/min" in personal
+
+
+def test_aram_together_needs_ten_games_each_way():
+    rows = [game(name, queue=450, match_id="T1") for name in ("Nox#EUW", "Tam#EUW")]
+    text = "\n\n".join("\n\n".join(card) for card in format_group_cards(year_of(rows)))
+    assert "Together:" not in text
+
+
 # --- Personal card ------------------------------------------------------------
 
 

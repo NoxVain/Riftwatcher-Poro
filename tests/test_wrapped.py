@@ -276,20 +276,17 @@ def test_arena_group_lines_chase_pool_damage_and_duos():
     assert "Best duo: **Fresh** & **Nox** · avg placement 2.0" in text
 
 
-def test_frontline_uses_the_typical_game_not_one_runaway_game():
-    # Tank takes 3,000/min every game; Nasus takes 1,000/min but one game of 12 million.
-    rows = [game("Tank#EUW", queue=1750, placement=3, damage_taken=90000) for _ in range(10)]
-    rows += [game("Nasus#EUW", queue=1750, placement=1, damage_taken=30000) for _ in range(9)]
-    rows.append(game("Nasus#EUW", queue=1750, placement=1, damage_taken=12_000_000))
-    rows.append(game("Few#EUW", queue=1750, placement=2, damage_taken=500000))
+def test_arena_most_damage_taken_in_a_game():
+    # One game is enough, and it may be the same game as the damage record.
+    rows = [game("Tank#EUW", queue=1750, placement=3, damage_taken=90000, champion="Sion")]
+    rows.append(game("Nasus#EUW", queue=1750, placement=1, damage=4_000_000, damage_taken=12_284_992, champion="Nasus"))
     text = "\n\n".join("\n\n".join(card) for card in format_group_cards(year_of(rows)))
-    assert "Frontline: **Tank** · 3,000 damage taken/min" in text
-
-
-def test_frontline_needs_ten_games():
-    rows = [game("Tank#EUW", queue=1750, placement=3, damage_taken=90000) for _ in range(9)]
-    text = "\n\n".join("\n\n".join(card) for card in format_group_cards(year_of(rows)))
-    assert "Frontline" not in text
+    assert "Most damage in a game: **4,000,000** · Nasus · Nasus" in text
+    assert "Most damage taken in a game: **12,284,992** · Nasus · Nasus" in text
+    # Only Arena games count.
+    aram = [game("Tank#EUW", queue=450, damage_taken=99_000_000), game("Tank#EUW", queue=1750, placement=2)]
+    text = "\n\n".join("\n\n".join(card) for card in format_group_cards(year_of(aram)))
+    assert "Most damage taken in a game: **20,000** · Tank · Lux" in text
 
 
 def test_arena_partners_on_the_personal_card():

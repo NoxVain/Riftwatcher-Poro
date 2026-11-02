@@ -11,7 +11,6 @@ end of January; admins can run it any time to preview the year so far.
 """
 
 import asyncio
-import statistics
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -113,6 +112,7 @@ class _ModeTotals:
     best_kills: tuple | None = None
     best_damage: tuple | None = None
     best_deaths: tuple | None = None
+    best_taken: tuple | None = None
     damage: int = 0
     # Champions with a 1st place (Arena).
     first_champions: set = field(default_factory=set)
@@ -137,7 +137,8 @@ class _ModeTotals:
             self.firsts += int(placement == 1)
             if placement == 1:
                 self.first_champions.add(champion)
-        for attr, column in (("best_kills", "kills"), ("best_damage", "damage_to_champions"), ("best_deaths", "deaths")):
+        for attr, column in (("best_kills", "kills"), ("best_damage", "damage_to_champions"), ("best_deaths", "deaths"),
+                             ("best_taken", "damage_taken")):
             value = row.get(column) or 0
             current = getattr(self, attr)
             if value and (current is None or value > current[0]):
@@ -166,9 +167,6 @@ class _PlayerYear:
     pink_games: int = 0
     pink_wards: int = 0
     pinkless_games: int = 0
-    # Damage taken per minute in each Arena game; the Frontline line uses the median, so one
-    # runaway game (a 12-million-damage Nasus) can't decide it.
-    arena_taken_per_minute: list = field(default_factory=list)
 
     @property
     def pinks_per_game(self):
@@ -228,8 +226,6 @@ class WrappedYear:
         local_end = end.astimezone(self.tz)
         player.days[local_end.date()] += 1
         self.matches.setdefault(row.get("match_id"), (mode, duration))
-        if mode == ARENA and row.get("damage_taken") is not None and duration:
-            player.arena_taken_per_minute.append(row["damage_taken"] * 60 / duration)
         if mode == ARENA and row.get("arena_placement"):
             teams = self.arena_teams.setdefault(row.get("match_id"), {})
             teams.setdefault(row["arena_placement"], []).append(riot_id)
@@ -579,6 +575,10 @@ def _arena_section(wrapped):
     if damage.modes[ARENA].best_damage:
         value, champion, _at = damage.modes[ARENA].best_damage
         lines.append(f"Most damage in a game: **{value:,}** · {_name(damage.riot_id)} · {champion}")
+    taken = max(players, key=lambda p: ((p.modes[ARENA].best_taken or (0,))[0], p.riot_id.casefold()))
+    if taken.modes[ARENA].best_taken:
+        value, champion, _at = taken.modes[ARENA].best_taken
+        lines.append(f"Most damage taken in a game: **{value:,}** · {_name(taken.riot_id)} · {champion}")
     god = max(players, key=lambda p: (len(p.modes[ARENA].first_champions), p.modes[ARENA].firsts, p.riot_id.casefold()))
     god_champions = len(god.modes[ARENA].first_champions)
     if god_champions >= MIN_ARENA_GOD_LINE:
@@ -590,12 +590,6 @@ def _arena_section(wrapped):
     if rated:
         best = max(rated, key=lambda p: (p.modes[ARENA].damage_per_minute, p.modes[ARENA].games))
         lines.append(f"Highest damage/min: **{_name(best.riot_id)}** · {best.modes[ARENA].damage_per_minute:,.0f}")
-    tanks = [p for p in players if len(p.arena_taken_per_minute) >= MIN_MODE_RATE_GAMES]
-    if tanks:
-        tank = max(tanks, key=lambda p: (statistics.median(p.arena_taken_per_minute), p.modes[ARENA].games))
-        lines.append(
-            f"Frontline: **{_name(tank.riot_id)}** · {statistics.median(tank.arena_taken_per_minute):,.0f} damage taken/min"
-        )
     duos = [(pair, entry) for pair, entry in wrapped.arena_duos().items() if entry[0] >= MIN_MODE_RATE_GAMES]
     if duos:
         most = max(duos, key=lambda item: (item[1][0], item[1][1], -item[1][2]))

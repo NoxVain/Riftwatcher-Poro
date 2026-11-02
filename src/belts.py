@@ -64,7 +64,7 @@ class Belt:
 BELTS = (
     Belt("damage_king", "👑", "Damage King", GLORY, _per_minute("damage_to_champions"),
          lambda t, r: f"**{r:,.0f}** damage/min"),
-    Belt("vision_dad", "👁️", "Vision Dad", GLORY, _per_minute("vision_score"),
+    Belt("vision_dad", "👁️", "Vision Daddy", GLORY, _per_minute("vision_score"),
          lambda t, r: f"**{r:.2f}** vision/min"),
     Belt("objective_goblin", "🏰", "Objective Goblin", GLORY, _per_game("objectives"),
          lambda t, r: f"**{r:.1f}** objectives a game"),

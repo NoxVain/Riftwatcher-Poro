@@ -1,6 +1,7 @@
 """Weekly title belts: awards, defended streaks, week windows, the card, and the posting loop."""
 
 import asyncio
+import itertools
 import json
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -25,11 +26,13 @@ from tests.discord_fakes import view_text
 OSLO = ZoneInfo("Europe/Oslo")
 START = datetime(2026, 10, 19, 6, tzinfo=OSLO)
 END = START + timedelta(days=7)
+MATCH_IDS = itertools.count(1)
 
 
-def game(riot_id, *, queue=420, remake=False, minutes=30, damage=20000, vision=30, turrets=1, dragons=1, barons=0,
-         heralds=0, saves=0, outnumbered=0, dodged=30, pings=10, dead_minutes=3):
+def game(riot_id, *, match_id=None, queue=420, remake=False, minutes=30, damage=20000, vision=30, turrets=1,
+         dragons=1, barons=0, heralds=0, saves=0, outnumbered=0, dodged=30, pings=10, dead_minutes=3):
     return {
+        "match_id": match_id or f"EUW1_{next(MATCH_IDS)}",
         "riot_id": riot_id,
         "queue_id": queue,
         "remake": remake,
@@ -71,6 +74,18 @@ def test_belts_need_three_ranked_games_and_skip_other_queues():
     assert week.players == 2
     assert awards_by_key(week)["damage_king"].holders == ["Nox#EUW"]
     assert awards_by_key(week)["damage_king"].text == "**1,000** damage/min"
+
+
+def test_games_played_together_count_once():
+    # Two duo games and one solo game: 3 games, 5 player-games.
+    rows = (
+        [game("Nox#EUW", match_id="EUW1_A"), game("Tam#EUW", match_id="EUW1_A")]
+        + [game("Nox#EUW", match_id="EUW1_B"), game("Tam#EUW", match_id="EUW1_B")]
+        + [game("Nox#EUW", match_id="EUW1_C"), game("Nox#EUW", match_id="EUW1_D", remake=True)]
+    )
+    week = compute_week_belts(rows, START, END)
+    assert (week.games, week.player_games, week.players) == (3, 5, 2)
+    assert "-# 3 ranked games · 2 players" in format_belts_sections(week)[0]
 
 
 def test_rates_are_per_minute_or_per_game_not_totals():

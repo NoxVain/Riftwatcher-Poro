@@ -220,7 +220,7 @@ All workers run continuously while connected, each with startup jitter and cycle
 
 Scoreboards sort by Gamer Score (0-100), then win rate, games played, and name.
 
-- Win component: Wilson lower bound of ranked wins/losses with `z = 1.40`.
+- Win component: Wilson lower bound of ranked wins/losses with `z = 1.00` (1.40 until 2026-11-02: across 585 stored player-days the best score was 75.9 and none reached 80; 1.00 lifts short winning streaks, keeps the same #1 on 97% of daily boards, and lets a 1-0 day edge a long average day, which 2-0 already did). The mood emoji uses the same Wilson value, so faces shift up too. `Report complete` logs `wilson_z=`.
 - Performance component: weighted percentile of per-minute stats (CS, champion damage, objective damage, healing, damage taken, kills, deaths inverted, vision) against same-role baselines.
 - Weights: 65% win / 35% performance; the performance share ramps linearly over the first 8 ranked games.
 - Baselines are built from cached ranked, non-remake matches (`BASELINE_MATCH_LIMIT`), need 20+ samples per role/stat, and are shown in `!health`. Payloads are read from Postgres in pages inside a worker thread: one small query lists the newest match IDs, then each page of 50 payloads is a short primary-key query (no server-side cursor or long transaction), keeping only per-minute numbers; afterwards freed memory is returned to the OS (`src/runtime/memory.py`). `!backfill` scans the cache the same way. Rebuilds run as one background task with a 120 s limit; callers never wait on it once baselines exist (before the first build they wait at most 30 s, then score with Wilson only).

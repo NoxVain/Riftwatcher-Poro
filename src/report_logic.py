@@ -7,7 +7,9 @@ VALID_POSITIONS = frozenset({"TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"})
 GAMER_SCORE_WIN_WEIGHT = 0.65
 GAMER_SCORE_PERF_WEIGHT = 0.35
 GAMER_SCORE_PERF_RAMP_GAMES = 8
-WILSON_Z = 1.40
+# 1.00 since 2026-11-02 (was 1.40): at 1.40 a perfect 10-0 day scored ~78 and no stored
+# day reached 80. 1.00 lifts short winning streaks while keeping 97% of daily #1s.
+WILSON_Z = 1.00
 
 _BASELINE_STATS = (
     "cs_per_min",

@@ -21,6 +21,7 @@ from src.report_logic import (
     pick_week_primary_role,
     rank_sort_key,
     wilson_lower_bound,
+    WILSON_Z,
 )
 
 
@@ -47,10 +48,14 @@ def test_wilson_lower_bound_prefers_consistent_sample():
     assert strong_large_sample > perfect_tiny_sample
 
 
-def test_wilson_default_is_stricter_than_legacy_z():
-    default_score = wilson_lower_bound(9, 1)
-    legacy_score = wilson_lower_bound(9, 1, z=1.28)
-    assert default_score < legacy_score
+def test_wilson_z_one_counts_a_short_perfect_streak_for_more():
+    assert WILSON_Z == 1.0
+    # A perfect n-0 scores n / (n + z^2): 1-0 is 50%, 3-0 is 75% (was 34% and 60% at z=1.40).
+    assert abs(wilson_lower_bound(1, 0) - 0.5) < 1e-9
+    assert abs(wilson_lower_bound(3, 0) - 0.75) < 1e-9
+    assert wilson_lower_bound(3, 0) > wilson_lower_bound(3, 0, z=1.40)
+    # A long strong day still beats a short perfect one.
+    assert wilson_lower_bound(9, 1) > wilson_lower_bound(3, 0)
 
 
 def test_gamer_score_weights_ramp_perf_component():

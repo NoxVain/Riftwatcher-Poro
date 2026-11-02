@@ -113,6 +113,9 @@ def test_format_streak_callout_win_tier_boundaries():
 
 def test_format_recap_queue_name_labels_arena_3x6():
     assert format_recap_queue_name(1750) == "🏟️ Arena 3x6"
+    # 1740 has the same six teams of three but isn't in Riot's queue list.
+    assert format_recap_queue_name(1740) == "🏟️ Arena 3x6"
+    assert recap_queue_label(2450) == "ARAM event"
 
 
 def test_format_recap_queue_name_labels_ranked_5s():

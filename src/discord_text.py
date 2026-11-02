@@ -105,7 +105,9 @@ def format_health_report(stats, *, title="Health OK"):
     )
 
 
-ARENA_QUEUE_IDS = frozenset({1700, 1710, 1750})
+ARENA_QUEUE_IDS = frozenset({1700, 1710, 1740, 1750})
+# Six teams of three; 1740 isn't in Riot's queues.json but its games have the same layout.
+ARENA_3X6_QUEUE_IDS = frozenset({1740, 1750})
 
 
 def match_recap_state_key(riot_id):
@@ -138,7 +140,7 @@ def format_recap_queue_name(queue_id):
         return "\U0001F3C6 Ranked Flex"
     if queue_id == 710:
         return "\U0001F3C6 Ranked 5s"
-    if queue_id == 1750:
+    if queue_id in ARENA_3X6_QUEUE_IDS:
         return "\U0001F3DF\uFE0F Arena 3x6"
     if queue_id in ARENA_QUEUE_IDS:
         return "\U0001F3DF\uFE0F Arena"
@@ -162,6 +164,8 @@ RECAP_QUEUE_LABELS = {
     490: "\u26A1 Quickplay",
     450: "\u2744\uFE0F ARAM",
     2400: "\u2744\uFE0F ARAM Mayhem",
+    # Not in Riot's queues.json: a Howling Abyss event mode (gameMode KIWI_JADE).
+    2450: "\u2744\uFE0F ARAM event",
     700: "\u2694\uFE0F Clash",
     720: "\u2694\uFE0F ARAM Clash",
     900: "\U0001F3B2 ARURF",

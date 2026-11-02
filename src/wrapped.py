@@ -24,7 +24,7 @@ from src.records import CATEGORIES, RECORD_QUEUE_IDS, RecordBook
 WRAPPED_STATE_KEY = "poro_wrapped_posted_year"
 WRAPPED_ACCENT = 0xF0B232
 WRAPPED_PERSONAL_ACCENT = 0x7F77DD
-ARAM_QUEUE_IDS = frozenset({450, 720, 2400})
+ARAM_QUEUE_IDS = frozenset({450, 720, 2400, 2450})
 POST_MONTH, POST_DAY, POST_HOUR = 12, 31, 18
 # !wrapped stays open through January.
 CLOSE_MONTH = 2

@@ -225,6 +225,7 @@ Scoreboards sort by Gamer Score (0-100), then win rate, games played, and name.
 - Weights: 65% win / 35% performance; the performance share ramps linearly over the first 8 ranked games.
 - Baselines are built from cached ranked, non-remake matches (`BASELINE_MATCH_LIMIT`), need 20+ samples per role/stat, and are shown in `!health`. Payloads are read from Postgres in pages inside a worker thread: one small query lists the newest match IDs, then each page of 50 payloads is a short primary-key query (no server-side cursor or long transaction), keeping only per-minute numbers; afterwards freed memory is returned to the OS (`src/runtime/memory.py`). `!backfill` scans the cache the same way. Rebuilds run as one background task with a 120 s limit; callers never wait on it once baselines exist (before the first build they wait at most 30 s, then score with Wilson only).
 - Without a baseline or primary role the score is pure Wilson x 100.
+- The weekly scoreboard uses the same score on the week's totals. Each day stores only its most-played role, so a player's weekly role is the one with the most ranked games over the days it was that day's role (`pick_week_primary_role`). Before 2026-11-02 the weekly had no role and scored on win rate alone.
 
 Badges (`report_builder.py`) are separate from the score: per-minute rates shrunk toward the group rate (prior of 2 games daily, 1 weekly), minimum 2 games daily / 3 weekly, plus a Grinder badge for most games.
 

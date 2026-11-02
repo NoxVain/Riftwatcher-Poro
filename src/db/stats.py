@@ -1,4 +1,5 @@
 from src.db.pool import db_execute
+from src.report_logic import pick_week_primary_role
 
 
 def db_upsert_daily_stats(day_date, riot_id, mode_records, performance_totals=None, primary_role=None):
@@ -211,7 +212,29 @@ def db_load_weekly_stats(start_day_date, end_day_date_exclusive):
         (start_day_date, end_day_date_exclusive),
         fetch=True,
     )
-    return [dict(zip(_LATEST_STATS_COLS, row)) for row in rows] if rows else []
+    if not rows:
+        return []
+    # The week's role is the one with the most ranked games over the days it was the
+    # day's primary role, so the weekly Gamer Score can use role baselines like the daily.
+    role_rows = db_execute(
+        """
+        SELECT lower(riot_id), primary_role, SUM(solo_wins + solo_losses + flex_wins + flex_losses)
+        FROM player_daily_stats
+        WHERE day_date >= %s AND day_date < %s AND primary_role IS NOT NULL
+        GROUP BY lower(riot_id), primary_role;
+        """,
+        (start_day_date, end_day_date_exclusive),
+        fetch=True,
+    )
+    role_games = {}
+    for key, role, games in role_rows or []:
+        role_games.setdefault(key, []).append((role, games))
+    results = []
+    for row in rows:
+        result = dict(zip(_LATEST_STATS_COLS, row))
+        result["primary_role"] = pick_week_primary_role(role_games.get(result["riot_id"].lower(), []))
+        results.append(result)
+    return results
 
 
 _DAILY_STATS_PLAYER_COLS = (

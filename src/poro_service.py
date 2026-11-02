@@ -316,13 +316,19 @@ class PoroService:
             self.log("[poro] Returning cached weekly report.")
             return self.weekly_report_cache["text"]
 
+        await self._ensure_role_baselines()
         report_start = time.perf_counter()
         stored_rows = await asyncio.to_thread(
             self.db_load_weekly_stats,
             week_start.isoformat(),
             week_end_exclusive.isoformat(),
         )
-        ranked_results = self.rows_to_ranked_results(stored_rows, self.friends)
+        ranked_results = self.rows_to_ranked_results(stored_rows, self.friends, baselines=self._role_baselines)
+        self.log(
+            f"[poro] Weekly report built: players={len(ranked_results)} "
+            f"with_role={sum(1 for row in stored_rows if row.get('primary_role'))} "
+            f"baselines={'yes' if self._role_baselines else 'no'}"
+        )
         report_text = self.format_report_from_results(
             ranked_results,
             [],

@@ -1,8 +1,10 @@
 import asyncio
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 from src.poro_service import PoroService
+from src.report_logic import compute_gamer_score, wilson_lower_bound
 
 
 class FakeRiotClient:
@@ -273,6 +275,33 @@ def test_build_weekly_report_aggregates_full_week_rows():
     assert "RIFTWATCHER PORO (WEEKLY)" in report
     assert "Alpha" in report
     assert "`5W-1L`" in report
+
+
+def test_weekly_report_scores_with_role_baselines_like_daily():
+    # Every baseline value is 0.5/min, so this player beats the role on every stat.
+    baselines = {"MIDDLE": {stat: [0.5] * 20 for stat in (
+        "cs_per_min", "player_damage_per_min", "objective_damage_per_min", "healing_per_min",
+        "damage_taken_per_min", "kills_per_min", "deaths_per_min", "vision_per_min")}}
+    row = {
+        "riot_id": "Alpha#NA1", "solo_wins": 5, "solo_losses": 1, "flex_wins": 0, "flex_losses": 0,
+        "arcade_wins": 0, "arcade_losses": 0, "total_wins": 5, "total_losses": 1,
+        "updated_at": datetime.now(tz=timezone.utc), "cs_total": 500, "minutes_total": 100.0,
+        "objective_damage": 1000, "player_damage": 2000, "healing": 300, "damage_taken": 4000,
+        "kills": 60, "deaths": 10, "vision_score": 60, "primary_role": "MIDDLE",
+    }
+    logs = []
+    service = _create_service(friends=["Alpha#NA1"], riot_client=FakeRiotClient())
+    service.log = logs.append
+    service._role_baselines = baselines
+    service._baselines_built_at = time.monotonic()
+    service.db_load_weekly_stats = lambda _start, _end: [row]
+
+    report = asyncio.run(service.build_weekly_win_rate_report())
+
+    expected = compute_gamer_score(5, 1, row, "MIDDLE", baselines)
+    assert expected > wilson_lower_bound(5, 1) * 100
+    assert f"Gamer Score: **{expected:.1f}**" in report
+    assert "[poro] Weekly report built: players=1 with_role=1 baselines=yes" in logs
 
 
 def test_get_week_window_respects_day_start_cutoff():

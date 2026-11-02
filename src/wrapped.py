@@ -112,6 +112,7 @@ class _ModeTotals:
     best_kills: tuple | None = None
     best_damage: tuple | None = None
     best_deaths: tuple | None = None
+    best_taken: tuple | None = None
     damage: int = 0
     # Champions with a 1st place (Arena).
     first_champions: set = field(default_factory=set)
@@ -136,7 +137,8 @@ class _ModeTotals:
             self.firsts += int(placement == 1)
             if placement == 1:
                 self.first_champions.add(champion)
-        for attr, column in (("best_kills", "kills"), ("best_damage", "damage_to_champions"), ("best_deaths", "deaths")):
+        for attr, column in (("best_kills", "kills"), ("best_damage", "damage_to_champions"), ("best_deaths", "deaths"),
+                             ("best_taken", "damage_taken")):
             value = row.get(column) or 0
             current = getattr(self, attr)
             if value and (current is None or value > current[0]):
@@ -573,6 +575,10 @@ def _arena_section(wrapped):
     if damage.modes[ARENA].best_damage:
         value, champion, _at = damage.modes[ARENA].best_damage
         lines.append(f"Most damage in a game: **{value:,}** · {_name(damage.riot_id)} · {champion}")
+    taken = max(players, key=lambda p: ((p.modes[ARENA].best_taken or (0,))[0], p.riot_id.casefold()))
+    if taken.modes[ARENA].best_taken:
+        value, champion, _at = taken.modes[ARENA].best_taken
+        lines.append(f"Most damage taken in a game: **{value:,}** · {_name(taken.riot_id)} · {champion}")
     god = max(players, key=lambda p: (len(p.modes[ARENA].first_champions), p.modes[ARENA].firsts, p.riot_id.casefold()))
     god_champions = len(god.modes[ARENA].first_champions)
     if god_champions >= MIN_ARENA_GOD_LINE:

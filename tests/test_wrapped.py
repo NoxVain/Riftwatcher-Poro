@@ -37,7 +37,7 @@ _counter = iter(range(1, 1_000_000))
 
 def game(riot_id, *, day=10, hour=20, queue=420, win=True, champion="Lux", kills=5, deaths=3, assists=8, minutes=30,
          position="UTILITY", pings=5, dead=120, mates=(), placement=None, match_id=None, damage=20000, vision=30,
-         pinks=None):
+         pinks=None, damage_taken=20000):
     n = next(_counter)
     end = datetime(YEAR, 3, 1, hour, tzinfo=OSLO) + timedelta(days=day, minutes=minutes)
     return {
@@ -56,7 +56,7 @@ def game(riot_id, *, day=10, hour=20, queue=420, win=True, champion="Lux", kills
         "assists": assists,
         "damage_to_champions": damage,
         "damage_share": 0.25,
-        "damage_taken": 20000,
+        "damage_taken": damage_taken,
         "gold_earned": 12000,
         "cs": 200,
         "vision_score": vision,
@@ -274,6 +274,19 @@ def test_arena_group_lines_chase_pool_damage_and_duos():
     assert "Highest damage/min: **Reo** · 3,000" in text
     assert "Duo of the year: **Fresh** & **Reo** · 12 games together · 4 crowns" in text
     assert "Best duo: **Fresh** & **Nox** · avg placement 2.0" in text
+
+
+def test_arena_most_damage_taken_in_a_game():
+    # One game is enough, and it may be the same game as the damage record.
+    rows = [game("Tank#EUW", queue=1750, placement=3, damage_taken=90000, champion="Sion")]
+    rows.append(game("Nasus#EUW", queue=1750, placement=1, damage=4_000_000, damage_taken=12_284_992, champion="Nasus"))
+    text = "\n\n".join("\n\n".join(card) for card in format_group_cards(year_of(rows)))
+    assert "Most damage in a game: **4,000,000** · Nasus · Nasus" in text
+    assert "Most damage taken in a game: **12,284,992** · Nasus · Nasus" in text
+    # Only Arena games count.
+    aram = [game("Tank#EUW", queue=450, damage_taken=99_000_000), game("Tank#EUW", queue=1750, placement=2)]
+    text = "\n\n".join("\n\n".join(card) for card in format_group_cards(year_of(aram)))
+    assert "Most damage taken in a game: **20,000** · Tank · Lux" in text
 
 
 def test_arena_partners_on_the_personal_card():

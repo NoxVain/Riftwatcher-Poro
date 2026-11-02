@@ -176,6 +176,7 @@ def db_iter_wrapped_rows(start, end, *, batch_size=RECORD_PAGE_ROWS):
 
 
 BELT_ROW_COLUMNS = (
+    "match_id",
     "queue_id",
     "remake",
     "duration_seconds",

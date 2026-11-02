@@ -133,9 +133,12 @@ class Award:
 class WeekBelts:
     start: datetime
     end: datetime
+    # Distinct games: one several tracked players were in counts once.
     games: int
     players: int
     awards: list
+    # One per player per game (what each player's own rates are built from).
+    player_games: int = 0
 
 
 def compute_week_belts(rows, start, end):
@@ -150,12 +153,14 @@ def compute_week_belts(rows, start, end):
         best = max(rates.values())
         holders = sorted((riot_id for riot_id, rate in rates.items() if rate == best), key=str.casefold)
         awards.append(Award(belt, holders, belt.text(qualified[holders[0]], best)))
+    counted = [row for row in rows if row.get("queue_id") in BELT_QUEUE_IDS and not row.get("remake")]
     return WeekBelts(
         start=start,
         end=end,
-        games=sum(t["games"][0] for t in totals.values()),
+        games=len({row["match_id"] for row in counted}),
         players=len(totals),
         awards=awards,
+        player_games=len(counted),
     )
 
 
@@ -301,7 +306,7 @@ async def post_weekly_belts_once(
     defended = sum(1 for award in week.awards for streak in award.streaks.values() if streak >= 2)
     log(
         f"[belts] Posted weekly belts for {week_label} in channel {channel_id}: belts={len(week.awards)} "
-        f"defended={defended} games={week.games} players={week.players}."
+        f"defended={defended} games={week.games} player_games={week.player_games} players={week.players}."
     )
     return "posted"
 

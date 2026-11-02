@@ -160,6 +160,19 @@ def test_card_sections_with_defended_and_shared_belts():
     assert sections[-1].startswith("-# Ranked Solo/Duo, Flex and 5v5")
 
 
+def test_vision_daddy_keeps_the_vision_dad_key_so_streaks_continue():
+    # Renamed on the card only; the stored holders still use "vision_dad".
+    rows = games("Support#EUW", vision=45)
+    week = compute_week_belts(rows, START, END)
+    apply_defended(week, {
+        "week_start": (START - timedelta(days=7)).isoformat(),
+        "holders": {"vision_dad": {"Support#EUW": 1}},
+    })
+    text = "\n\n".join(format_belts_sections(week))
+    assert "👁️ **Vision Daddy** · Support · **1.50** vision/min · 🔁 defended" in text
+    assert "Vision Dad " not in text
+
+
 def test_card_date_range_across_months_and_view():
     start = datetime(2026, 10, 26, 6, tzinfo=OSLO)
     week = compute_week_belts(games("A#1"), start, start + timedelta(days=7))

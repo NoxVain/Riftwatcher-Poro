@@ -92,7 +92,7 @@ Start with:
   - ranked labels for Solo/Duo, Flex and Ranked 5s; named labels for common non-ranked queues (Normal Draft/Blind, Swiftplay, Quickplay, ARAM, ARAM Mayhem, Clash, ARAM Clash, ARURF, URF, One for All, Nexus Blitz, Co-op vs AI); other queues show `Queue <id>`
   - per player: name, champion (portrait by default), role (left out in ARAM and other modes without lanes), LP; no result mark, since the card edge and header show a shared win/loss. In mixed-result games each player line adds · **Win** or · **Loss**
   - compact bold stats: KDA, CS/min and vision; damage and objectives; damage taken and healing
-  - Arena (`1700`/`1710`/`1750`, with `1750` shown as `Arena 3x6`): placement/team ordering, damage + team damage share, taken/healing/shielded, gold
+  - Arena (`1700`/`1710`/`1740`/`1750`, with `1740`/`1750` shown as `Arena 3x6`): placement/team ordering, damage + team damage share, taken/healing/shielded, gold
   - Arena augments and items by name when static data is available (raw IDs otherwise)
   - Arena skillshots hit/dodged from match challenge stats
   - each match is a card (Discord Components V2) with a result-coloured edge: green all wins, red all losses, blurple mixed, gold Arena, grey unknown

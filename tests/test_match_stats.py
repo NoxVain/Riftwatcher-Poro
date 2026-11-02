@@ -157,6 +157,8 @@ def test_extract_marks_remakes_and_arena_placement():
     # Arena 3x6 (1750) carries a placement too.
     arena_3x6 = match("EUW1_4", [player(NOX, 100, "", placement=5)], queue=1750)
     assert extract_player_match_rows(arena_3x6, TRACKED)[0]["arena_placement"] == 5
+    arena_1740 = match("EUW1_5", [player(NOX, 100, "", placement=2)], queue=1740)
+    assert extract_player_match_rows(arena_1740, TRACKED)[0]["arena_placement"] == 2
     assert arena_row["team_position"] is None and arena_row["opponent_gold_diff"] is None
 
 

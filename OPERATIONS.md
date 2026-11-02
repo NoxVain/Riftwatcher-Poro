@@ -256,7 +256,8 @@ The group Wrapped posts once in `EVENTS_CHANNEL_ID` on 31 December between 18:00
 - Wrapped is a surprise: until the group post has gone out (`poro_wrapped_posted_year` is this year) and before February, `!wrapped` gets no reply for anyone, admins included, and logs `[wrapped] Ignored !wrapped: Wrapped isn't open …`. There is no preview in Discord; check the cards with a local read-only render instead.
 - `[wrapped] Channel … not available; retrying next check.` and `[wrapped] Wrapped check failed; retrying next check: …` retry every 10 minutes. If the bot is down at 18:00, the post goes out at the first check after startup (until the end of January).
 - The year is stored in `poro_wrapped_posted_year` before sending, so a send that fails after that is not retried. To repost, delete that key; the next check posts again.
-- Arena 3x6 placements came with `STATS_VERSION` 6 (the deploy rebuilds every row, about 2 minutes); before that, only queue 1700 Arena games had a placement.
+- Arena 3x6 placements came with `STATS_VERSION` 6 (the deploy rebuilds every row, about 2 minutes); before that, only queue 1700 Arena games had a placement. Queue 1740 (also six teams of three, not in Riot's queue list) counts as Arena since `STATS_VERSION` 9, whose rebuild fills its placements.
+- ARAM Mayhem (queue 2400) never reaches the bot: Riot keeps Mayhem matches private (403 from match-v5, left out of match ID lists; RiotGames/developer-relations#1109), so they're missing from recaps, scoreboards, records and Wrapped. Queue 2450 (`KIWI_JADE`, a Howling Abyss event) does come through and shows as `ARAM event`.
 
 ## Match Cache Retention
 

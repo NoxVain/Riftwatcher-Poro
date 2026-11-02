@@ -20,7 +20,7 @@ from src.report_logic import get_match_duration_seconds, get_match_end_unix_seco
 from src.runtime.memory import release_freed_memory
 
 # Bump when extraction changes, so the next pass rebuilds every row.
-STATS_VERSION = 8
+STATS_VERSION = 9
 STATS_FINGERPRINT_KEY = "player_match_stats_fingerprint"
 STATS_WATERMARK_KEY = "player_match_stats_cached_through"
 # STATS_VERSION of the last completed full pass; until it matches, a rebuild is under way

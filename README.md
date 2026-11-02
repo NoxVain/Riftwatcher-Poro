@@ -82,7 +82,7 @@ Start with:
   - Flex (`440`)
   - Ranked 5s (`710`) - counted in the Flex bucket
 - Scoreboards are ordered by `Gamer Score` (0-100):
-  - 65% Wilson lower bound of the ranked win rate (z = 1.40) + 35% role-relative performance percentile
+  - 65% Wilson lower bound of the ranked win rate (z = 1.00) + 35% role-relative performance percentile
   - the performance share ramps in over the first 8 ranked games of the window
   - performance percentiles compare per-minute stats against same-role baselines built from cached ranked matches (`BASELINE_MATCH_LIMIT`)
   - the weekly scoreboard scores the same way, using the role each player played most that week

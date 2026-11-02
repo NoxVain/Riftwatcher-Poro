@@ -5,6 +5,7 @@ from datetime import datetime
 from src.report_logic import (
     GAMER_SCORE_PERF_WEIGHT,
     GAMER_SCORE_PERF_RAMP_GAMES,
+    WILSON_Z,
     compute_gamer_score,
     compute_perf_percentile,
     format_mode_line,
@@ -187,7 +188,7 @@ def format_report_from_results(
         service.log(
             f"[poro] Report complete: players={len(service.friends)} "
             "ranked=0 hidden_no_matches=all errors=0 "
-            f"elapsed={total_elapsed_ms}ms"
+            f"wilson_z={WILSON_Z:.2f} elapsed={total_elapsed_ms}ms"
         )
         return "\n".join(report_lines)
 
@@ -248,7 +249,7 @@ def format_report_from_results(
     service.log(
         f"[poro] Report complete: players={len(service.friends)} "
         f"ranked={len(ranked_results)} hidden_no_matches={len(service.friends) - len(ranked_results) - len(error_results)} "
-        f"errors={len(error_results)} elapsed={total_elapsed_ms}ms"
+        f"errors={len(error_results)} wilson_z={WILSON_Z:.2f} elapsed={total_elapsed_ms}ms"
     )
     report_text = "\n".join(report_lines)
     if len(report_text) <= 2000:

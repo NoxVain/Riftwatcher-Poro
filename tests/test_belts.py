@@ -29,7 +29,7 @@ END = START + timedelta(days=7)
 MATCH_IDS = itertools.count(1)
 
 
-def game(riot_id, *, match_id=None, queue=420, remake=False, minutes=30, damage=20000, vision=30, turrets=1,
+def game(riot_id, *, match_id=None, queue=420, remake=False, minutes=30, damage=20000, gold=12000, vision=30, turrets=1,
          dragons=1, barons=0, heralds=0, saves=0, outnumbered=0, dodged=30, pings=10, dead_minutes=3):
     return {
         "match_id": match_id or f"EUW1_{next(MATCH_IDS)}",
@@ -38,6 +38,7 @@ def game(riot_id, *, match_id=None, queue=420, remake=False, minutes=30, damage=
         "remake": remake,
         "duration_seconds": minutes * 60,
         "damage_to_champions": damage,
+        "gold_earned": gold,
         "vision_score": vision,
         "turret_takedowns": turrets,
         "dragon_takedowns": dragons,
@@ -57,6 +58,60 @@ def games(riot_id, count=3, **kwargs):
 
 def awards_by_key(week):
     return {award.belt.key: award for award in week.awards}
+
+
+def test_lp_belts_rank_net_weekly_change_and_share_ties():
+    rows = games("A#1") + games("B#1") + games("C#1") + games("D#1")
+    lp = {"A#1": {"lp_delta": 125, "games": 7}, "B#1": {"lp_delta": 125, "games": 5},
+          "C#1": {"lp_delta": -80, "games": 6}, "D#1": {"lp_delta": -20, "games": 3}}
+    week = compute_week_belts(rows, START, END, lp_totals=lp)
+    belts = awards_by_key(week)
+    assert belts["lp_gained"].holders == ["A#1", "B#1"]
+    assert belts["lp_gained"].text == "**+125 LP** net this week"
+    assert belts["lp_lost"].holders == ["C#1"]
+    assert belts["lp_lost"].text == "**-80 LP** net this week"
+    previous = {"week_start": (START - timedelta(days=7)).isoformat(),
+                "holders": {"lp_gained": {"A#1": 2}, "lp_lost": {"D#1": 1}}}
+    state = apply_defended(week, previous)
+    assert state["lp_gained"] == {"A#1": 3, "B#1": 1}
+    assert state["lp_lost"] == {"C#1": 1}
+    sections = format_belts_sections(week)
+    assert "LP Climber" in next(s for s in sections if s.startswith("**Glory**"))
+    assert "LP Donor" in next(s for s in sections if s.startswith("**Shame**"))
+    assert "recorded Solo/Duo + Flex" in sections[-1]
+
+
+def test_lp_needs_three_ranked_and_three_observed_games_and_known_nonzero_lp():
+    rows = games("Rookie#1", 2) + games("Missing#1") + games("Few#1") + games("Zero#1")
+    lp = {"Rookie#1": {"lp_delta": 999, "games": 3}, "Missing#1": {"lp_delta": None, "games": 3},
+          "Few#1": {"lp_delta": -999, "games": 2}, "Zero#1": {"lp_delta": 0, "games": 3},
+          "Removed#1": {"lp_delta": 1000, "games": 10}}
+    belts = awards_by_key(compute_week_belts(rows, START, END, lp_totals=lp))
+    assert "lp_gained" not in belts and "lp_lost" not in belts
+    assert "damage_king" in belts
+
+
+def test_only_positive_or_negative_lp_awards_the_corresponding_belt():
+    for delta, expected, absent in ((20, "lp_gained", "lp_lost"), (-20, "lp_lost", "lp_gained")):
+        week = compute_week_belts(games("A#1"), START, END,
+                                  lp_totals={"A#1": {"lp_delta": delta, "games": 3}})
+        assert expected in awards_by_key(week) and absent not in awards_by_key(week)
+
+
+def test_gold_magnet_uses_total_gold_divided_by_total_minutes():
+    # A's unweighted average is higher, but B earns more gold per actual minute.
+    rows = [game("A#1", gold=9000, minutes=10), game("A#1", gold=12000, minutes=50),
+            game("A#1", gold=9000, minutes=30)] + games("B#1", gold=12000)
+    rows += games("Rookie#1", 2, gold=60000) + games("Unknown#1", gold=None)
+    belt = awards_by_key(compute_week_belts(rows, START, END))["gold_magnet"]
+    assert belt.holders == ["B#1"] and belt.text == "**400** gold/min"
+
+
+def test_gold_magnet_shares_ties_and_skips_missing_and_zero_values():
+    rows = games("A#1", gold=12000) + games("B#1", gold=12000)
+    assert awards_by_key(compute_week_belts(rows, START, END))["gold_magnet"].holders == ["A#1", "B#1"]
+    for gold in (None, 0):
+        assert "gold_magnet" not in awards_by_key(compute_week_belts(games("A#1", gold=gold), START, END))
 
 
 # --- Awards -----------------------------------------------------------------
@@ -236,7 +291,8 @@ class FakeChannel:
         self.sent.append(view_text(view) if view is not None else content)
 
 
-def run_once(*, state, rows=None, now=END + BELTS_POST_DELAY, channel=None, logs=None, missing_channel=False):
+def run_once(*, state, rows=None, now=END + BELTS_POST_DELAY, channel=None, logs=None, missing_channel=False,
+             lp_totals=None, fail_lp=False):
     channel = channel or FakeChannel()
     loads = []
 
@@ -248,8 +304,15 @@ def run_once(*, state, rows=None, now=END + BELTS_POST_DELAY, channel=None, logs
         assert channel_id == 555
         return None if missing_channel else channel
 
+    def load_lp(start, end):
+        assert (start, end) == (START, END)
+        if fail_lp:
+            raise RuntimeError("LP read failed")
+        return lp_totals or {}
+
     result = asyncio.run(post_weekly_belts_once(
         db_load_belt_rows=load_rows,
+        db_load_belt_lp_totals=load_lp,
         db_get_state=state.get,
         db_set_state=state.__setitem__,
         resolve_channel=resolve,
@@ -321,6 +384,54 @@ def test_rejected_card_falls_back_to_text():
     assert result == "posted"
     assert channel.sent[0].startswith("🎖️ **Weekly title belts**")
     assert any("sending it as plain text" in line for line in logs)
+
+
+def test_lp_loader_is_wired_to_posting_and_state():
+    state = {BELTS_STATE_KEY: previous_state()}
+    logs = []
+    result, channel, _ = run_once(state=state, logs=logs,
+                                 lp_totals={"NoxVain#EUW": {"lp_delta": 140, "games": 8}})
+    assert result == "posted" and "**+140 LP**" in channel.sent[0]
+    assert "lp_players=1 lp_belts=1" in logs[-1]
+    assert json.loads(state[BELTS_STATE_KEY])["holders"]["lp_gained"] == {"NoxVain#EUW": 1}
+
+
+def test_failed_lp_read_does_not_block_the_other_belts():
+    logs = []
+    result, channel, _ = run_once(state={BELTS_STATE_KEY: previous_state()}, fail_lp=True, logs=logs)
+    assert result == "posted" and "Gold Magnet" in channel.sent[0]
+    assert "LP Climber" not in channel.sent[0] and "LP Donor" not in channel.sent[0]
+    assert "LP totals unavailable" in logs[0]
+
+
+def test_lp_timeout_does_not_block_the_other_belts(monkeypatch):
+    import src.belts as belts
+
+    async def timeout(awaitable, *, timeout):
+        awaitable.close()
+        raise TimeoutError("test timeout")
+
+    monkeypatch.setattr(belts.asyncio, "wait_for", timeout)
+    logs = []
+    result, channel, _ = run_once(state={BELTS_STATE_KEY: previous_state()}, logs=logs)
+    assert result == "posted" and "Gold Magnet" in channel.sent[0]
+    assert "TimeoutError" in logs[0]
+
+
+def test_long_tied_belt_card_has_a_lossless_plain_text_fallback():
+    rows, lp = [], {}
+    for i in range(25):
+        name = "_" * 28 + str(i) + "#EUW"
+        rows.extend(games(name))
+        lp[name] = {"lp_delta": 100, "games": 3}
+    week = compute_week_belts(rows, START, END, lp_totals=lp)
+    apply_defended(week, None)
+    expected = "\n\n".join(format_belts_sections(week))
+    result, channel, _ = run_once(state={BELTS_STATE_KEY: previous_state()}, rows=rows,
+                                 lp_totals=lp, channel=FakeChannel(reject_views=True))
+    assert result == "posted" and len(channel.sent) > 1
+    assert all(0 < len(text) <= 2000 for text in channel.sent)
+    assert "".join(channel.sent) == expected
 
 
 def test_loop_never_raises():

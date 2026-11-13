@@ -2,5 +2,5 @@
 # Exact pins keep builds reproducible; Dependabot opens PRs to update them.
 discord.py==2.7.1
 requests==2.34.2
-psycopg[binary]==3.3.6
+psycopg[binary]==3.3.8
 python-dotenv==1.2.4

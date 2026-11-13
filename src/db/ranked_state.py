@@ -108,3 +108,21 @@ def db_load_all_ranked_states():
     for row in rows:
         states.setdefault(row[0], []).append(dict(zip(_RANKED_STATE_COLS, row[1:])))
     return states
+
+
+def db_load_belt_lp_totals(start, end):
+    """Tracked players' recorded net Solo/Duo + Flex LP in [start, end).
+
+    A reset or unknown delta makes that player's total unreliable for the week.
+    Keep multi-game polls and dodge/decay adjustments; they also change net LP.
+    """
+    rows = db_execute(
+        "SELECT t.riot_id, sum(h.lp_delta), sum(h.wins_delta + h.losses_delta) "
+        "FROM tracked_players t JOIN lp_history h ON lower(h.riot_id) = lower(t.riot_id) "
+        "WHERE h.queue_type = ANY(%s) AND h.observed_at >= %s AND h.observed_at < %s "
+        "GROUP BY t.riot_id "
+        "HAVING bool_and(h.lp_delta IS NOT NULL AND h.wins_delta >= 0 AND h.losses_delta >= 0);",
+        (["RANKED_SOLO_5X5", "RANKED_FLEX_SR"], start, end),
+        fetch=True,
+    ) or []
+    return {riot_id: {"lp_delta": int(delta), "games": int(games)} for riot_id, delta, games in rows}

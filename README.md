@@ -64,7 +64,7 @@ Start with:
 - `src/match_stats.py` - per-player match stats extracted from cached matches into `player_match_stats` (background sync)
 - `src/player_analysis.py` - `!analyze` rules: guarded strengths and tips from recent ranked games (3 months by default, up to 12), and the compact card
 - `src/wrapped.py` - Poro Wrapped: the group's year in review, posted in the events channel on 31 December at 18:00, and `!wrapped Name` per player until the end of January
-- `src/belts.py` - weekly title belts (Damage King, Backseat Gamer, ...) posted in the events channel when a report week closes, with defended streaks
+- `src/belts.py` - weekly title belts (including LP Climber for most recorded net LP gained, LP Donor for most lost, and Gold Magnet for highest gold/min) posted in the events channel when a report week closes, with defended streaks
 - `src/records.py` - Hall of Fame: group records and personal records from ranked games (`!records`), and "New group record" and "Personal best" lines in recaps
 - `tests/` - unit tests
 

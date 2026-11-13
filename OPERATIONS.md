@@ -240,9 +240,10 @@ Pentakills come from the `penta_kills` column, added with `STATS_VERSION` 2. The
 
 ## Weekly Title Belts
 
-The belts card for a report week posts in `EVENTS_CHANNEL_ID` about 20-30 minutes after the week closes (Monday 06:00 Oslo in production), from that week's ranked rows in `player_match_stats`.
+The belts card for a report week posts in `EVENTS_CHANNEL_ID` about 20-30 minutes after the week closes (Monday 06:00 Oslo in production), from that week's ranked rows in `player_match_stats`, plus recorded LP changes in `lp_history`. Gold Magnet uses total measured gold divided by measured minutes. LP Climber/LP Donor use net Solo/Duo + Flex LP observed during [week start, week end); promotions/demotions are already normalized in the stored deltas. LP awards need 3 ranked games and 3 observed games, and omit player-weeks with unknown LP or negative win/loss counter deltas (resets). Dodges/decay and multi-game polls count; missing history is never estimated.
 
-- Logs: `[belts] Posted weekly belts for <start>..<end> in channel <id>: belts=… defended=… games=… player_games=… players=….` `games` counts each game once; `player_games` counts it once per tracked player in it. A week where nobody played 3 ranked games logs `[belts] No belts for week …` and posts nothing.
+- Logs: `[belts] Posted weekly belts for <start>..<end> in channel <id>: belts=… defended=… games=… player_games=… players=… lp_players=… lp_belts=….` `games` counts each game once; `player_games` counts it once per tracked player in it. A week where nobody played 3 ranked games logs `[belts] No belts for week …` and posts nothing.
+- `[belts] LP totals unavailable; posting other belts: ...` means the optional read failed or exceeded 10 seconds. Other belts still post; LP awards can be absent for missing/incomplete history, counter resets, insufficient observed games or zero net change. No Riot calls, migration or stats rebuild is needed.
 - The very first run stores the last closed week's holders and logs `[belts] First run: …`; the first card posts the following Monday, so defended marks work from the first card.
 - `[belts] Channel … not available; retrying next check.` or `[belts] Weekly belts check failed; retrying next check: …` retry every 10 minutes. The week is stored before sending, so a send that fails after that is not retried.
 - To repost a week (e.g. after fixing a bug), set `weekly_belts_state` back to the previous week's value, or delete it to start over from a silent baseline (defended streaks reset).

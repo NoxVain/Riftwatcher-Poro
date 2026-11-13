@@ -2,7 +2,8 @@
 
 Pure logic over one week of `player_match_stats` rows (ranked Solo/Duo, Flex and 5v5,
 no remakes), plus a background loop that posts the card. Each belt goes to the best
-rate (per minute or per game) among players with at least MIN_BELT_GAMES games; ties
+rate (per minute or per game), or recorded net weekly LP change. Players need at
+least MIN_BELT_GAMES games (also observed games for LP); ties
 share the belt. Holders are stored in `bot_state`, so a belt held again the next week
 is marked as defended. No Riot requests.
 """
@@ -15,6 +16,8 @@ from datetime import datetime, time, timedelta, timezone
 
 import discord
 
+from src.discord_text import split_message_text
+
 BELT_QUEUE_IDS = (420, 440, 710)
 MIN_BELT_GAMES = 3
 BELTS_STATE_KEY = "weekly_belts_state"
@@ -24,6 +27,7 @@ BELTS_CHECK_SECONDS = 600
 # First check after startup: lets a stats rebuild (STATS_VERSION bump) finish first.
 BELTS_STARTUP_DELAY_SECONDS = 900
 BELTS_ACCENT = 0xF0B232
+LP_LOAD_TIMEOUT_SECONDS = 10
 
 GLORY = "Glory"
 SHAME = "Shame"
@@ -62,8 +66,12 @@ class Belt:
 
 
 BELTS = (
+    Belt("lp_gained", "🪜", "LP Climber", GLORY, lambda t: t["net_lp"][0],
+         lambda t, r: f"**+{r:,.0f} LP** net this week"),
     Belt("damage_king", "👑", "Damage King", GLORY, _per_minute("damage_to_champions"),
          lambda t, r: f"**{r:,.0f}** damage/min"),
+    Belt("gold_magnet", "💰", "Gold Magnet", GLORY, _per_minute("gold_earned"),
+         lambda t, r: f"**{r:,.0f}** gold/min"),
     Belt("vision_dad", "👁️", "Vision Daddy", GLORY, _per_minute("vision_score"),
          lambda t, r: f"**{r:.2f}** vision/min"),
     Belt("objective_goblin", "🏰", "Objective Goblin", GLORY, _per_game("objectives"),
@@ -78,10 +86,13 @@ BELTS = (
          lambda t, r: f"**{r:.0f}** pings a game"),
     Belt("grey_screen", "🪦", "Grey Screen Enjoyer", SHAME, _dead_share,
          lambda t, r: f"dead for **{r * 100:.0f}%** of every game"),
+    Belt("lp_lost", "📉", "LP Donor", SHAME, lambda t: -t["net_lp"][0],
+         lambda t, r: f"**-{r:,.0f} LP** net this week"),
 )
 
 _SUMMED_COLUMNS = (
     "damage_to_champions",
+    "gold_earned",
     "vision_score",
     "ally_saves",
     "outnumbered_kills",
@@ -141,9 +152,13 @@ class WeekBelts:
     player_games: int = 0
 
 
-def compute_week_belts(rows, start, end):
+def compute_week_belts(rows, start, end, *, lp_totals=None):
     totals = _player_totals(rows)
     qualified = {riot_id: t for riot_id, t in totals.items() if t["games"][0] >= MIN_BELT_GAMES}
+    for riot_id, player in qualified.items():
+        lp = (lp_totals or {}).get(riot_id)
+        if lp and lp.get("lp_delta") is not None and lp.get("games", 0) >= MIN_BELT_GAMES:
+            player["net_lp"] = [lp["lp_delta"], lp["games"], 0]
     awards = []
     for belt in BELTS:
         rates = {riot_id: belt.rate(t) for riot_id, t in qualified.items()}
@@ -247,8 +262,10 @@ def format_belts_sections(week):
         if lines:
             sections.append(f"**{section}**\n" + "\n".join(lines))
     sections.append(
-        "-# Ranked Solo/Duo, Flex and 5v5 · the best rate wins, ties share the belt · 🔁 held last week too"
+        "-# Ranked Solo/Duo, Flex and 5v5 · best rates or net LP totals win, ties share the belt · 🔁 held last week too"
     )
+    if any(award.belt.key in ("lp_gained", "lp_lost") for award in week.awards):
+        sections[-1] += "\n-# LP: recorded Solo/Duo + Flex changes · 3+ observed games · resets/unknown LP excluded"
     return sections
 
 
@@ -265,7 +282,8 @@ def build_belts_view(sections):
 
 
 async def post_weekly_belts_once(
-    *, db_load_belt_rows, db_get_state, db_set_state, resolve_channel, channel_id, tz, day_start_hour, now_utc, log
+    *, db_load_belt_rows, db_get_state, db_set_state, resolve_channel, channel_id, tz, day_start_hour, now_utc, log,
+    db_load_belt_lp_totals=None,
 ):
     """One check: post the last closed week's belts if they're due and not posted yet.
 
@@ -279,7 +297,15 @@ async def post_weekly_belts_once(
     if now_utc < end + BELTS_POST_DELAY:
         return "waiting"
     rows = await asyncio.to_thread(db_load_belt_rows, start, end)
-    week = compute_week_belts(rows, start, end)
+    lp_totals = {}
+    if db_load_belt_lp_totals is not None:
+        try:
+            lp_totals = await asyncio.wait_for(
+                asyncio.to_thread(db_load_belt_lp_totals, start, end), timeout=LP_LOAD_TIMEOUT_SECONDS,
+            )
+        except Exception as exc:
+            log(f"[belts] LP totals unavailable; posting other belts: {type(exc).__name__}: {exc}")
+    week = compute_week_belts(rows, start, end, lp_totals=lp_totals)
     holders = apply_defended(week, state)
     new_state = json.dumps({"week_start": start.isoformat(), "holders": holders})
     week_label = f"{start.date()}..{end.date()}"
@@ -302,11 +328,13 @@ async def post_weekly_belts_once(
         await channel.send(view=build_belts_view(sections))
     except discord.HTTPException as exc:
         log(f"[belts] Discord rejected the belts card (HTTP {getattr(exc, 'status', '?')}); sending it as plain text.")
-        await channel.send("\n\n".join(sections))
+        for chunk in split_message_text("\n\n".join(sections)):
+            await channel.send(chunk)
     defended = sum(1 for award in week.awards for streak in award.streaks.values() if streak >= 2)
     log(
         f"[belts] Posted weekly belts for {week_label} in channel {channel_id}: belts={len(week.awards)} "
-        f"defended={defended} games={week.games} player_games={week.player_games} players={week.players}."
+        f"defended={defended} games={week.games} player_games={week.player_games} players={week.players} "
+        f"lp_players={len(lp_totals)} lp_belts={sum(a.belt.key in ('lp_gained', 'lp_lost') for a in week.awards)}."
     )
     return "posted"
 
@@ -321,6 +349,7 @@ async def run_weekly_belts_loop(
     tz,
     day_start_hour,
     log,
+    db_load_belt_lp_totals=None,
     startup_delay_seconds=BELTS_STARTUP_DELAY_SECONDS,
     interval_seconds=BELTS_CHECK_SECONDS,
     max_passes=None,
@@ -342,6 +371,7 @@ async def run_weekly_belts_loop(
                 day_start_hour=day_start_hour,
                 now_utc=now(),
                 log=log,
+                db_load_belt_lp_totals=db_load_belt_lp_totals,
             )
         except Exception as exc:
             log(f"[belts] Weekly belts check failed; retrying next check: {type(exc).__name__}: {exc}")

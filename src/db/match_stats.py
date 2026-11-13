@@ -181,6 +181,7 @@ BELT_ROW_COLUMNS = (
     "remake",
     "duration_seconds",
     "damage_to_champions",
+    "gold_earned",
     "vision_score",
     "turret_takedowns",
     "dragon_takedowns",

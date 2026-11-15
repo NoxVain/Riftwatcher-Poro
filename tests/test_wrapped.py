@@ -521,7 +521,6 @@ def run_command(content, monkeypatch, *, now, admin=False, logs=None, posted="20
         poro_service=None,
         report_timezone_name="Europe/Oslo",
         report_day_start_hour=6,
-        db_enabled=True,
         start_monotonic=0.0,
         daily_request_lock=asyncio.Lock(),
         request_id_context=contextvars.ContextVar("request_id", default=None),

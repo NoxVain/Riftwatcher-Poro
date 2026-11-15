@@ -86,9 +86,6 @@ async def handle_ops_commands(ctx):
         return True
 
     if content_lower.startswith(f"{BACKFILL_COMMAND.casefold()} "):
-        if not ctx.db_enabled:
-            await ctx.message.channel.send("Backfill requires postgres-backed mode.")
-            return True
 
         parts = content.split()
         if len(parts) != 3:
@@ -189,7 +186,7 @@ async def handle_ops_commands(ctx):
         if arg not in CHAMPION_DISPLAY_MODES:
             await ctx.message.channel.send(CHAMPION_DISPLAY_USAGE)
             return True
-        if not ctx.db_enabled or ctx.db_set_state is None:
+        if ctx.db_set_state is None:
             await ctx.message.channel.send("Champion display settings require postgres-backed mode.")
             return True
 

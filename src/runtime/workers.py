@@ -87,7 +87,6 @@ async def evaluate_rank_changes_and_notify(
 
 async def background_rank_notifier(
     *,
-    db_enabled,
     daily_refresh_seconds,
     client,
     request_id_context,
@@ -95,8 +94,6 @@ async def background_rank_notifier(
     evaluate_rank_changes_and_notify_fn,
     log,
 ):
-    if not db_enabled:
-        return
     sleep_seconds = max(30, daily_refresh_seconds)
     initial_jitter = random.uniform(0.0, min(30.0, sleep_seconds / 2))
     if initial_jitter > 0:
@@ -129,7 +126,6 @@ async def background_match_recap_notifier(
     riot_client,
     poro_service,
     match_recap_channel_id,
-    db_enabled,
     db_get_state,
     db_set_state,
     db_upsert_daily_stats,
@@ -165,7 +161,6 @@ async def background_match_recap_notifier(
                 match_recap_channel_id=match_recap_channel_id,
                 channel=channel,
                 champion_icons=champion_icons,
-                db_enabled=db_enabled,
                 db_get_state=db_get_state,
                 db_set_state=db_set_state,
                 db_upsert_daily_stats=db_upsert_daily_stats,
@@ -305,7 +300,6 @@ async def background_patch_notes_notifier(
 
 async def background_match_cache_backfiller(
     *,
-    db_enabled,
     daily_refresh_seconds,
     client,
     request_id_context,
@@ -318,9 +312,6 @@ async def background_match_cache_backfiller(
     worker_stats,
     log,
 ):
-    if not db_enabled:
-        return
-
     backfill_recent_ids_count = 100
     backfill_per_player_limit = 3
     backfill_interval_seconds = max(120, daily_refresh_seconds * 2)
@@ -366,7 +357,6 @@ async def background_match_cache_backfiller(
 
 async def background_daily_refresher(
     *,
-    db_enabled,
     daily_refresh_seconds,
     client,
     request_id_context,
@@ -383,8 +373,6 @@ async def background_daily_refresher(
     worker_stats,
     log,
 ):
-    if not db_enabled:
-        return
     sleep_seconds = max(30, daily_refresh_seconds)
     initial_jitter = random.uniform(0.0, min(30.0, sleep_seconds / 2))
     if initial_jitter > 0:
@@ -435,8 +423,7 @@ async def background_daily_refresher(
                     log(f"[refresh] Could not edit last report message: {exc}")
                     report_state["channel_id"] = None
                     report_state["message_id"] = None
-                    if db_enabled:
-                        await asyncio.to_thread(db_set_last_report_message, 0, 0)
+                    await asyncio.to_thread(db_set_last_report_message, 0, 0)
                 except discord.HTTPException as exc:
                     log(f"[refresh] Discord API error while editing last report message: {exc}")
 

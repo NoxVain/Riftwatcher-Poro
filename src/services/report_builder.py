@@ -272,8 +272,6 @@ async def build_score_breakdown_report(service):
         lines.append("_Run `!Daily` once to trigger a build._")
         lines.append("")
 
-    if not service.db_enabled:
-        return "\n".join(lines + ["_DB not enabled \u2014 per-player breakdown unavailable._"])
 
     stored_rows = await asyncio.to_thread(service.db_load_latest_stats, cycle_key)
     row_by_key = {str(row["riot_id"]).casefold(): row for row in (stored_rows or [])}

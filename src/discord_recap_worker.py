@@ -371,7 +371,6 @@ async def process_recap_cycle(
     poro_service,
     match_recap_channel_id,
     channel,
-    db_enabled,
     db_get_state,
     db_set_state,
     db_upsert_daily_stats,
@@ -422,7 +421,7 @@ async def process_recap_cycle(
             log(f"[recap] Failed while checking {riot_id}: {exc}")
 
     # Recaps Discord refused on an earlier cycle go out again with this one.
-    held_back_before = await asyncio.to_thread(_load_retry_queue, db_get_state, log) if db_enabled else {}
+    held_back_before = await asyncio.to_thread(_load_retry_queue, db_get_state, log)
     now = time.time()
     retrying = {}
     for match_id, first_refused in sorted(held_back_before.items()):
@@ -477,7 +476,7 @@ async def process_recap_cycle(
             continue
         duration_seconds = get_match_duration_seconds(match_info)
         match_entries.append((end_ts, match_id, queue_id, duration_seconds, tracked_participants))
-        if queue_id in RECORD_QUEUE_IDS and db_enabled and db_iter_record_rows is not None:
+        if queue_id in RECORD_QUEUE_IDS and db_iter_record_rows is not None:
             stats_rows = extract_player_match_rows(match_info, set(puuid_to_riot_id))
             for row in stats_rows:
                 row["riot_id"] = puuid_to_riot_id[row["puuid"]]
@@ -542,7 +541,7 @@ async def process_recap_cycle(
             )
             waiting_before = len(lp_waiting)
             lp_queue_type = QUEUE_TYPE_BY_QUEUE_ID.get(queue_id)
-            if lp_queue_type is not None and db_enabled:
+            if lp_queue_type is not None:
                 player_line = await _attach_stored_lp(
                     player_line,
                     riot_id=riot_id,
@@ -594,10 +593,9 @@ async def process_recap_cycle(
         for riot_id, _participant in tracked_participants:
             affected_riot_ids.add(riot_id)
     if not affected_riot_ids:
-        if db_enabled:
-            await _save_held_back(
-                db_set_state, retrying=retrying, held_ids=[], failed_match_ids=failed_match_ids, now=now
-            )
+        await _save_held_back(
+            db_set_state, retrying=retrying, held_ids=[], failed_match_ids=failed_match_ids, now=now
+        )
         return
 
     streak_sections = []
@@ -662,10 +660,9 @@ async def process_recap_cycle(
             f"[recap] Discord refused the recap ({refusal}); holding back {len(held_ids)} match(es) "
             f"for the next cycle: {', '.join(held_ids)}."
         )
-    if db_enabled:
-        await _save_held_back(
-            db_set_state, retrying=retrying, held_ids=held_ids, failed_match_ids=failed_match_ids, now=now
-        )
+    await _save_held_back(
+        db_set_state, retrying=retrying, held_ids=held_ids, failed_match_ids=failed_match_ids, now=now
+    )
 
     # A streak callout waits for its player's held-back recap, which works it out again.
     held_set = set(held_ids)
@@ -705,8 +702,6 @@ async def process_recap_cycle(
         await asyncio.to_thread(db_set_state, state_key, streak_token)
         log(f"[recap] Posted streak callout for {riot_id} ({streak_token}).")
 
-    if not db_enabled:
-        return
 
     try:
         cycle_key = poro_service.get_cycle_key()

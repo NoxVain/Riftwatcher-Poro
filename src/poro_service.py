@@ -51,7 +51,6 @@ class PoroService:
         report_day_start_hour,
         report_cache_seconds,
         daily_refresh_seconds,
-        db_enabled,
         db_load_latest_stats,
         db_load_weekly_stats=None,
         db_upsert_daily_stats,
@@ -69,7 +68,6 @@ class PoroService:
         self.report_day_start_hour = max(0, min(23, int(report_day_start_hour)))
         self.report_cache_seconds = report_cache_seconds
         self.daily_refresh_seconds = daily_refresh_seconds
-        self.db_enabled = db_enabled
         self.db_load_latest_stats = db_load_latest_stats
         self.db_load_weekly_stats = db_load_weekly_stats or (lambda _start, _end: [])
         self.db_upsert_daily_stats = db_upsert_daily_stats
@@ -184,7 +182,7 @@ class PoroService:
             badge_prior_games=badge_prior_games,
         )
 
-    async def build_today_win_rate_report(self, progress_callback=None, prefer_snapshot=False, bypass_cache=False):
+    async def build_today_win_rate_report(self, prefer_snapshot=False, bypass_cache=False):
         cycle_key = self.get_cycle_key()
         now_monotonic = time.monotonic()
         if (
@@ -202,51 +200,47 @@ class PoroService:
         ranked_results = []
         error_results = []
 
-        if self.db_enabled:
-            stored_rows = await asyncio.to_thread(self.db_load_latest_stats, cycle_key)
-            if stored_rows:
-                if not prefer_snapshot:
-                    latest_updated_at = None
-                    for row in stored_rows:
-                        row_updated_at = row["updated_at"]
-                        if row_updated_at is None:
-                            continue
-                        if latest_updated_at is None or row_updated_at > latest_updated_at:
-                            latest_updated_at = row_updated_at
+        stored_rows = await asyncio.to_thread(self.db_load_latest_stats, cycle_key)
+        if stored_rows:
+            if not prefer_snapshot:
+                latest_updated_at = None
+                for row in stored_rows:
+                    row_updated_at = row["updated_at"]
+                    if row_updated_at is None:
+                        continue
+                    if latest_updated_at is None or row_updated_at > latest_updated_at:
+                        latest_updated_at = row_updated_at
 
-                    snapshot_max_age_seconds = max(600, self.daily_refresh_seconds * 2)
-                    snapshot_stale = True
-                    if latest_updated_at is not None:
-                        latest_updated_utc = latest_updated_at.astimezone(timezone.utc)
-                        snapshot_age = datetime.now(tz=timezone.utc) - latest_updated_utc
-                        snapshot_stale = snapshot_age > timedelta(seconds=snapshot_max_age_seconds)
+                snapshot_max_age_seconds = max(600, self.daily_refresh_seconds * 2)
+                snapshot_stale = True
+                if latest_updated_at is not None:
+                    latest_updated_utc = latest_updated_at.astimezone(timezone.utc)
+                    snapshot_age = datetime.now(tz=timezone.utc) - latest_updated_utc
+                    snapshot_stale = snapshot_age > timedelta(seconds=snapshot_max_age_seconds)
 
-                    if snapshot_stale:
-                        self.log("[poro] Snapshot data is stale; falling back to live rebuild.")
-                        stored_rows = []
+                if snapshot_stale:
+                    self.log("[poro] Snapshot data is stale; falling back to live rebuild.")
+                    stored_rows = []
 
-            if stored_rows:
-                ranked_results = self.rows_to_ranked_results(stored_rows, self.friends, baselines=self._role_baselines)
-                if ranked_results or prefer_snapshot:
-                    self.log("[poro] Returning report from postgres daily stats.")
-                    report_text = self.format_report_from_results(ranked_results, error_results, report_start)
-                    if not bypass_cache:
-                        self.report_cache["text"] = report_text
-                        self.report_cache["day"] = cycle_key
-                        self.report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
-                    return report_text
-            elif prefer_snapshot:
+        if stored_rows:
+            ranked_results = self.rows_to_ranked_results(stored_rows, self.friends, baselines=self._role_baselines)
+            if ranked_results or prefer_snapshot:
+                self.log("[poro] Returning report from postgres daily stats.")
                 report_text = self.format_report_from_results(ranked_results, error_results, report_start)
                 if not bypass_cache:
                     self.report_cache["text"] = report_text
                     self.report_cache["day"] = cycle_key
                     self.report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
                 return report_text
+        elif prefer_snapshot:
+            report_text = self.format_report_from_results(ranked_results, error_results, report_start)
+            if not bypass_cache:
+                self.report_cache["text"] = report_text
+                self.report_cache["day"] = cycle_key
+                self.report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
+            return report_text
 
         self.riot_client.clear_match_cache()
-        total_players = len(self.friends)
-        processed_players = 0
-
         ordered_players = await self.get_players_ordered_by_oldest_stats(cycle_key)
         for riot_id in ordered_players:
             lol_name = get_lol_name(riot_id)
@@ -256,9 +250,6 @@ class PoroService:
             except requests.RequestException as exc:
                 error_results.append((lol_name, self.simplify_riot_error(exc)))
                 self.log(f"[poro] Player failed {lol_name}: {exc}")
-                processed_players += 1
-                if progress_callback is not None:
-                    await progress_callback(processed_players, total_players, lol_name)
                 continue
 
             wins, losses = get_mode_totals(mode_records)
@@ -273,17 +264,11 @@ class PoroService:
                 primary_role,
             )
             if total == 0:
-                processed_players += 1
-                if progress_callback is not None:
-                    await progress_callback(processed_players, total_players, lol_name)
                 continue
 
             win_rate = (wins / total) * 100
             gamer_score = compute_gamer_score(wins, losses, performance_totals, primary_role, self._role_baselines)
             ranked_results.append((lol_name, mode_records, wins, losses, win_rate, performance_totals, gamer_score))
-            processed_players += 1
-            if progress_callback is not None:
-                await progress_callback(processed_players, total_players, lol_name)
 
         ranked_results.sort(key=rank_sort_key)
         report_text = self.format_report_from_results(ranked_results, error_results, report_start)
@@ -293,8 +278,6 @@ class PoroService:
         return report_text
 
     async def build_weekly_win_rate_report(self, bypass_cache=False):
-        if not self.db_enabled:
-            return "Weekly report requires database-backed daily stats."
 
         week_start, week_end_exclusive = self.get_week_window()
         window_key = f"{week_start.isoformat()}::{week_end_exclusive.isoformat()}"
@@ -352,8 +335,6 @@ class PoroService:
         return await service_build_score_breakdown_report(self)
 
     async def backfill_daily_stats_from_cache(self, start_day_date, end_day_date, max_payloads=0):
-        if not self.db_enabled:
-            return {"error": "db_disabled"}
         if self.db_load_match_payloads_for_baseline is None:
             return {"error": "cache_loader_unavailable"}
 

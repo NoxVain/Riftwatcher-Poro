@@ -16,7 +16,6 @@ from src.db.match_stats import (
     db_upsert_player_match_stats,
 )
 from src.db.players import db_get_puuid, db_load_tracked_players, db_load_tracked_puuids, db_remove_player, db_upsert_player
-from src.db.pool import DB_ENABLED
 from src.db.ranked_state import (
     db_delete_ranked_state_queue,
     db_insert_lp_change,

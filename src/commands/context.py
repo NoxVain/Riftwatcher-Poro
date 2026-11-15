@@ -16,7 +16,6 @@ class CommandHandlerContext:
     poro_service: Any
     report_timezone_name: str
     report_day_start_hour: int
-    db_enabled: bool
     start_monotonic: float
     daily_request_lock: Any
     request_id_context: Any

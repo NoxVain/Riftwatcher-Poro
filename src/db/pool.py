@@ -1,18 +1,10 @@
 import queue
 import threading
 
-try:
-    import psycopg
-except ImportError:
-    psycopg = None
+import psycopg
 
 from src.config import DATABASE_URL, DB_POOL_SIZE
 
-
-if psycopg is None:
-    raise RuntimeError("DATABASE_URL is set but psycopg is not installed. Add psycopg[binary] to dependencies.")
-
-DB_ENABLED = True
 DB_POOL = None
 DB_POOL_LOCK = threading.Lock()
 DB_POOL_TOTAL = 0

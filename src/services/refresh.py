@@ -17,8 +17,6 @@ from src.report_logic import (
 
 async def get_players_ordered_by_oldest_stats(service, cycle_key):
     players = list(service.friends)
-    if not service.db_enabled:
-        return players
 
     try:
         stored_rows = await asyncio.to_thread(service.db_load_latest_stats, cycle_key)
@@ -42,8 +40,6 @@ async def get_players_ordered_by_oldest_stats(service, cycle_key):
 
 
 async def refresh_daily_stats_once(service, progress_callback=None):
-    if not service.db_enabled:
-        return
     service.log("[refresh] Starting daily stats refresh.")
     service.riot_client.clear_match_cache()
     cycle_key = service.get_cycle_key()
@@ -73,8 +69,6 @@ async def refresh_daily_stats_once(service, progress_callback=None):
 
 
 async def refresh_recent_matches_snapshot(service, recent_count=20):
-    if not service.db_enabled:
-        return
     service.log(f"[refresh] Running on-demand recent refresh (count={recent_count})")
     cycle_key = service.get_cycle_key()
     changed_any = False

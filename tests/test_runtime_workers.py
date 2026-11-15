@@ -126,7 +126,6 @@ def test_background_daily_refresher_updates_runtime_cleanup_state(monkeypatch):
 
     asyncio.run(
         runtime_workers.background_daily_refresher(
-            db_enabled=True,
             daily_refresh_seconds=30,
             client=client,
             request_id_context=__import__("contextvars").ContextVar("request_id", default=None),

@@ -470,7 +470,7 @@ class FakeMessage:
         self.author = FakeAuthor()
 
 
-def run_command(content, *, channel=None, db_enabled=True, rows=None, fail=False, logs=None):
+def run_command(content, *, channel=None, with_loader=True, rows=None, fail=False, logs=None):
     channel = channel or FakeChannel()
 
     def iter_rows(queue_ids, *, before=None, exclude_match_ids=()):
@@ -486,7 +486,6 @@ def run_command(content, *, channel=None, db_enabled=True, rows=None, fail=False
         poro_service=None,
         report_timezone_name="UTC",
         report_day_start_hour=6,
-        db_enabled=db_enabled,
         start_monotonic=0.0,
         daily_request_lock=asyncio.Lock(),
         request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -498,7 +497,7 @@ def run_command(content, *, channel=None, db_enabled=True, rows=None, fail=False
         log=(logs.append if logs is not None else (lambda _msg: None)),
         events_channel_id=999,
         db_load_tracked_puuids=lambda: [("NoxVain#EUW", "nox"), ("Tamarin#EUW", "tam"), ("Pending#EUW", None)],
-        db_iter_record_rows=iter_rows,
+        db_iter_record_rows=iter_rows if with_loader else None,
     ))
     return channel
 
@@ -525,7 +524,7 @@ def test_records_command_unknown_player():
 
 
 def test_records_command_needs_database():
-    channel = run_command("!records", db_enabled=False)
+    channel = run_command("!records", with_loader=False)
     assert channel.sent == ["Records need the database, which isn't configured."]
 
 

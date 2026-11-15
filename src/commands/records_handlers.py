@@ -27,7 +27,7 @@ async def handle_records_commands(ctx):
     if command is None:
         return False
     channel = ctx.message.channel
-    if not ctx.db_enabled or ctx.db_iter_record_rows is None:
+    if ctx.db_iter_record_rows is None:
         await channel.send("Records need the database, which isn't configured.")
         return True
 

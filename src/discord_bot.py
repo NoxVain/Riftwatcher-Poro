@@ -80,7 +80,6 @@ DAILY_REFRESH_SECONDS = cfg.DAILY_REFRESH_SECONDS
 MATCH_CACHE_RETENTION_DAYS = cfg.MATCH_CACHE_RETENTION_DAYS
 MATCH_RECAP_CHANNEL_ID = cfg.MATCH_RECAP_CHANNEL_ID
 MATCH_RECAP_POLL_SECONDS = cfg.MATCH_RECAP_POLL_SECONDS
-DB_ENABLED = dbm.DB_ENABLED
 
 normalize_riot_id = cfg.normalize_riot_id
 
@@ -265,7 +264,6 @@ poro_service = PoroService(
     report_day_start_hour=REPORT_DAY_START_HOUR,
     report_cache_seconds=REPORT_CACHE_SECONDS,
     daily_refresh_seconds=DAILY_REFRESH_SECONDS,
-    db_enabled=DB_ENABLED,
     db_load_latest_stats=db_load_latest_stats,
     db_load_weekly_stats=db_load_weekly_stats,
     db_upsert_daily_stats=db_upsert_daily_stats,
@@ -363,8 +361,7 @@ async def edit_last_report_message(prefer_snapshot=False, bypass_cache=False):
         log(f"[refresh] Could not edit last report message: {exc}")
         LAST_REPORT_MESSAGE["channel_id"] = None
         LAST_REPORT_MESSAGE["message_id"] = None
-        if DB_ENABLED:
-            await asyncio.to_thread(db_set_last_report_message, 0, 0)
+        await asyncio.to_thread(db_set_last_report_message, 0, 0)
     except discord.HTTPException as exc:
         log(f"[refresh] Discord API error while editing last report message: {exc}")
 
@@ -391,8 +388,7 @@ async def edit_last_weekly_report_message(bypass_cache=False):
         log(f"[refresh] Could not edit weekly report message {message_id}: {exc}")
         LAST_WEEKLY_REPORT_MESSAGE["channel_id"] = None
         LAST_WEEKLY_REPORT_MESSAGE["message_id"] = None
-        if DB_ENABLED:
-            await asyncio.to_thread(db_set_last_weekly_report_message, 0, 0)
+        await asyncio.to_thread(db_set_last_weekly_report_message, 0, 0)
     except discord.HTTPException as exc:
         log(f"[refresh] Discord API error while editing weekly report message: {exc}")
 
@@ -612,8 +608,8 @@ async def background_worker_stall_notifier():
                 events_channel_id=EVENTS_CHANNEL_ID,
                 worker_stats=WORKER_STATS,
                 stale_thresholds_seconds=WORKER_STALE_THRESHOLDS,
-                db_get_state=db_get_state if DB_ENABLED else None,
-                db_set_state=db_set_state if DB_ENABLED else None,
+                db_get_state=db_get_state,
+                db_set_state=db_set_state,
                 now_monotonic=time.monotonic(),
                 log=log,
             )
@@ -672,49 +668,48 @@ async def on_ready():
         log("[startup] Warning: MATCH_RECAP_CHANNEL_ID equals DAILY_REPORT_CHANNEL_ID.")
     if WEEKLY_REPORT_CHANNEL_ID and WEEKLY_REPORT_CHANNEL_ID == DAILY_REPORT_CHANNEL_ID:
         log("[startup] Info: WEEKLY_REPORT_CHANNEL_ID equals DAILY_REPORT_CHANNEL_ID.")
-    if DB_ENABLED:
-        log(f"[startup] DAILY_REFRESH_SECONDS={DAILY_REFRESH_SECONDS}")
-        if BACKGROUND_REFRESH_TASK is None or BACKGROUND_REFRESH_TASK.done():
-            BACKGROUND_REFRESH_TASK = client.loop.create_task(background_daily_refresher())
-        if BACKGROUND_RANK_TASK is None or BACKGROUND_RANK_TASK.done():
-            BACKGROUND_RANK_TASK = client.loop.create_task(background_rank_notifier())
-        if BACKGROUND_RECAP_TASK is None or BACKGROUND_RECAP_TASK.done():
-            BACKGROUND_RECAP_TASK = client.loop.create_task(background_match_recap_notifier())
-        if BACKGROUND_BACKFILL_TASK is None or BACKGROUND_BACKFILL_TASK.done():
-            BACKGROUND_BACKFILL_TASK = client.loop.create_task(background_match_cache_backfiller())
-        if BACKGROUND_STALL_TASK is None or BACKGROUND_STALL_TASK.done():
-            BACKGROUND_STALL_TASK = client.loop.create_task(background_worker_stall_notifier())
-        if BACKGROUND_PUUID_REMAP_TASK is None:
-            # One-off per startup; it no-ops once the cache matches the tracked PUUIDs.
-            BACKGROUND_PUUID_REMAP_TASK = client.loop.create_task(background_puuid_remap())
-        if BACKGROUND_MATCH_STATS_TASK is None or BACKGROUND_MATCH_STATS_TASK.done():
-            # Starts after the PUUID remap, so rows never carry pre-key-change PUUIDs.
-            BACKGROUND_MATCH_STATS_TASK = client.loop.create_task(background_match_stats())
-        if BACKGROUND_BELTS_TASK is None or BACKGROUND_BELTS_TASK.done():
-            BACKGROUND_BELTS_TASK = client.loop.create_task(background_weekly_belts())
-        if BACKGROUND_WRAPPED_TASK is None or BACKGROUND_WRAPPED_TASK.done():
-            BACKGROUND_WRAPPED_TASK = client.loop.create_task(background_wrapped())
-        if ESPORTS_ENABLED:
-            log(
-                f"[startup] Esports news enabled: NEWS_CHANNEL_ID={NEWS_CHANNEL_ID} "
-                f"leagues={','.join(cfg.ESPORTS_LEAGUES)} poll={cfg.ESPORTS_POLL_SECONDS}s "
-                f"spoilers={cfg.ESPORTS_SPOILER_TAGS}"
-            )
-            if not cfg.ESPORTS_API_KEY:
-                log("[startup] Warning: ESPORTS_API_KEY is not set; esports worker will alert in the news channel.")
-            if BACKGROUND_ESPORTS_TASK is None or BACKGROUND_ESPORTS_TASK.done():
-                BACKGROUND_ESPORTS_TASK = client.loop.create_task(background_esports_notifier())
-        else:
-            log("[startup] Esports news disabled (set NEWS_CHANNEL_ID to enable).")
-        if PATCH_NOTES_ENABLED:
-            log(
-                f"[startup] Patch notes enabled: channel={EVENTS_CHANNEL_ID} "
-                f"locale={cfg.PATCH_NOTES_LOCALE} poll={PATCH_NOTES_POLL_SECONDS}s"
-            )
-            if BACKGROUND_PATCH_TASK is None or BACKGROUND_PATCH_TASK.done():
-                BACKGROUND_PATCH_TASK = client.loop.create_task(background_patch_notes_notifier())
-        else:
-            log("[startup] Patch notes disabled (PATCH_NOTES_ENABLED=false).")
+    log(f"[startup] DAILY_REFRESH_SECONDS={DAILY_REFRESH_SECONDS}")
+    if BACKGROUND_REFRESH_TASK is None or BACKGROUND_REFRESH_TASK.done():
+        BACKGROUND_REFRESH_TASK = client.loop.create_task(background_daily_refresher())
+    if BACKGROUND_RANK_TASK is None or BACKGROUND_RANK_TASK.done():
+        BACKGROUND_RANK_TASK = client.loop.create_task(background_rank_notifier())
+    if BACKGROUND_RECAP_TASK is None or BACKGROUND_RECAP_TASK.done():
+        BACKGROUND_RECAP_TASK = client.loop.create_task(background_match_recap_notifier())
+    if BACKGROUND_BACKFILL_TASK is None or BACKGROUND_BACKFILL_TASK.done():
+        BACKGROUND_BACKFILL_TASK = client.loop.create_task(background_match_cache_backfiller())
+    if BACKGROUND_STALL_TASK is None or BACKGROUND_STALL_TASK.done():
+        BACKGROUND_STALL_TASK = client.loop.create_task(background_worker_stall_notifier())
+    if BACKGROUND_PUUID_REMAP_TASK is None:
+        # One-off per startup; it no-ops once the cache matches the tracked PUUIDs.
+        BACKGROUND_PUUID_REMAP_TASK = client.loop.create_task(background_puuid_remap())
+    if BACKGROUND_MATCH_STATS_TASK is None or BACKGROUND_MATCH_STATS_TASK.done():
+        # Starts after the PUUID remap, so rows never carry pre-key-change PUUIDs.
+        BACKGROUND_MATCH_STATS_TASK = client.loop.create_task(background_match_stats())
+    if BACKGROUND_BELTS_TASK is None or BACKGROUND_BELTS_TASK.done():
+        BACKGROUND_BELTS_TASK = client.loop.create_task(background_weekly_belts())
+    if BACKGROUND_WRAPPED_TASK is None or BACKGROUND_WRAPPED_TASK.done():
+        BACKGROUND_WRAPPED_TASK = client.loop.create_task(background_wrapped())
+    if ESPORTS_ENABLED:
+        log(
+            f"[startup] Esports news enabled: NEWS_CHANNEL_ID={NEWS_CHANNEL_ID} "
+            f"leagues={','.join(cfg.ESPORTS_LEAGUES)} poll={cfg.ESPORTS_POLL_SECONDS}s "
+            f"spoilers={cfg.ESPORTS_SPOILER_TAGS}"
+        )
+        if not cfg.ESPORTS_API_KEY:
+            log("[startup] Warning: ESPORTS_API_KEY is not set; esports worker will alert in the news channel.")
+        if BACKGROUND_ESPORTS_TASK is None or BACKGROUND_ESPORTS_TASK.done():
+            BACKGROUND_ESPORTS_TASK = client.loop.create_task(background_esports_notifier())
+    else:
+        log("[startup] Esports news disabled (set NEWS_CHANNEL_ID to enable).")
+    if PATCH_NOTES_ENABLED:
+        log(
+            f"[startup] Patch notes enabled: channel={EVENTS_CHANNEL_ID} "
+            f"locale={cfg.PATCH_NOTES_LOCALE} poll={PATCH_NOTES_POLL_SECONDS}s"
+        )
+        if BACKGROUND_PATCH_TASK is None or BACKGROUND_PATCH_TASK.done():
+            BACKGROUND_PATCH_TASK = client.loop.create_task(background_patch_notes_notifier())
+    else:
+        log("[startup] Patch notes disabled (PATCH_NOTES_ENABLED=false).")
     if not STARTUP_SCOREBOARD_INIT_DONE:
         daily_channel = await resolve_channel(DAILY_REPORT_CHANNEL_ID)
         weekly_channel = await resolve_channel(WEEKLY_REPORT_CHANNEL_ID)

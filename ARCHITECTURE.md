@@ -115,7 +115,7 @@ These are the priorities behind most decisions in this repo. New changes should 
 
 ## Worker Model
 
-All workers run continuously while connected, each with startup jitter and cycle heartbeat logs. Every cycle records ok/error counts and last/avg/max latency in `WORKER_STATS`, which `!health` and `/health` display. Postgres is required (`DATABASE_URL`, so `DB_ENABLED` is always true); workers are scheduled from `on_ready` and are not duplicated on reconnect.
+All workers run continuously while connected, each with startup jitter and cycle heartbeat logs. Every cycle records ok/error counts and last/avg/max latency in `WORKER_STATS`, which `!health` and `/health` display. Postgres is required (`DATABASE_URL`); workers are scheduled from `on_ready` and are not duplicated on reconnect.
 
 - Refresh worker
   - interval: `max(30, DAILY_REFRESH_SECONDS)`

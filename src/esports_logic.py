@@ -247,11 +247,6 @@ def reconcile_events(previous_matches, events, *, now_unix):
     return announcements, entries
 
 
-def diff_events(previous_matches, events, *, now_unix):
-    """Announcements only; see reconcile_events."""
-    return reconcile_events(previous_matches, events, now_unix=now_unix)[0]
-
-
 def events_in_window(events, start_unix, end_unix):
     selected = [e for e in events if e["start_unix"] is not None and start_unix <= e["start_unix"] < end_unix]
     return sorted(selected, key=lambda e: (e["start_unix"], e["match_id"]))

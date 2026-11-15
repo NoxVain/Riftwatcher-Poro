@@ -4,7 +4,6 @@ from datetime import datetime, timedelta, timezone
 
 
 VALID_POSITIONS = frozenset({"TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"})
-GAMER_SCORE_WIN_WEIGHT = 0.65
 GAMER_SCORE_PERF_WEIGHT = 0.35
 GAMER_SCORE_PERF_RAMP_GAMES = 8
 # 1.00 since 2026-11-02 (was 1.40): at 1.40 a perfect 10-0 day scored ~78 and no stored
@@ -74,6 +73,25 @@ def create_performance_totals():
         "kill_participation_num": 0,
         "kill_participation_den": 0,
     }
+
+
+def mode_records_from_row(row):
+    """Solo/Duo and Flex win/loss records from a `player_daily_stats` row; no row means no games."""
+    records = create_mode_records()
+    if row:
+        for bucket, prefix in (("solo_duo", "solo"), ("flex", "flex")):
+            records[bucket]["wins"] = int(row.get(f"{prefix}_wins") or 0)
+            records[bucket]["losses"] = int(row.get(f"{prefix}_losses") or 0)
+    return records
+
+
+def performance_totals_from_row(row):
+    """Performance totals from a `player_daily_stats` row; a missing or NULL column counts as 0."""
+    totals = create_performance_totals()
+    if row:
+        for key, empty in totals.items():
+            totals[key] = type(empty)(row.get(key) or 0)
+    return totals
 
 
 def get_mode_totals(mode_records):

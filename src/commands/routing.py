@@ -52,46 +52,43 @@ def format_help_text(
     )
 
 
+# Commands that are only valid on their own, and commands that can also take an argument.
+BARE_COMMANDS = (
+    TEST_COMMAND,
+    RIOT_TEST_COMMAND,
+    DAILY_COMMAND,
+    WEEK_COMMAND,
+    HEALTH_COMMAND,
+    HELP_COMMAND,
+    SCORE_COMMAND,
+)
+ARGUMENT_COMMANDS = (
+    ADD_COMMAND,
+    REMOVE_COMMAND,
+    DEBUG_PLAYER_COMMAND,
+    BACKFILL_COMMAND,
+    PROFILE_COMMAND,
+    STREAK_COMMAND,
+    TTS_COMMAND,
+    CHAMPION_DISPLAY_COMMAND,
+    ANALYZE_COMMAND,
+    ANALYZE_ALIAS,
+    RECORDS_COMMAND,
+    RECORDS_ALIAS,
+    WRAPPED_COMMAND,
+)
+
+
+def _is_command(content_lower, command):
+    """True for the command on its own or followed by a space and an argument."""
+    prefix = command.casefold()
+    return content_lower == prefix or content_lower.startswith(f"{prefix} ")
+
+
 def is_supported_command(content_lower):
-    known_exact = {
-        TEST_COMMAND.casefold(),
-        RIOT_TEST_COMMAND.casefold(),
-        DAILY_COMMAND.casefold(),
-        WEEK_COMMAND.casefold(),
-        STREAK_COMMAND.casefold(),
-        ADD_COMMAND.casefold(),
-        REMOVE_COMMAND.casefold(),
-        DEBUG_PLAYER_COMMAND.casefold(),
-        HEALTH_COMMAND.casefold(),
-        BACKFILL_COMMAND.casefold(),
-        HELP_COMMAND.casefold(),
-        SCORE_COMMAND.casefold(),
-        PROFILE_COMMAND.casefold(),
-        TTS_COMMAND.casefold(),
-        CHAMPION_DISPLAY_COMMAND.casefold(),
-        ANALYZE_COMMAND.casefold(),
-        ANALYZE_ALIAS.casefold(),
-        RECORDS_COMMAND.casefold(),
-        RECORDS_ALIAS.casefold(),
-        WRAPPED_COMMAND.casefold(),
-    }
-    if content_lower in known_exact:
+    if any(content_lower == command.casefold() for command in BARE_COMMANDS):
         return True
-    return (
-        content_lower.startswith(f"{ADD_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{REMOVE_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{DEBUG_PLAYER_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{BACKFILL_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{PROFILE_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{STREAK_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{TTS_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{CHAMPION_DISPLAY_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{ANALYZE_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{ANALYZE_ALIAS.casefold()} ")
-        or content_lower.startswith(f"{RECORDS_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{RECORDS_ALIAS.casefold()} ")
-        or content_lower.startswith(f"{WRAPPED_COMMAND.casefold()} ")
-    )
+    return any(_is_command(content_lower, command) for command in ARGUMENT_COMMANDS)
 
 
 def command_channel_id(
@@ -104,53 +101,15 @@ def command_channel_id(
         return daily_channel_id
     if content_lower == WEEK_COMMAND.casefold():
         return weekly_channel_id
-    if (
-        content_lower == STREAK_COMMAND.casefold()
-        or content_lower.startswith(f"{STREAK_COMMAND.casefold()} ")
-    ):
+    if _is_command(content_lower, STREAK_COMMAND):
         return match_recap_channel_id or commands_channel_id
-    if (
-        content_lower == TTS_COMMAND.casefold()
-        or content_lower.startswith(f"{TTS_COMMAND.casefold()} ")
-        or content_lower == CHAMPION_DISPLAY_COMMAND.casefold()
-        or content_lower.startswith(f"{CHAMPION_DISPLAY_COMMAND.casefold()} ")
-    ):
+    if _is_command(content_lower, TTS_COMMAND) or _is_command(content_lower, CHAMPION_DISPLAY_COMMAND):
         allowed = [commands_channel_id]
         if match_recap_channel_id and match_recap_channel_id != commands_channel_id:
             allowed.append(match_recap_channel_id)
         return tuple(allowed)
-
-    if (
-        content_lower in {
-            TEST_COMMAND.casefold(),
-            RIOT_TEST_COMMAND.casefold(),
-            ADD_COMMAND.casefold(),
-            REMOVE_COMMAND.casefold(),
-            DEBUG_PLAYER_COMMAND.casefold(),
-            HEALTH_COMMAND.casefold(),
-            BACKFILL_COMMAND.casefold(),
-            HELP_COMMAND.casefold(),
-            SCORE_COMMAND.casefold(),
-            PROFILE_COMMAND.casefold(),
-            TTS_COMMAND.casefold(),
-            ANALYZE_COMMAND.casefold(),
-            ANALYZE_ALIAS.casefold(),
-            RECORDS_COMMAND.casefold(),
-            RECORDS_ALIAS.casefold(),
-            WRAPPED_COMMAND.casefold(),
-        }
-        or content_lower.startswith(f"{ADD_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{REMOVE_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{DEBUG_PLAYER_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{BACKFILL_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{PROFILE_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{TTS_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{ANALYZE_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{ANALYZE_ALIAS.casefold()} ")
-        or content_lower.startswith(f"{RECORDS_COMMAND.casefold()} ")
-        or content_lower.startswith(f"{RECORDS_ALIAS.casefold()} ")
-        or content_lower.startswith(f"{WRAPPED_COMMAND.casefold()} ")
-    ):
+    # Every other command runs in the commands channel.
+    if is_supported_command(content_lower):
         return commands_channel_id
     return None
 

@@ -10,6 +10,8 @@ from src.report_logic import (
     get_mode_bucket,
     is_match_in_report_cycle,
     is_remake_match,
+    mode_records_from_row,
+    performance_totals_from_row,
 )
 
 
@@ -119,34 +121,8 @@ async def refresh_recent_matches_snapshot(service, recent_count=20):
                 changed_any = True
                 continue
 
-            mode_records = {
-                "solo_duo": {"wins": int(row["solo_wins"]), "losses": int(row["solo_losses"])},
-                "flex": {"wins": int(row["flex_wins"]), "losses": int(row["flex_losses"])},
-            }
-            performance_totals = {
-                "cs_total": int(row["cs_total"] or 0),
-                "minutes_total": float(row["minutes_total"] or 0.0),
-                "objective_damage": int(row["objective_damage"] or 0),
-                "player_damage": int(row["player_damage"] or 0),
-                "healing": int(row["healing"] or 0),
-                "damage_taken": int(row["damage_taken"] or 0),
-                "kills": int(row["kills"] or 0),
-                "assists": int(row.get("assists", 0) or 0),
-                "deaths": int(row["deaths"] or 0),
-                "vision_score": int(row["vision_score"] or 0),
-                "gold_earned": int(row.get("gold_earned", 0) or 0),
-                "wards_placed": int(row.get("wards_placed", 0) or 0),
-                "wards_killed": int(row.get("wards_killed", 0) or 0),
-                "turret_takedowns": int(row.get("turret_takedowns", 0) or 0),
-                "dragon_takedowns": int(row.get("dragon_takedowns", 0) or 0),
-                "baron_takedowns": int(row.get("baron_takedowns", 0) or 0),
-                "double_kills": int(row.get("double_kills", 0) or 0),
-                "triple_kills": int(row.get("triple_kills", 0) or 0),
-                "quadra_kills": int(row.get("quadra_kills", 0) or 0),
-                "penta_kills": int(row.get("penta_kills", 0) or 0),
-                "kill_participation_num": int(row.get("kill_participation_num", 0) or 0),
-                "kill_participation_den": int(row.get("kill_participation_den", 0) or 0),
-            }
+            mode_records = mode_records_from_row(row)
+            performance_totals = performance_totals_from_row(row)
             player_changed = False
             for match_id in reversed(new_match_ids):
                 match_info = await service.riot_client.fetch_match_info(match_id)

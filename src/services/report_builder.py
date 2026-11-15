@@ -11,6 +11,8 @@ from src.report_logic import (
     format_mode_line,
     gamer_score_weights_for_games,
     get_mode_totals,
+    mode_records_from_row,
+    performance_totals_from_row,
     rank_sort_key,
     wilson_lower_bound,
 )
@@ -48,34 +50,8 @@ def rows_to_ranked_results(rows, tracked_friends, baselines=None):
         riot_id = row["riot_id"]
         if riot_id.casefold() not in tracked_lookup:
             continue
-        mode_records = {
-            "solo_duo": {"wins": row["solo_wins"], "losses": row["solo_losses"]},
-            "flex": {"wins": row["flex_wins"], "losses": row["flex_losses"]},
-        }
-        performance_totals = {
-            "cs_total": int(row["cs_total"] or 0),
-            "minutes_total": float(row["minutes_total"] or 0.0),
-            "objective_damage": int(row["objective_damage"] or 0),
-            "player_damage": int(row["player_damage"] or 0),
-            "healing": int(row["healing"] or 0),
-            "damage_taken": int(row["damage_taken"] or 0),
-            "kills": int(row["kills"] or 0),
-            "assists": int(row.get("assists", 0) or 0),
-            "deaths": int(row["deaths"] or 0),
-            "vision_score": int(row["vision_score"] or 0),
-            "gold_earned": int(row.get("gold_earned", 0) or 0),
-            "wards_placed": int(row.get("wards_placed", 0) or 0),
-            "wards_killed": int(row.get("wards_killed", 0) or 0),
-            "turret_takedowns": int(row.get("turret_takedowns", 0) or 0),
-            "dragon_takedowns": int(row.get("dragon_takedowns", 0) or 0),
-            "baron_takedowns": int(row.get("baron_takedowns", 0) or 0),
-            "double_kills": int(row.get("double_kills", 0) or 0),
-            "triple_kills": int(row.get("triple_kills", 0) or 0),
-            "quadra_kills": int(row.get("quadra_kills", 0) or 0),
-            "penta_kills": int(row.get("penta_kills", 0) or 0),
-            "kill_participation_num": int(row.get("kill_participation_num", 0) or 0),
-            "kill_participation_den": int(row.get("kill_participation_den", 0) or 0),
-        }
+        mode_records = mode_records_from_row(row)
+        performance_totals = performance_totals_from_row(row)
         wins, losses = get_mode_totals(mode_records)
         total = wins + losses
         if total == 0:
@@ -316,39 +292,13 @@ async def build_score_breakdown_report(service):
             lines.append(f"\u26AB  **{lol_name}** \u2014 no data today")
             continue
 
-        mode_records = {
-            "solo_duo": {"wins": int(row["solo_wins"] or 0), "losses": int(row["solo_losses"] or 0)},
-            "flex": {"wins": int(row["flex_wins"] or 0), "losses": int(row["flex_losses"] or 0)},
-        }
+        mode_records = mode_records_from_row(row)
         wins, losses = get_mode_totals(mode_records)
         if wins + losses == 0:
             lines.append(f"\u26AB  **{lol_name}** \u2014 no ranked games today")
             continue
 
-        performance_totals = {
-            "cs_total": int(row["cs_total"] or 0),
-            "minutes_total": float(row["minutes_total"] or 0.0),
-            "objective_damage": int(row["objective_damage"] or 0),
-            "player_damage": int(row["player_damage"] or 0),
-            "healing": int(row["healing"] or 0),
-            "damage_taken": int(row["damage_taken"] or 0),
-            "kills": int(row["kills"] or 0),
-            "assists": int(row.get("assists", 0) or 0),
-            "deaths": int(row["deaths"] or 0),
-            "vision_score": int(row["vision_score"] or 0),
-            "gold_earned": int(row.get("gold_earned", 0) or 0),
-            "wards_placed": int(row.get("wards_placed", 0) or 0),
-            "wards_killed": int(row.get("wards_killed", 0) or 0),
-            "turret_takedowns": int(row.get("turret_takedowns", 0) or 0),
-            "dragon_takedowns": int(row.get("dragon_takedowns", 0) or 0),
-            "baron_takedowns": int(row.get("baron_takedowns", 0) or 0),
-            "double_kills": int(row.get("double_kills", 0) or 0),
-            "triple_kills": int(row.get("triple_kills", 0) or 0),
-            "quadra_kills": int(row.get("quadra_kills", 0) or 0),
-            "penta_kills": int(row.get("penta_kills", 0) or 0),
-            "kill_participation_num": int(row.get("kill_participation_num", 0) or 0),
-            "kill_participation_den": int(row.get("kill_participation_den", 0) or 0),
-        }
+        performance_totals = performance_totals_from_row(row)
         primary_role = str(row.get("primary_role") or "").upper() or None
         win_rate = (wins / (wins + losses)) * 100
         wilson = wilson_lower_bound(wins, losses)

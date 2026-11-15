@@ -1,7 +1,7 @@
 import discord
 import requests
 
-from src.constants import DAILY_COMMAND, WEEK_COMMAND
+from src.constants import DAILY_COMMAND, DISCORD_MESSAGE_LIMIT, WEEK_COMMAND
 from src.discord_text import format_user_error
 
 
@@ -33,7 +33,7 @@ async def handle_report_commands(ctx):
                         snapshot_text = await ctx.poro_service.build_today_win_rate_report()
                         refresh_note = "_Refreshing latest matches..._"
                         snapshot_with_note = f"{snapshot_text}\n\n{refresh_note}"
-                        if len(snapshot_with_note) > 2000:
+                        if len(snapshot_with_note) > DISCORD_MESSAGE_LIMIT:
                             snapshot_with_note = snapshot_text
                         await status_message.edit(content=snapshot_with_note)
                         displayed_text = snapshot_with_note

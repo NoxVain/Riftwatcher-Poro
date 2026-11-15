@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 
 import discord
 
+from src.discord_text import player_name
+
 RECORD_QUEUE_IDS = (420, 440, 710)
 # Don't announce records until the table holds a real history (fresh installs, rebuilds).
 MIN_GAMES_FOR_RECAP_RECORDS = 200
@@ -300,10 +302,6 @@ def detect_record_breaks(book, matches):
     return breaks
 
 
-def _name(riot_id):
-    return discord.utils.escape_markdown(riot_id.split("#", 1)[0])
-
-
 def _month(at):
     return at.strftime("%b %Y")
 
@@ -320,14 +318,14 @@ def format_record_break(record_break):
         )
     return (
         f"🏆 **New group record:** {category.phrase(record_break.value)} "
-        f"(was {category.text(previous.value)}, {_name(previous.riot_id)}{champion}, {_month(previous.at)})"
+        f"(was {category.text(previous.value)}, {player_name(previous.riot_id)}{champion}, {_month(previous.at)})"
     )
 
 
 def _holder_line(category, holder, *, with_name=True, place=None):
     parts = [f"**{category.text(holder.value)}** {category.label_for(holder.value)}"]
     if with_name:
-        parts.append(_name(holder.riot_id))
+        parts.append(player_name(holder.riot_id))
     if holder.champion:
         parts.append(holder.champion)
     parts.append(_month(holder.at))
@@ -340,7 +338,7 @@ def _streak_line(holder, kind, *, with_name=True, place=None):
     word = "wins" if kind == "win" else "losses"
     parts = [f"**{int(holder.value)}** ranked {word} in a row"]
     if with_name:
-        parts.append(_name(holder.riot_id))
+        parts.append(player_name(holder.riot_id))
     parts.append(_month(holder.at))
     if place:
         parts.append(place)
@@ -398,18 +396,18 @@ def format_group_sections(book):
     if total_steals:
         name = _career_leader(book, "objective_steals")
         steals = book.careers[name].objective_steals
-        lines.append(f"**{steals:,}** objective steals · {_name(name)} · group total {total_steals:,}")
+        lines.append(f"**{steals:,}** objective steals · {player_name(name)} · group total {total_steals:,}")
     total_pentas = sum(career.pentakills for career in book.careers.values())
     if total_pentas:
         name = _career_leader(book, "pentakills")
-        lines.append(f"**{book.careers[name].pentakills}** pentakills · {_name(name)} · group total {total_pentas}")
+        lines.append(f"**{book.careers[name].pentakills}** pentakills · {player_name(name)} · group total {total_pentas}")
     total_deathless = sum(career.deathless for career in book.careers.values())
     if total_deathless:
         name = _career_leader(book, "deathless")
-        lines.append(f"{_deathless_text(book.careers[name].deathless)} · {_name(name)} · group total {total_deathless:,}")
+        lines.append(f"{_deathless_text(book.careers[name].deathless)} · {player_name(name)} · group total {total_deathless:,}")
     name = _career_leader(book, "games")
     career = book.careers[name]
-    lines.append(f"**{career.games:,}** games, {_hours(career.seconds)} hours · {_name(name)}")
+    lines.append(f"**{career.games:,}** games, {_hours(career.seconds)} hours · {player_name(name)}")
     sections.append("**Streaks and career**\n" + "\n".join(lines))
     sections.append(f"{FOOTER} · `!records Name` for personal records")
     return sections
@@ -420,7 +418,7 @@ def format_personal_sections(book, riot_id):
 
     Every line carries the player's place in the group; zero values are hidden.
     """
-    name = _name(riot_id)
+    name = player_name(riot_id)
     career = book.careers.get(riot_id)
     if career is None:
         return [f"🏆 **{name}** · personal records", "No ranked games recorded yet."]

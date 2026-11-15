@@ -17,7 +17,8 @@ from datetime import datetime, timedelta, timezone
 
 import discord
 
-from src.discord_text import ARENA_QUEUE_IDS
+from src.constants import DISCORD_MESSAGE_LIMIT
+from src.discord_text import ARENA_QUEUE_IDS, player_name
 from src.rank_logic import rank_level
 from src.records import CATEGORIES, RECORD_QUEUE_IDS, RecordBook
 
@@ -299,10 +300,6 @@ def load_wrapped(db_iter_wrapped_rows, db_load_all_ranked_states, year, tz, *, e
 # --- Text helpers -------------------------------------------------------------
 
 
-def _name(riot_id):
-    return discord.utils.escape_markdown(riot_id.split("#", 1)[0])
-
-
 def _pct(wins, games):
     return f"{round(100 * wins / games)}%" if games else "0%"
 
@@ -484,7 +481,7 @@ def compute_awards(wrapped):
 
 
 def _award_block(award):
-    holder = " + ".join(f"**{_name(part)}**" for part in award.holder.split(" + "))
+    holder = " + ".join(f"**{player_name(part)}**" for part in award.holder.split(" + "))
     lines = [f"**{award.title}**", f"{holder} · {award.text}" + (" · all modes" if award.all_modes else "")]
     if award.banter:
         lines.append(f"-# *{award.banter}*")
@@ -504,13 +501,13 @@ def _year_record_lines(wrapped):
         if holder is not None:
             champion = f" · {holder.champion}" if holder.champion else ""
             lines.append(
-                f"**{category.text(holder.value)}** {category.label_for(holder.value)} · {_name(holder.riot_id)}"
+                f"**{category.text(holder.value)}** {category.label_for(holder.value)} · {player_name(holder.riot_id)}"
                 f"{champion} · {holder.at.astimezone(wrapped.tz).strftime('%b')}"
             )
     for kind, word in (("win", "wins"), ("loss", "losses")):
         holder = book.record(kind)
         if holder is not None:
-            lines.append(f"**{int(holder.value)}** ranked {word} in a row · {_name(holder.riot_id)}")
+            lines.append(f"**{int(holder.value)}** ranked {word} in a row · {player_name(holder.riot_id)}")
     return lines
 
 
@@ -521,11 +518,11 @@ def _aram_section(wrapped):
     games = len(_mode_matches(wrapped, ARAM))
     lines = [f"❄️ **ARAM**\n-# {_plural(games, 'game')} on the Howling Abyss"]
     top = max(players, key=lambda p: (p.modes[ARAM].games, p.riot_id.casefold()))
-    lines.append(f"Most games: **{_name(top.riot_id)}** · {top.modes[ARAM].games}")
+    lines.append(f"Most games: **{player_name(top.riot_id)}** · {top.modes[ARAM].games}")
     rated = [p for p in players if p.modes[ARAM].games >= MIN_MODE_RATE_GAMES]
     if rated:
         best = max(rated, key=lambda p: (p.modes[ARAM].wins / p.modes[ARAM].games, p.modes[ARAM].games))
-        lines.append(f"Best win rate: **{_name(best.riot_id)}** · {_pct(best.modes[ARAM].wins, best.modes[ARAM].games)}")
+        lines.append(f"Best win rate: **{player_name(best.riot_id)}** · {_pct(best.modes[ARAM].wins, best.modes[ARAM].games)}")
     champs = Counter()
     for player in players:
         for champ, (count, _wins) in player.modes[ARAM].champions.items():
@@ -536,13 +533,13 @@ def _aram_section(wrapped):
     kills = max(players, key=lambda p: (p.modes[ARAM].best_kills or (0,))[0])
     if kills.modes[ARAM].best_kills:
         value, champion, _at = kills.modes[ARAM].best_kills
-        lines.append(f"Most kills: **{value}** · {_name(kills.riot_id)} · {champion}")
+        lines.append(f"Most kills: **{value}** · {player_name(kills.riot_id)} · {champion}")
     for attr, label in (("best_damage", "Most damage in a game"), ("best_deaths", "Most deaths in a game")):
         holder = max(players, key=lambda p: ((getattr(p.modes[ARAM], attr) or (0,))[0], p.riot_id.casefold()))
         best = getattr(holder.modes[ARAM], attr)
         if best:
             value, champion, _at = best
-            lines.append(f"{label}: **{value:,}** · {_name(holder.riot_id)} · {champion}")
+            lines.append(f"{label}: **{value:,}** · {player_name(holder.riot_id)} · {champion}")
     together = [won for count, won in wrapped.aram_games.values() if count >= 2]
     alone = [won for count, won in wrapped.aram_games.values() if count == 1]
     if len(together) >= MIN_MODE_RATE_GAMES and len(alone) >= MIN_MODE_RATE_GAMES:
@@ -551,7 +548,7 @@ def _aram_section(wrapped):
             f"alone: **{_pct(sum(alone), len(alone))}**"
         )
     if top.modes[ARAM].games >= 0.5 * sum(p.modes[ARAM].games for p in players) and len(players) > 1:
-        lines.append(f"-# *Howling Abyss, population: {_name(top.riot_id)}.*")
+        lines.append(f"-# *Howling Abyss, population: {player_name(top.riot_id)}.*")
     return "\n".join(lines)
 
 
@@ -563,43 +560,43 @@ def _arena_section(wrapped):
     lines = [f"⚔️ **Arena**\n-# {_plural(games, 'game')} in the Arena"]
     top = max(players, key=lambda p: (p.modes[ARENA].firsts, p.modes[ARENA].games))
     if top.modes[ARENA].firsts:
-        lines.append(f"Most 1st places: **{_name(top.riot_id)}** · {top.modes[ARENA].firsts}")
+        lines.append(f"Most 1st places: **{player_name(top.riot_id)}** · {top.modes[ARENA].firsts}")
     placed = [p for p in players if p.modes[ARENA].placement_games >= MIN_MODE_RATE_GAMES]
     if placed:
         best = min(placed, key=lambda p: (p.modes[ARENA].placement_sum / p.modes[ARENA].placement_games, -p.modes[ARENA].games))
         average = best.modes[ARENA].placement_sum / best.modes[ARENA].placement_games
-        lines.append(f"Best average placement: **{_name(best.riot_id)}** · {average:.1f}")
+        lines.append(f"Best average placement: **{player_name(best.riot_id)}** · {average:.1f}")
     most = max(players, key=lambda p: (p.modes[ARENA].games, p.riot_id.casefold()))
-    lines.append(f"Most games: **{_name(most.riot_id)}** · {most.modes[ARENA].games}")
+    lines.append(f"Most games: **{player_name(most.riot_id)}** · {most.modes[ARENA].games}")
     damage = max(players, key=lambda p: (p.modes[ARENA].best_damage or (0,))[0])
     if damage.modes[ARENA].best_damage:
         value, champion, _at = damage.modes[ARENA].best_damage
-        lines.append(f"Most damage in a game: **{value:,}** · {_name(damage.riot_id)} · {champion}")
+        lines.append(f"Most damage in a game: **{value:,}** · {player_name(damage.riot_id)} · {champion}")
     taken = max(players, key=lambda p: ((p.modes[ARENA].best_taken or (0,))[0], p.riot_id.casefold()))
     if taken.modes[ARENA].best_taken:
         value, champion, _at = taken.modes[ARENA].best_taken
-        lines.append(f"Most damage taken in a game: **{value:,}** · {_name(taken.riot_id)} · {champion}")
+        lines.append(f"Most damage taken in a game: **{value:,}** · {player_name(taken.riot_id)} · {champion}")
     god = max(players, key=lambda p: (len(p.modes[ARENA].first_champions), p.modes[ARENA].firsts, p.riot_id.casefold()))
     god_champions = len(god.modes[ARENA].first_champions)
     if god_champions >= MIN_ARENA_GOD_LINE:
-        lines.append(f"Arena God chase: **{_name(god.riot_id)}** · 1st place with {god_champions} different champions")
+        lines.append(f"Arena God chase: **{player_name(god.riot_id)}** · 1st place with {god_champions} different champions")
     pool = max(players, key=lambda p: (len(p.modes[ARENA].champions), p.modes[ARENA].games, p.riot_id.casefold()))
     if len(pool.modes[ARENA].champions) >= MIN_POOL_LINE:
-        lines.append(f"Deepest pool: **{_name(pool.riot_id)}** · {len(pool.modes[ARENA].champions)} different champions")
+        lines.append(f"Deepest pool: **{player_name(pool.riot_id)}** · {len(pool.modes[ARENA].champions)} different champions")
     rated = [p for p in players if p.modes[ARENA].games >= MIN_MODE_RATE_GAMES and p.modes[ARENA].damage]
     if rated:
         best = max(rated, key=lambda p: (p.modes[ARENA].damage_per_minute, p.modes[ARENA].games))
-        lines.append(f"Highest damage/min: **{_name(best.riot_id)}** · {best.modes[ARENA].damage_per_minute:,.0f}")
+        lines.append(f"Highest damage/min: **{player_name(best.riot_id)}** · {best.modes[ARENA].damage_per_minute:,.0f}")
     duos = [(pair, entry) for pair, entry in wrapped.arena_duos().items() if entry[0] >= MIN_MODE_RATE_GAMES]
     if duos:
         most = max(duos, key=lambda item: (item[1][0], item[1][1], -item[1][2]))
         (a, b), (games, firsts, _sum) = most
         crowns = f" · {_plural(firsts, 'crown')}" if firsts else ""
-        lines.append(f"Duo of the year: **{_name(a)}** & **{_name(b)}** · {games} games together{crowns}")
+        lines.append(f"Duo of the year: **{player_name(a)}** & **{player_name(b)}** · {games} games together{crowns}")
         best = min(duos, key=lambda item: (item[1][2] / item[1][0], -item[1][0]))
         if best[0] != most[0]:
             (a, b), (games, _firsts, placement_sum) = best
-            lines.append(f"Best duo: **{_name(a)}** & **{_name(b)}** · avg placement {placement_sum / games:.1f}")
+            lines.append(f"Best duo: **{player_name(a)}** & **{player_name(b)}** · avg placement {placement_sum / games:.1f}")
     if top.modes[ARENA].firsts >= 20:
         lines.append(f"-# *{top.modes[ARENA].firsts} crowns. The Arena has a new landlord.*")
     elif god_champions >= ARENA_GOD_CHAMPIONS:
@@ -657,7 +654,7 @@ def format_group_cards(wrapped, commands_channel_id=None):
     final = ["🏁 **Where everyone ended up**"]
     if standings:
         standings.sort(key=lambda item: (-item[0][0], -item[0][1], item[1].casefold()))
-        final.append("\n".join(f"**{text}** · {_name(riot_id)}" for _level, riot_id, text in standings))
+        final.append("\n".join(f"**{text}** · {player_name(riot_id)}" for _level, riot_id, text in standings))
     where = f"<#{commands_channel_id}>" if commands_channel_id else "this channel"
     final.append(f"-# Your own year: `!wrapped Name` in {where} · open until 31 Jan")
     cards.append(final)
@@ -745,16 +742,16 @@ def _arena_partner_text(wrapped, riot_id):
     if not partners:
         return None
     most = max(partners, key=lambda p: (p[1], -p[2], p[0].casefold()))
-    text = f"Most games with **{_name(most[0])}** ({most[1]})"
+    text = f"Most games with **{player_name(most[0])}** ({most[1]})"
     rated = [p for p in partners if p[1] >= MIN_MODE_RATE_GAMES]
     if rated:
         best = min(rated, key=lambda p: (p[2] / p[1], -p[1]))
-        text += f" · best with **{_name(best[0])}** (avg {best[2] / best[1]:.1f})"
+        text += f" · best with **{player_name(best[0])}** (avg {best[2] / best[1]:.1f})"
     return text
 
 
 def format_personal_sections(wrapped, riot_id):
-    name = _name(riot_id)
+    name = player_name(riot_id)
     player = wrapped.players.get(riot_id)
     if player is None:
         return [f"🎁 **{name}** · Wrapped {wrapped.year}", f"No games recorded in {wrapped.year} yet."]
@@ -791,11 +788,11 @@ def format_personal_sections(wrapped, riot_id):
                     partners.append((mate, games, wins))
         if partners:
             most = max(partners, key=lambda p: (p[1], p[2]))
-            text = f"Most games with **{_name(most[0])}** ({most[1]})"
+            text = f"Most games with **{player_name(most[0])}** ({most[1]})"
             rated = [p for p in partners if p[1] >= MIN_MODE_RATE_GAMES]
             if rated:
                 best = max(rated, key=lambda p: (p[2] / p[1], p[1]))
-                text += f" · best with **{_name(best[0])}** ({_pct(best[2], best[1])})"
+                text += f" · best with **{player_name(best[0])}** ({_pct(best[2], best[1])})"
             lines.append(text)
         sections.append("\n".join(lines))
 
@@ -873,10 +870,7 @@ def build_wrapped_views(sections, accent=WRAPPED_ACCENT):
     return built
 
 
-PLAIN_MESSAGE_LIMIT = 2_000
-
-
-def text_chunks(sections, limit=PLAIN_MESSAGE_LIMIT):
+def text_chunks(sections, limit=DISCORD_MESSAGE_LIMIT):
     """Join sections into plain messages under Discord's limit, splitting between sections."""
     chunks, current = [], ""
     for section in sections:

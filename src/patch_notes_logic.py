@@ -12,8 +12,9 @@ from datetime import datetime
 from html import unescape
 from html.parser import HTMLParser
 
+from src.constants import DISCORD_MESSAGE_LIMIT
+
 LEAGUE_SITE_BASE_URL = "https://www.leagueoflegends.com"
-DISCORD_MESSAGE_LIMIT = 2000
 DESCRIPTION_MAX_CHARS = 300
 MAX_NAMES_PER_SECTION = 40
 SEEN_STATE_MAX_ENTRIES = 50

@@ -16,6 +16,7 @@ from datetime import datetime, time, timedelta, timezone
 
 import discord
 
+from src.discord_text import player_name
 from src.recap_lp import QUEUE_TYPE_BY_QUEUE_ID
 
 BELT_QUEUE_IDS = (420, 440, 710)
@@ -238,10 +239,6 @@ def last_closed_week(now_utc, tz, day_start_hour):
     return start, end
 
 
-def _name(riot_id):
-    return discord.utils.escape_markdown(riot_id.split("#", 1)[0])
-
-
 def _defended(streak):
     if streak < 2:
         return ""
@@ -251,7 +248,7 @@ def _defended(streak):
 def _award_line(award):
     parts = [f"{award.belt.emoji} **{award.belt.name}**"]
     if len(award.holders) == 1:
-        parts.append(_name(award.holders[0]))
+        parts.append(player_name(award.holders[0]))
         parts.append(award.text)
         defended = _defended(award.streaks.get(award.holders[0], 1))
         if defended:
@@ -260,7 +257,7 @@ def _award_line(award):
         names = []
         for riot_id in award.holders:
             defended = _defended(award.streaks.get(riot_id, 1))
-            names.append(f"{_name(riot_id)} ({defended})" if defended else _name(riot_id))
+            names.append(f"{player_name(riot_id)} ({defended})" if defended else player_name(riot_id))
         parts.append(" and ".join(names))
         parts.append(award.text)
     return " · ".join(parts)

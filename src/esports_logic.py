@@ -2,6 +2,8 @@
 
 from datetime import datetime, timedelta
 
+from src.constants import DISCORD_MESSAGE_LIMIT
+
 # Matches first seen already completed are only announced if they started this recently.
 NEW_COMPLETED_MAX_AGE_SECONDS = 24 * 3600
 # The API can flip a match to "completed" before its game tally catches up (e.g. 2-1 in a Bo5).
@@ -10,7 +12,6 @@ COMPLETION_GRACE_SECONDS = 15 * 60
 
 ANNOUNCEMENT_ORDER = {"live": 0, "game": 1, "match": 2}
 STATE_RANK = {"unstarted": 0, "inProgress": 1, "completed": 2}
-DISCORD_MESSAGE_LIMIT = 2000
 _WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 SCHEDULE_FOOTER = "\n_Times shown in your local timezone._"

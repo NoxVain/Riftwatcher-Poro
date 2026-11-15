@@ -4,6 +4,8 @@ from datetime import timedelta
 import discord
 import requests
 
+from src.constants import DISCORD_MESSAGE_LIMIT
+
 
 def create_request_id(prefix):
     return f"{prefix}-{uuid.uuid4().hex[:8]}"
@@ -45,7 +47,12 @@ def format_user_error(prefix, exc, request_id=None):
     return text
 
 
-def split_message_text(text, limit=2000):
+def player_name(riot_id):
+    """The game name of a Riot ID (no tag), safe to put in Discord markdown."""
+    return discord.utils.escape_markdown(riot_id.split("#", 1)[0])
+
+
+def split_message_text(text, limit=DISCORD_MESSAGE_LIMIT):
     """Plain-text chunks within Discord's message limit, split at line breaks where possible; nothing is dropped."""
     if limit < 1:
         raise ValueError("Message limit must be positive.")

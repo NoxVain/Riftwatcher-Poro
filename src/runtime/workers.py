@@ -14,6 +14,14 @@ from src.discord_text import create_request_id, report_signature
 from src.patch_notes_logic import seconds_until_next_check
 
 
+def new_worker_stats(started_at):
+    """Counters for one worker. `last_success_at` starts at startup, so the stall watchdog has a baseline."""
+    return {
+        "cycles": 0, "errors": 0, "runs": 0, "elapsed_ms_last": 0, "elapsed_ms_avg": 0, "elapsed_ms_max": 0,
+        "elapsed_ms_total": 0, "last_success_at": started_at,
+    }
+
+
 def _ensure_worker_stat_entry(worker_stats, worker_name):
     entry = worker_stats.setdefault(worker_name, {})
     entry.setdefault("cycles", 0)

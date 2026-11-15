@@ -9,12 +9,12 @@ import discord
 import pytest
 
 import src.commands.wrapped_handlers as wrapped_handlers
+from src.constants import DISCORD_MESSAGE_LIMIT
 from src.discord_command_handlers import handle_incoming_message
 from src.wrapped import (
     MESSAGE_CHAR_BUDGET,
     MIN_AWARD_GAMES,
     MIN_DUO_GAMES,
-    PLAIN_MESSAGE_LIMIT,
     WRAPPED_STATE_KEY,
     build_wrapped,
     build_wrapped_views,
@@ -389,7 +389,7 @@ def test_long_cards_split_into_several_messages():
 def test_plain_text_chunks_stay_under_the_message_limit():
     chunks = text_chunks(["a" * 1200, "b" * 1200, "c" * 300])
     assert [len(chunk) for chunk in chunks] == [1200, 1502]
-    assert all(len(chunk) <= PLAIN_MESSAGE_LIMIT for chunk in text_chunks(["z" * 5000]))
+    assert all(len(chunk) <= DISCORD_MESSAGE_LIMIT for chunk in text_chunks(["z" * 5000]))
 
 
 # --- Posting task -------------------------------------------------------------

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from src.poro_service import PoroService
 from src.report_logic import compute_gamer_score, wilson_lower_bound
+from src.services.report_builder import get_leader_badges_by_player
 
 
 class FakeRiotClient:
@@ -150,7 +151,7 @@ def test_get_leader_badges_by_player_marks_category_leads():
         ),
     ]
 
-    badges = PoroService.get_leader_badges_by_player(ranked_results)
+    badges = get_leader_badges_by_player(ranked_results)
     assert "\U0001F33E" in badges["Alpha"]
     assert "\U0001F3F0" in badges["Alpha"]
     assert "\u2764\uFE0F" in badges["Alpha"]

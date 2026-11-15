@@ -154,3 +154,21 @@ def test_help_lists_the_commands_channel():
     text = format_help_text(report_day_start_hour=6, commands_channel_id=505, **CHANNELS)
     assert "<#303>" not in text
     assert "`!records [Name#Tag]`" in text and "(run in <#505>)" in text
+
+
+def test_every_command_constant_is_routed_exactly_once():
+    import src.constants as constants
+    from src.commands.routing import ARGUMENT_COMMANDS, BARE_COMMANDS
+
+    declared = {value for name, value in vars(constants).items() if name.endswith(("_COMMAND", "_ALIAS"))}
+    routed = BARE_COMMANDS + ARGUMENT_COMMANDS
+    assert len(routed) == len(set(routed))
+    # `!sync` is handled in discord_bot.py before routing.
+    assert set(routed) == declared - {constants.SYNC_COMMAND}
+
+
+def test_only_argument_commands_accept_text_after_the_command():
+    assert is_supported_command("!health") and not is_supported_command("!health now")
+    assert is_supported_command("!records") and is_supported_command("!records nox")
+    # The argument needs a space: a longer word is a different, unknown command.
+    assert not is_supported_command("!recordsx")

@@ -3,7 +3,6 @@ from datetime import date, datetime, timezone
 from src.esports_logic import (
     COMPLETION_GRACE_SECONDS,
     align_event,
-    diff_events,
     events_in_window,
     format_announcement,
     format_daily_schedule,
@@ -14,6 +13,11 @@ from src.esports_logic import (
     restore_resolved_teams,
     snapshot_entry,
 )
+
+
+def diff_events(previous_matches, events, *, now_unix):
+    """Announcements only."""
+    return reconcile_events(previous_matches, events, now_unix=now_unix)[0]
 
 
 def raw_event(match_id="m1", state="inProgress", wins=(0, 0), outcomes=(None, None), start="2026-10-15T18:00:00Z", best_of=5, block="Play-Ins", event_type="match"):

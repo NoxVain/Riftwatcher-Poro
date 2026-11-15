@@ -31,19 +31,15 @@ from src.services.report_builder import (
     BADGE_MIN_GAMES_WEEKLY,
     BADGE_PRIOR_GAMES_DAILY,
     BADGE_PRIOR_GAMES_WEEKLY,
-    LEADERBOARD_BADGES as SERVICE_LEADERBOARD_BADGES,
     build_score_breakdown_report as service_build_score_breakdown_report,
     format_report_from_results as service_format_report_from_results,
     get_leader_badges_by_player as service_get_leader_badges_by_player,
     rows_to_ranked_results as service_rows_to_ranked_results,
-    with_derived_performance as service_with_derived_performance,
 )
 
 
 class PoroService:
     BASELINE_TTL_SECONDS = 12 * 3600
-
-    LEADERBOARD_BADGES = SERVICE_LEADERBOARD_BADGES
 
     def __init__(
         self,
@@ -149,10 +145,6 @@ class PoroService:
 
     async def get_players_ordered_by_oldest_stats(self, cycle_key):
         return await service_get_players_ordered_by_oldest_stats(self, cycle_key)
-
-    @staticmethod
-    def with_derived_performance(performance_totals):
-        return service_with_derived_performance(performance_totals)
 
     @classmethod
     def get_leader_badges_by_player(

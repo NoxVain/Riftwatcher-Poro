@@ -50,11 +50,6 @@ def match_result(queue_id, participants):
     return "Mixed results"
 
 
-def match_accent(queue_id, participants):
-    """Accent colour for a match card from the tracked players' results."""
-    return RESULT_ACCENTS[match_result(queue_id, participants)]
-
-
 def format_card_header(queue_id, duration_seconds, result):
     """Small grey header line: queue, result and game length (no date or clock)."""
     return f"-# {recap_queue_label(queue_id)} · **{result}** · {format_match_duration(duration_seconds)}"

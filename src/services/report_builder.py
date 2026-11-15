@@ -90,14 +90,6 @@ def rows_to_ranked_results(rows, tracked_friends, baselines=None):
     return ranked_results
 
 
-def with_derived_performance(performance_totals):
-    data = dict(performance_totals)
-    minutes = float(data.get("minutes_total", 0.0) or 0.0)
-    cs_total = int(data.get("cs_total", 0) or 0)
-    data["cs_per_min"] = (cs_total / minutes) if minutes > 0 else 0.0
-    return data
-
-
 def _award_to_max(leaders, scored, badge):
     """Append ``badge`` to every player tied for the highest positive score."""
     if not scored:

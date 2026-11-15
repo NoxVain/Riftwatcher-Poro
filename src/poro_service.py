@@ -22,19 +22,16 @@ from src.riot_api import get_lol_name
 from src.runtime.memory import release_freed_memory
 from src.services.baselines import ensure_role_baselines
 from src.services.refresh import (
-    get_players_ordered_by_oldest_stats as service_get_players_ordered_by_oldest_stats,
+    get_players_ordered_by_oldest_stats,
     refresh_daily_stats_once as service_refresh_daily_stats_once,
     refresh_recent_matches_snapshot as service_refresh_recent_matches_snapshot,
 )
 from src.services.report_builder import (
-    BADGE_MIN_GAMES_DAILY,
     BADGE_MIN_GAMES_WEEKLY,
-    BADGE_PRIOR_GAMES_DAILY,
     BADGE_PRIOR_GAMES_WEEKLY,
     build_score_breakdown_report as service_build_score_breakdown_report,
-    format_report_from_results as service_format_report_from_results,
-    get_leader_badges_by_player as service_get_leader_badges_by_player,
-    rows_to_ranked_results as service_rows_to_ranked_results,
+    format_report_from_results,
+    rows_to_ranked_results,
 )
 
 
@@ -137,51 +134,6 @@ class PoroService:
         week_end_exclusive_date = week_start_date + timedelta(days=7)
         return week_start_date, week_end_exclusive_date
 
-    @staticmethod
-    def rows_to_ranked_results(rows, tracked_friends, baselines=None):
-        return service_rows_to_ranked_results(rows, tracked_friends, baselines=baselines)
-
-    async def get_players_ordered_by_oldest_stats(self, cycle_key):
-        return await service_get_players_ordered_by_oldest_stats(self, cycle_key)
-
-    @classmethod
-    def get_leader_badges_by_player(
-        cls,
-        ranked_results,
-        *,
-        min_games=BADGE_MIN_GAMES_DAILY,
-        prior_games=BADGE_PRIOR_GAMES_DAILY,
-    ):
-        return service_get_leader_badges_by_player(
-            ranked_results,
-            min_games=min_games,
-            prior_games=prior_games,
-        )
-
-    def format_report_from_results(
-        self,
-        ranked_results,
-        error_results,
-        report_start,
-        *,
-        header_title="DAILY",
-        empty_line_1="Looks like everyone has a life today.",
-        empty_line_2="We will keep you up to date if anyone crawls back into the hole.",
-        badge_min_games=BADGE_MIN_GAMES_DAILY,
-        badge_prior_games=BADGE_PRIOR_GAMES_DAILY,
-    ):
-        return service_format_report_from_results(
-            self,
-            ranked_results,
-            error_results,
-            report_start,
-            header_title=header_title,
-            empty_line_1=empty_line_1,
-            empty_line_2=empty_line_2,
-            badge_min_games=badge_min_games,
-            badge_prior_games=badge_prior_games,
-        )
-
     async def build_today_win_rate_report(self, prefer_snapshot=False, bypass_cache=False):
         cycle_key = self.get_cycle_key()
         now_monotonic = time.monotonic()
@@ -223,17 +175,17 @@ class PoroService:
                     stored_rows = []
 
         if stored_rows:
-            ranked_results = self.rows_to_ranked_results(stored_rows, self.friends, baselines=self._role_baselines)
+            ranked_results = rows_to_ranked_results(stored_rows, self.friends, baselines=self._role_baselines)
             if ranked_results or prefer_snapshot:
                 self.log("[poro] Returning report from postgres daily stats.")
-                report_text = self.format_report_from_results(ranked_results, error_results, report_start)
+                report_text = format_report_from_results(self, ranked_results, error_results, report_start)
                 if not bypass_cache:
                     self.report_cache["text"] = report_text
                     self.report_cache["day"] = cycle_key
                     self.report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
                 return report_text
         elif prefer_snapshot:
-            report_text = self.format_report_from_results(ranked_results, error_results, report_start)
+            report_text = format_report_from_results(self, ranked_results, error_results, report_start)
             if not bypass_cache:
                 self.report_cache["text"] = report_text
                 self.report_cache["day"] = cycle_key
@@ -241,7 +193,7 @@ class PoroService:
             return report_text
 
         self.riot_client.clear_match_cache()
-        ordered_players = await self.get_players_ordered_by_oldest_stats(cycle_key)
+        ordered_players = await get_players_ordered_by_oldest_stats(self, cycle_key)
         for riot_id in ordered_players:
             lol_name = get_lol_name(riot_id)
             self.log(f"[poro] Processing player {lol_name} ({riot_id})")
@@ -271,7 +223,7 @@ class PoroService:
             ranked_results.append((lol_name, mode_records, wins, losses, win_rate, performance_totals, gamer_score))
 
         ranked_results.sort(key=rank_sort_key)
-        report_text = self.format_report_from_results(ranked_results, error_results, report_start)
+        report_text = format_report_from_results(self, ranked_results, error_results, report_start)
         self.report_cache["text"] = report_text
         self.report_cache["day"] = cycle_key
         self.report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
@@ -298,13 +250,14 @@ class PoroService:
             week_start.isoformat(),
             week_end_exclusive.isoformat(),
         )
-        ranked_results = self.rows_to_ranked_results(stored_rows, self.friends, baselines=self._role_baselines)
+        ranked_results = rows_to_ranked_results(stored_rows, self.friends, baselines=self._role_baselines)
         self.log(
             f"[poro] Weekly report built: players={len(ranked_results)} "
             f"with_role={sum(1 for row in stored_rows if row.get('primary_role'))} "
             f"baselines={'yes' if self._role_baselines else 'no'}"
         )
-        report_text = self.format_report_from_results(
+        report_text = format_report_from_results(
+            self,
             ranked_results,
             [],
             report_start,

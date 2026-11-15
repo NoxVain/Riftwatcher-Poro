@@ -4,14 +4,11 @@ from datetime import datetime, timezone
 import requests
 
 from src.report_logic import (
-    accumulate_participant_performance,
+    count_participant_game,
     derive_primary_role,
-    get_match_duration_seconds,
-    get_mode_bucket,
-    is_match_in_report_cycle,
-    is_remake_match,
     mode_records_from_row,
     performance_totals_from_row,
+    scored_bucket_today,
 )
 
 
@@ -120,35 +117,16 @@ async def refresh_recent_matches_snapshot(service, recent_count=20):
             player_changed = False
             for match_id in reversed(new_match_ids):
                 match_info = await service.riot_client.fetch_match_info(match_id)
-                if not is_match_in_report_cycle(
-                    match_info,
-                    service.report_timezone,
-                    day_start_hour=service.report_day_start_hour,
-                ):
-                    continue
-                if is_remake_match(match_info):
-                    continue
-                queue_id = match_info["info"].get("queueId", -1)
-                bucket_name = get_mode_bucket(queue_id)
+                bucket_name = scored_bucket_today(
+                    match_info, service.report_timezone, day_start_hour=service.report_day_start_hour
+                )
                 if bucket_name is None:
                     continue
                 participant = service.riot_client.get_participant(match_info, puuid)
                 if participant is None:
                     continue
-                result = participant.get("win")
-                if result is True:
-                    mode_records[bucket_name]["wins"] += 1
+                if count_participant_game(mode_records, performance_totals, bucket_name, participant, match_info):
                     player_changed = True
-                elif result is False:
-                    mode_records[bucket_name]["losses"] += 1
-                    player_changed = True
-                duration_seconds = get_match_duration_seconds(match_info)
-                accumulate_participant_performance(
-                    performance_totals,
-                    participant,
-                    duration_seconds,
-                    match_info=match_info,
-                )
 
             if player_changed:
                 await asyncio.to_thread(

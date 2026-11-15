@@ -372,3 +372,35 @@ def is_match_in_report_cycle(match_info, report_timezone, day_start_hour=6, now_
     window_start = get_report_cycle_start_unix_seconds(report_timezone, day_start_hour=day_start_hour, now_utc=now_utc)
     end_ts = get_match_end_unix_seconds(match_info)
     return end_ts >= window_start
+
+
+def scored_bucket_today(match_info, report_timezone, *, day_start_hour, now_utc=None):
+    """The bucket (`solo_duo` or `flex`) a match counts toward in the current report day, or None.
+
+    None for a match that ended before the report day started, a remake, or a queue that isn't scored.
+    """
+    if not is_match_in_report_cycle(match_info, report_timezone, day_start_hour=day_start_hour, now_utc=now_utc):
+        return None
+    if is_remake_match(match_info):
+        return None
+    return get_mode_bucket(match_info["info"].get("queueId", -1))
+
+
+def count_participant_game(mode_records, performance_totals, bucket_name, participant, match_info):
+    """Add one game to a player's day: the win or loss in its bucket, and the performance totals.
+
+    Returns True when a win or loss was counted.
+    """
+    result = participant.get("win")
+    counted = result is True or result is False
+    if result is True:
+        mode_records[bucket_name]["wins"] += 1
+    elif result is False:
+        mode_records[bucket_name]["losses"] += 1
+    accumulate_participant_performance(
+        performance_totals,
+        participant,
+        get_match_duration_seconds(match_info),
+        match_info=match_info,
+    )
+    return counted

@@ -26,3 +26,16 @@ def test_weekly_stats_skip_the_role_query_for_an_empty_week(monkeypatch):
     monkeypatch.setattr(stats, "db_execute", lambda *args, **kwargs: calls.append(args) or [])
     assert stats.db_load_weekly_stats("2026-11-02", "2026-11-09") == []
     assert len(calls) == 1
+
+
+def test_daily_stats_upsert_passes_one_value_per_placeholder(monkeypatch):
+    calls = []
+    monkeypatch.setattr(stats, "db_execute", lambda query, params=None, **kwargs: calls.append((query, params)))
+    mode_records = {"solo_duo": {"wins": 2, "losses": 1}, "flex": {"wins": 0, "losses": 3}}
+    stats.db_upsert_daily_stats("2026-11-15", "A#EUW", mode_records, {"cs_total": 500}, "middle")
+
+    query, params = calls[0]
+    assert query.count("%s") == len(params)
+    # Day, player, Solo/Duo W-L, Flex W-L, then the totals of the two.
+    assert params[:8] == ("2026-11-15", "A#EUW", 2, 1, 0, 3, 2, 4)
+    assert params[-1] == "MIDDLE"

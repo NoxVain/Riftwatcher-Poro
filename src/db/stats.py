@@ -7,8 +7,6 @@ def db_upsert_daily_stats(day_date, riot_id, mode_records, performance_totals=No
     solo_losses = mode_records["solo_duo"]["losses"]
     flex_wins = mode_records["flex"]["wins"]
     flex_losses = mode_records["flex"]["losses"]
-    arcade_wins = 0
-    arcade_losses = 0
     total_wins = solo_wins + flex_wins
     total_losses = solo_losses + flex_losses
     stats = performance_totals or {}
@@ -41,7 +39,6 @@ def db_upsert_daily_stats(day_date, riot_id, mode_records, performance_totals=No
             day_date, riot_id,
             solo_wins, solo_losses,
             flex_wins, flex_losses,
-            arcade_wins, arcade_losses,
             total_wins, total_losses,
             cs_total, minutes_total,
             objective_damage, player_damage, healing, damage_taken,
@@ -57,7 +54,7 @@ def db_upsert_daily_stats(day_date, riot_id, mode_records, performance_totals=No
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, NOW()
+            %s, NOW()
         )
         ON CONFLICT (day_date, riot_id)
         DO UPDATE SET
@@ -65,8 +62,6 @@ def db_upsert_daily_stats(day_date, riot_id, mode_records, performance_totals=No
             solo_losses = EXCLUDED.solo_losses,
             flex_wins = EXCLUDED.flex_wins,
             flex_losses = EXCLUDED.flex_losses,
-            arcade_wins = EXCLUDED.arcade_wins,
-            arcade_losses = EXCLUDED.arcade_losses,
             total_wins = EXCLUDED.total_wins,
             total_losses = EXCLUDED.total_losses,
             cs_total = EXCLUDED.cs_total,
@@ -101,8 +96,6 @@ def db_upsert_daily_stats(day_date, riot_id, mode_records, performance_totals=No
             solo_losses,
             flex_wins,
             flex_losses,
-            arcade_wins,
-            arcade_losses,
             total_wins,
             total_losses,
             cs_total,
@@ -134,7 +127,7 @@ def db_upsert_daily_stats(day_date, riot_id, mode_records, performance_totals=No
 
 _LATEST_STATS_COLS = (
     "riot_id", "solo_wins", "solo_losses", "flex_wins", "flex_losses",
-    "arcade_wins", "arcade_losses", "total_wins", "total_losses", "updated_at",
+    "total_wins", "total_losses", "updated_at",
     "cs_total", "minutes_total", "objective_damage", "player_damage", "healing",
     "damage_taken", "kills", "assists", "deaths", "vision_score",
     "gold_earned", "wards_placed", "wards_killed",
@@ -149,7 +142,7 @@ def db_load_latest_stats(day_date):
         """
         SELECT DISTINCT ON (lower(riot_id))
             riot_id, solo_wins, solo_losses, flex_wins, flex_losses,
-            arcade_wins, arcade_losses, total_wins, total_losses, updated_at,
+            total_wins, total_losses, updated_at,
             cs_total, minutes_total, objective_damage, player_damage, healing, damage_taken,
             kills, assists, deaths, vision_score,
             gold_earned, wards_placed, wards_killed,
@@ -176,8 +169,6 @@ def db_load_weekly_stats(start_day_date, end_day_date_exclusive):
             COALESCE(SUM(solo_losses), 0) AS solo_losses,
             COALESCE(SUM(flex_wins), 0) AS flex_wins,
             COALESCE(SUM(flex_losses), 0) AS flex_losses,
-            COALESCE(SUM(arcade_wins), 0) AS arcade_wins,
-            COALESCE(SUM(arcade_losses), 0) AS arcade_losses,
             COALESCE(SUM(total_wins), 0) AS total_wins,
             COALESCE(SUM(total_losses), 0) AS total_losses,
             MAX(updated_at) AS updated_at,
@@ -239,7 +230,7 @@ def db_load_weekly_stats(start_day_date, end_day_date_exclusive):
 
 _DAILY_STATS_PLAYER_COLS = (
     "solo_wins", "solo_losses", "flex_wins", "flex_losses",
-    "arcade_wins", "arcade_losses", "cs_total", "minutes_total",
+    "cs_total", "minutes_total",
     "objective_damage", "player_damage", "healing", "damage_taken",
     "kills", "assists", "deaths", "vision_score",
     "gold_earned", "wards_placed", "wards_killed",
@@ -256,7 +247,6 @@ def db_get_daily_stats_for_player(day_date, riot_id):
         SELECT
             solo_wins, solo_losses,
             flex_wins, flex_losses,
-            arcade_wins, arcade_losses,
             cs_total,
             minutes_total,
             objective_damage,

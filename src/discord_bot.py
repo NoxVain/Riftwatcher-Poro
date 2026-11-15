@@ -106,6 +106,7 @@ db_iter_record_rows = dbm.db_iter_record_rows
 db_iter_wrapped_rows = dbm.db_iter_wrapped_rows
 db_load_all_ranked_states = dbm.db_load_all_ranked_states
 db_load_belt_rows = dbm.db_load_belt_rows
+db_load_belt_lp_totals = dbm.db_load_belt_lp_totals
 db_delete_ranked_state_queue = dbm.db_delete_ranked_state_queue
 db_insert_lp_change = dbm.db_insert_lp_change
 db_set_last_report_message = dbm.db_set_last_report_message
@@ -522,6 +523,7 @@ async def background_match_stats():
 async def background_weekly_belts():
     return await run_weekly_belts_loop(
         db_load_belt_rows=db_load_belt_rows,
+        db_load_belt_lp_totals=db_load_belt_lp_totals,
         db_get_state=db_get_state,
         db_set_state=db_set_state,
         resolve_channel=resolve_channel,

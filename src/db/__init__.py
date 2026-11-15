@@ -21,6 +21,7 @@ from src.db.ranked_state import (
     db_delete_ranked_state_queue,
     db_insert_lp_change,
     db_load_all_ranked_states,
+    db_load_belt_lp_totals,
     db_load_ranked_state,
     db_upsert_ranked_state,
 )

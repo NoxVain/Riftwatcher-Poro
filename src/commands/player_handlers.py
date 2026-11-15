@@ -17,68 +17,9 @@ from src.report_logic import (
     get_mode_bucket,
     get_mode_totals,
     is_remake_match,
+    mode_records_from_row,
+    performance_totals_from_row,
 )
-
-
-def _row_to_mode_records(row):
-    if not row:
-        return {"solo_duo": {"wins": 0, "losses": 0}, "flex": {"wins": 0, "losses": 0}}
-    return {
-        "solo_duo": {"wins": int(row.get("solo_wins", 0) or 0), "losses": int(row.get("solo_losses", 0) or 0)},
-        "flex": {"wins": int(row.get("flex_wins", 0) or 0), "losses": int(row.get("flex_losses", 0) or 0)},
-    }
-
-
-def _row_to_performance_totals(row):
-    if not row:
-        return {
-            "cs_total": 0,
-            "minutes_total": 0.0,
-            "objective_damage": 0,
-            "player_damage": 0,
-            "healing": 0,
-            "damage_taken": 0,
-            "kills": 0,
-            "assists": 0,
-            "deaths": 0,
-            "vision_score": 0,
-            "gold_earned": 0,
-            "wards_placed": 0,
-            "wards_killed": 0,
-            "turret_takedowns": 0,
-            "dragon_takedowns": 0,
-            "baron_takedowns": 0,
-            "double_kills": 0,
-            "triple_kills": 0,
-            "quadra_kills": 0,
-            "penta_kills": 0,
-            "kill_participation_num": 0,
-            "kill_participation_den": 0,
-        }
-    return {
-        "cs_total": int(row.get("cs_total", 0) or 0),
-        "minutes_total": float(row.get("minutes_total", 0.0) or 0.0),
-        "objective_damage": int(row.get("objective_damage", 0) or 0),
-        "player_damage": int(row.get("player_damage", 0) or 0),
-        "healing": int(row.get("healing", 0) or 0),
-        "damage_taken": int(row.get("damage_taken", 0) or 0),
-        "kills": int(row.get("kills", 0) or 0),
-        "assists": int(row.get("assists", 0) or 0),
-        "deaths": int(row.get("deaths", 0) or 0),
-        "vision_score": int(row.get("vision_score", 0) or 0),
-        "gold_earned": int(row.get("gold_earned", 0) or 0),
-        "wards_placed": int(row.get("wards_placed", 0) or 0),
-        "wards_killed": int(row.get("wards_killed", 0) or 0),
-        "turret_takedowns": int(row.get("turret_takedowns", 0) or 0),
-        "dragon_takedowns": int(row.get("dragon_takedowns", 0) or 0),
-        "baron_takedowns": int(row.get("baron_takedowns", 0) or 0),
-        "double_kills": int(row.get("double_kills", 0) or 0),
-        "triple_kills": int(row.get("triple_kills", 0) or 0),
-        "quadra_kills": int(row.get("quadra_kills", 0) or 0),
-        "penta_kills": int(row.get("penta_kills", 0) or 0),
-        "kill_participation_num": int(row.get("kill_participation_num", 0) or 0),
-        "kill_participation_den": int(row.get("kill_participation_den", 0) or 0),
-    }
 
 
 async def _get_recent_ranked_kda(riot_client, puuid, recent_ids, max_matches=20):
@@ -187,13 +128,13 @@ async def handle_player_commands(ctx):
                     **perf_totals,
                 }
 
-            today_mode = _row_to_mode_records(today_row)
-            today_perf = _row_to_performance_totals(today_row)
+            today_mode = mode_records_from_row(today_row)
+            today_perf = performance_totals_from_row(today_row)
             today_wins, today_losses = get_mode_totals(today_mode)
             today_games = today_wins + today_losses
             today_wr = (today_wins / today_games * 100.0) if today_games > 0 else 0.0
 
-            weekly_mode = _row_to_mode_records(weekly_row)
+            weekly_mode = mode_records_from_row(weekly_row)
             week_wins, week_losses = get_mode_totals(weekly_mode)
             week_games = week_wins + week_losses
             week_wr = (week_wins / week_games * 100.0) if week_games > 0 else 0.0

@@ -438,7 +438,6 @@ async def background_rank_notifier():
     if cfg.WORKER_STAGGER_SECONDS > 0:
         await asyncio.sleep(cfg.WORKER_STAGGER_SECONDS * 1)
     return await runtime_background_rank_notifier(
-        db_enabled=DB_ENABLED,
         daily_refresh_seconds=DAILY_REFRESH_SECONDS,
         client=client,
         request_id_context=REQUEST_ID_CONTEXT,
@@ -459,7 +458,6 @@ async def background_match_recap_notifier():
         riot_client=riot_client,
         poro_service=poro_service,
         match_recap_channel_id=MATCH_RECAP_CHANNEL_ID,
-        db_enabled=DB_ENABLED,
         db_get_state=db_get_state,
         db_set_state=db_set_state,
         db_upsert_daily_stats=db_upsert_daily_stats,
@@ -477,7 +475,6 @@ async def background_match_cache_backfiller():
     if cfg.WORKER_STAGGER_SECONDS > 0:
         await asyncio.sleep(cfg.WORKER_STAGGER_SECONDS * 3)
     return await runtime_background_match_cache_backfiller(
-        db_enabled=DB_ENABLED,
         daily_refresh_seconds=DAILY_REFRESH_SECONDS,
         client=client,
         request_id_context=REQUEST_ID_CONTEXT,
@@ -546,7 +543,6 @@ async def background_wrapped():
 
 async def background_daily_refresher():
     await runtime_background_daily_refresher(
-        db_enabled=DB_ENABLED,
         daily_refresh_seconds=DAILY_REFRESH_SECONDS,
         client=client,
         request_id_context=REQUEST_ID_CONTEXT,

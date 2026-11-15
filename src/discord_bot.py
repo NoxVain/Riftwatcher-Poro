@@ -282,7 +282,6 @@ def remember_report_message(message):
     runtime_remember_report_message(
         state=MESSAGE_STATE,
         message=message,
-        db_enabled=DB_ENABLED,
         db_set_last_report_message=db_set_last_report_message,
     )
 
@@ -291,7 +290,6 @@ def remember_previous_report_message(message, cycle_key=None):
     runtime_remember_previous_report_message(
         state=MESSAGE_STATE,
         message=message,
-        db_enabled=DB_ENABLED,
         db_set_state=db_set_state,
         cycle_key=cycle_key,
     )
@@ -301,7 +299,6 @@ def remember_weekly_report_message(message):
     runtime_remember_weekly_report_message(
         state=MESSAGE_STATE,
         message=message,
-        db_enabled=DB_ENABLED,
         db_set_last_weekly_report_message=db_set_last_weekly_report_message,
     )
 
@@ -326,7 +323,6 @@ async def get_or_create_report_message(channel, initial_content):
         channel=channel,
         initial_content=initial_content,
         poro_service=poro_service,
-        db_enabled=DB_ENABLED,
         db_get_state=db_get_state,
         db_set_state=db_set_state,
         db_get_last_report_message=db_get_last_report_message,
@@ -341,7 +337,6 @@ async def get_or_create_weekly_report_message(channel, initial_content):
         state=MESSAGE_STATE,
         channel=channel,
         initial_content=initial_content,
-        db_enabled=DB_ENABLED,
         db_get_last_weekly_report_message=db_get_last_weekly_report_message,
         db_set_last_weekly_report_message=db_set_last_weekly_report_message,
         remember_weekly_report_message_fn=remember_weekly_report_message,

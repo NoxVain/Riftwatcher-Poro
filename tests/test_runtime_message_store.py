@@ -74,14 +74,13 @@ def test_create_message_state_has_expected_shape():
     assert state["last_report_message"]["message_id"] is None
 
 
-def test_remember_report_message_updates_state_without_db():
+def test_remember_report_message_updates_state():
     state = create_message_state()
     message = FakeMessage(channel_id=111, message_id=222)
 
     remember_report_message(
         state=state,
         message=message,
-        db_enabled=False,
         db_set_last_report_message=lambda _channel_id, _message_id: None,
     )
 
@@ -106,7 +105,6 @@ def test_background_db_writes_are_held_until_done():
         message_store.remember_report_message(
             state=create_message_state(),
             message=FakeMessage(channel_id=111, message_id=222),
-            db_enabled=True,
             db_set_last_report_message=slow_db_write,
         )
         # The only strong reference to the pending write is the module's task set.
@@ -121,14 +119,13 @@ def test_background_db_writes_are_held_until_done():
     assert message_store._BACKGROUND_TASKS == set()
 
 
-def test_remember_previous_report_message_updates_state_and_cycle_without_db():
+def test_remember_previous_report_message_updates_state_and_cycle():
     state = create_message_state()
     message = FakeMessage(channel_id=333, message_id=444)
 
     remember_previous_report_message(
         state=state,
         message=message,
-        db_enabled=False,
         db_set_state=lambda _key, _value: None,
         cycle_key="2026-02-25",
     )
@@ -138,14 +135,13 @@ def test_remember_previous_report_message_updates_state_and_cycle_without_db():
     assert state["last_previous_report_message"]["cycle_key"] == "2026-02-25"
 
 
-def test_remember_weekly_report_message_updates_state_without_db():
+def test_remember_weekly_report_message_updates_state():
     state = create_message_state()
     message = FakeMessage(channel_id=555, message_id=666)
 
     remember_weekly_report_message(
         state=state,
         message=message,
-        db_enabled=False,
         db_set_last_weekly_report_message=lambda _channel_id, _message_id: None,
     )
 
@@ -192,7 +188,6 @@ def test_get_or_create_report_message_rollover_updates_previous_message():
             channel=channel,
             initial_content="init",
             poro_service=PoroService(),
-            db_enabled=False,
             db_get_state=lambda _k: None,
             db_set_state=lambda _k, _v: None,
             db_get_last_report_message=lambda: (0, 0),
@@ -241,7 +236,6 @@ def test_get_or_create_report_message_keeps_today_id_on_fetch_http_exception():
             channel=channel,
             initial_content="init",
             poro_service=PoroService(),
-            db_enabled=False,
             db_get_state=lambda _k: None,
             db_set_state=lambda _k, _v: None,
             db_get_last_report_message=lambda: (0, 0),

@@ -29,40 +29,23 @@ async def handle_report_commands(ctx):
                 if status_message.content != loading_text:
                     await status_message.edit(content=loading_text)
                 try:
-                    if ctx.db_enabled:
-                        snapshot_text = await ctx.poro_service.build_today_win_rate_report()
-                        refresh_note = "_Refreshing latest matches..._"
-                        snapshot_with_note = f"{snapshot_text}\n\n{refresh_note}"
-                        if len(snapshot_with_note) > DISCORD_MESSAGE_LIMIT:
-                            snapshot_with_note = snapshot_text
-                        await status_message.edit(content=snapshot_with_note)
-                        displayed_text = snapshot_with_note
-                        ctx.remember_report_message(status_message)
-                        ctx.log(f"[poro] Sent stored snapshot report in channel {ctx.daily_channel_id}.")
+                    snapshot_text = await ctx.poro_service.build_today_win_rate_report()
+                    refresh_note = "_Refreshing latest matches..._"
+                    snapshot_with_note = f"{snapshot_text}\n\n{refresh_note}"
+                    if len(snapshot_with_note) > DISCORD_MESSAGE_LIMIT:
+                        snapshot_with_note = snapshot_text
+                    await status_message.edit(content=snapshot_with_note)
+                    displayed_text = snapshot_with_note
+                    ctx.remember_report_message(status_message)
+                    ctx.log(f"[poro] Sent stored snapshot report in channel {ctx.daily_channel_id}.")
 
-                        await ctx.poro_service.refresh_recent_matches_snapshot(recent_count=20)
-                        refreshed_text = await ctx.poro_service.build_today_win_rate_report()
-                        if refreshed_text != displayed_text:
-                            await status_message.edit(content=refreshed_text)
-                            ctx.log(f"[poro] Updated report after quick refresh in channel {ctx.daily_channel_id}.")
-                        else:
-                            ctx.log("[poro] Quick refresh produced no visible report change.")
+                    await ctx.poro_service.refresh_recent_matches_snapshot(recent_count=20)
+                    refreshed_text = await ctx.poro_service.build_today_win_rate_report()
+                    if refreshed_text != displayed_text:
+                        await status_message.edit(content=refreshed_text)
+                        ctx.log(f"[poro] Updated report after quick refresh in channel {ctx.daily_channel_id}.")
                     else:
-                        async def progress(done, total, last_name):
-                            await status_message.edit(
-                                content=(
-                                    f"\u23F3 Gathering match results since {ctx.report_day_start_hour:02d}:00 "
-                                    f"from Riot... ({done}/{total}) `{last_name}`"
-                                )
-                            )
-
-                        report_text = await ctx.poro_service.build_today_win_rate_report(progress_callback=progress)
-                        await status_message.edit(content=report_text)
-                        ctx.remember_report_message(status_message)
-                        ctx.log(
-                            f"[poro] Sent cycle win rate report (since {ctx.report_day_start_hour:02d}:00) "
-                            f"in channel {ctx.daily_channel_id}."
-                        )
+                        ctx.log("[poro] Quick refresh produced no visible report change.")
                 except (KeyError, requests.RequestException) as exc:
                     await status_message.edit(content=format_user_error("Daily report failed", exc, request_id))
                     ctx.log(f"[poro] Daily report failed: {type(exc).__name__}: {exc}")

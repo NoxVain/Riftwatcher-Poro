@@ -99,34 +99,23 @@ async def handle_player_commands(ctx):
 
             today_row = None
             weekly_row = None
-            if ctx.db_enabled:
-                cycle_key = ctx.poro_service.get_cycle_key()
-                today_rows = await asyncio.to_thread(ctx.poro_service.db_load_latest_stats, cycle_key)
-                for row in today_rows:
-                    if str(row.get("riot_id", "")).casefold() == riot_id.casefold():
-                        today_row = row
-                        break
+            cycle_key = ctx.poro_service.get_cycle_key()
+            today_rows = await asyncio.to_thread(ctx.poro_service.db_load_latest_stats, cycle_key)
+            for row in today_rows:
+                if str(row.get("riot_id", "")).casefold() == riot_id.casefold():
+                    today_row = row
+                    break
 
-                week_start, week_end_exclusive = ctx.poro_service.get_week_window()
-                weekly_rows = await asyncio.to_thread(
-                    ctx.poro_service.db_load_weekly_stats,
-                    week_start.isoformat(),
-                    week_end_exclusive.isoformat(),
-                )
-                for row in weekly_rows:
-                    if str(row.get("riot_id", "")).casefold() == riot_id.casefold():
-                        weekly_row = row
-                        break
-            else:
-                mode_records, perf_totals = await ctx.riot_client.get_today_mode_records(riot_id)
-                today_row = {
-                    "riot_id": riot_id,
-                    "solo_wins": mode_records["solo_duo"]["wins"],
-                    "solo_losses": mode_records["solo_duo"]["losses"],
-                    "flex_wins": mode_records["flex"]["wins"],
-                    "flex_losses": mode_records["flex"]["losses"],
-                    **perf_totals,
-                }
+            week_start, week_end_exclusive = ctx.poro_service.get_week_window()
+            weekly_rows = await asyncio.to_thread(
+                ctx.poro_service.db_load_weekly_stats,
+                week_start.isoformat(),
+                week_end_exclusive.isoformat(),
+            )
+            for row in weekly_rows:
+                if str(row.get("riot_id", "")).casefold() == riot_id.casefold():
+                    weekly_row = row
+                    break
 
             today_mode = mode_records_from_row(today_row)
             today_perf = performance_totals_from_row(today_row)

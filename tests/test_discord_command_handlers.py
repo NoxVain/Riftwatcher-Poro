@@ -175,7 +175,6 @@ def test_handle_mood_command_updates_scoreboard_from_snapshot_then_refresh():
             poro_service=poro_service,
             report_timezone_name="UTC",
             report_day_start_hour=6,
-            db_enabled=True,
             start_monotonic=0.0,
             daily_request_lock=asyncio.Lock(),
             request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -215,7 +214,6 @@ def test_handle_add_command_happy_path_persists_and_invalidates_cache():
             poro_service=poro_service,
             report_timezone_name="UTC",
             report_day_start_hour=6,
-            db_enabled=True,
             start_monotonic=0.0,
             daily_request_lock=asyncio.Lock(),
             request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -255,7 +253,6 @@ def test_handle_remove_command_happy_path_removes_persists_and_invalidates_cache
             poro_service=poro_service,
             report_timezone_name="UTC",
             report_day_start_hour=6,
-            db_enabled=True,
             start_monotonic=0.0,
             daily_request_lock=asyncio.Lock(),
             request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -301,7 +298,6 @@ def test_handle_week_command_updates_weekly_scoreboard_message():
             poro_service=poro_service,
             report_timezone_name="UTC",
             report_day_start_hour=6,
-            db_enabled=True,
             start_monotonic=0.0,
             daily_request_lock=asyncio.Lock(),
             request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -338,7 +334,6 @@ def test_handle_help_command_shows_usage_and_channels():
             poro_service=poro_service,
             report_timezone_name="UTC",
             report_day_start_hour=9,
-            db_enabled=True,
             start_monotonic=0.0,
             daily_request_lock=asyncio.Lock(),
             request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -377,7 +372,6 @@ def test_known_command_in_wrong_channel_prompts_to_use_daily_channel():
             poro_service=poro_service,
             report_timezone_name="UTC",
             report_day_start_hour=6,
-            db_enabled=True,
             start_monotonic=0.0,
             daily_request_lock=asyncio.Lock(),
             request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -415,7 +409,6 @@ def test_handle_week_command_loading_text_uses_configured_hour():
             poro_service=poro_service,
             report_timezone_name="UTC",
             report_day_start_hour=9,
-            db_enabled=True,
             start_monotonic=0.0,
             daily_request_lock=asyncio.Lock(),
             request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -452,7 +445,6 @@ def _base_streak_kwargs(channel, friends=None):
         poro_service=FakePoroService(build_outputs=["unused"]),
         report_timezone_name="UTC",
         report_day_start_hour=6,
-        db_enabled=True,
         start_monotonic=0.0,
         daily_request_lock=asyncio.Lock(),
         request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -672,7 +664,6 @@ def test_health_command_includes_backfill_status():
             poro_service=poro_service,
             report_timezone_name="UTC",
             report_day_start_hour=9,
-            db_enabled=True,
             start_monotonic=0.0,
             daily_request_lock=asyncio.Lock(),
             request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -720,7 +711,6 @@ def test_health_command_includes_worker_latency_metrics_when_available():
             poro_service=poro_service,
             report_timezone_name="UTC",
             report_day_start_hour=9,
-            db_enabled=True,
             start_monotonic=0.0,
             daily_request_lock=asyncio.Lock(),
             request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -756,7 +746,6 @@ def test_backfill_command_runs_cache_backfill_and_reports_summary():
             poro_service=poro_service,
             report_timezone_name="UTC",
             report_day_start_hour=9,
-            db_enabled=True,
             start_monotonic=0.0,
             daily_request_lock=asyncio.Lock(),
             request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -792,7 +781,6 @@ def test_backfill_command_rejects_invalid_date_format():
             poro_service=poro_service,
             report_timezone_name="UTC",
             report_day_start_hour=9,
-            db_enabled=True,
             start_monotonic=0.0,
             daily_request_lock=asyncio.Lock(),
             request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -894,7 +882,6 @@ def test_profile_command_returns_summary_for_player():
             poro_service=poro_service,
             report_timezone_name="UTC",
             report_day_start_hour=6,
-            db_enabled=True,
             start_monotonic=0.0,
             daily_request_lock=asyncio.Lock(),
             request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -1011,9 +998,12 @@ def _champdisplay(content, channel, state, *, admin=True, **overrides):
         handle_incoming_message(
             message=message,
             riot_client=FakeRiotClient(),
-            db_get_state=lambda key: state.get(key),
-            db_set_state=lambda key, value: state.update({key: value}),
-            **{**_base_streak_kwargs(channel), **overrides},
+            **{
+                **_base_streak_kwargs(channel),
+                "db_get_state": lambda key: state.get(key),
+                "db_set_state": lambda key, value: state.update({key: value}),
+                **overrides,
+            },
         )
     )
     return channel.sent_messages[-1].content
@@ -1064,7 +1054,7 @@ def test_champdisplay_change_requires_postgres():
     channel = FakeChannel(channel_id=999)
     state = {}
 
-    reply = _champdisplay("!champdisplay icon", channel, state, db_enabled=False)
+    reply = _champdisplay("!champdisplay icon", channel, state, db_set_state=None)
 
     assert "postgres" in reply
     assert state == {}

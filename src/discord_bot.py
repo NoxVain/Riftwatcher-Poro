@@ -751,7 +751,6 @@ async def on_message(message):
         poro_service=poro_service,
         report_timezone_name=REPORT_TIMEZONE_NAME,
         report_day_start_hour=REPORT_DAY_START_HOUR,
-        db_enabled=DB_ENABLED,
         start_monotonic=START_MONOTONIC,
         daily_request_lock=DAILY_REQUEST_LOCK,
         request_id_context=REQUEST_ID_CONTEXT,

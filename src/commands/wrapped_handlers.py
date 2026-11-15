@@ -62,7 +62,7 @@ async def handle_wrapped_commands(ctx):
     if year is None:
         return True
     channel = ctx.message.channel
-    if not ctx.db_enabled or ctx.db_iter_wrapped_rows is None:
+    if ctx.db_iter_wrapped_rows is None:
         await channel.send("Wrapped needs the database, which isn't configured.")
         return True
     query = ctx.content[len(WRAPPED_COMMAND):].strip()

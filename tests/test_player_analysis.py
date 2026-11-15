@@ -426,7 +426,7 @@ def default_rows():
     return games_with(14, 6, champion="Zyra") + games_with(3, 9, champion="Lux", start_days_ago=200)
 
 
-def run_command(content, *, channel=None, db_enabled=True, rows=None, calls=None, fail=False, logs=None):
+def run_command(content, *, channel=None, with_loader=True, rows=None, calls=None, fail=False, logs=None):
     import src.commands.analysis_handlers as analysis_handlers
 
     channel = channel or FakeChannel()
@@ -451,7 +451,6 @@ def run_command(content, *, channel=None, db_enabled=True, rows=None, calls=None
         poro_service=None,
         report_timezone_name="UTC",
         report_day_start_hour=6,
-        db_enabled=db_enabled,
         start_monotonic=0.0,
         daily_request_lock=asyncio.Lock(),
         request_id_context=contextvars.ContextVar("request_id", default=None),
@@ -463,7 +462,7 @@ def run_command(content, *, channel=None, db_enabled=True, rows=None, calls=None
         log=(logs.append if logs is not None else (lambda _msg: None)),
         events_channel_id=999,
         db_load_tracked_puuids=lambda: [("NoxVain#EUW", "nox"), ("Pending#EUW", None)],
-        db_load_player_analysis_rows=load_rows,
+        db_load_player_analysis_rows=load_rows if with_loader else None,
         db_load_role_group_totals=load_totals,
     ))
     analysis_handlers._now = real_now
@@ -527,7 +526,7 @@ def test_analyze_usage_and_unknown_players(content, expected):
 
 
 def test_analyze_without_database_and_on_db_errors():
-    no_db, _ = run_command("!analyze NoxVain", db_enabled=False)
+    no_db, _ = run_command("!analyze NoxVain", with_loader=False)
     failed, _ = run_command("!analyze NoxVain", fail=True)
 
     assert no_db.sent == ["Player analysis needs the database, which isn't configured."]

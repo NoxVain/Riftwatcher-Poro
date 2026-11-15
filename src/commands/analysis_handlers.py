@@ -50,7 +50,7 @@ async def handle_analysis_commands(ctx):
             "role is top, jungle, mid, adc or support)."
         )
         return True
-    if not ctx.db_enabled or ctx.db_load_player_analysis_rows is None:
+    if ctx.db_load_player_analysis_rows is None:
         await channel.send("Player analysis needs the database, which isn't configured.")
         return True
 

@@ -40,7 +40,8 @@ def _within_limits(message):
     ],
 )
 def test_match_accent(queue_id, results, expected):
-    assert cards.match_accent(queue_id, [{"win": result} for result in results]) == expected
+    participants = [{"win": result} for result in results]
+    assert cards.RESULT_ACCENTS[cards.match_result(queue_id, participants)] == expected
 
 
 def test_single_match_card_keeps_recap_text_and_tracks_lp_components():
@@ -137,7 +138,6 @@ def test_add_lp_to_card_refuses_unknown_component_or_changed_heading():
 def test_match_result_labels_match_accents(queue_id, results, expected):
     participants = [{"win": result} for result in results]
     assert cards.match_result(queue_id, participants) == expected
-    assert cards.match_accent(queue_id, participants) == cards.RESULT_ACCENTS[expected]
 
 
 def test_card_header_shows_queue_result_and_game_length_only():

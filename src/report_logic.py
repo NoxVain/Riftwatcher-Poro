@@ -75,6 +75,25 @@ def create_performance_totals():
     }
 
 
+def mode_records_from_row(row):
+    """Solo/Duo and Flex win/loss records from a `player_daily_stats` row; no row means no games."""
+    records = create_mode_records()
+    if row:
+        for bucket, prefix in (("solo_duo", "solo"), ("flex", "flex")):
+            records[bucket]["wins"] = int(row.get(f"{prefix}_wins") or 0)
+            records[bucket]["losses"] = int(row.get(f"{prefix}_losses") or 0)
+    return records
+
+
+def performance_totals_from_row(row):
+    """Performance totals from a `player_daily_stats` row; a missing or NULL column counts as 0."""
+    totals = create_performance_totals()
+    if row:
+        for key, empty in totals.items():
+            totals[key] = type(empty)(row.get(key) or 0)
+    return totals
+
+
 def get_mode_totals(mode_records):
     wins = mode_records["solo_duo"]["wins"] + mode_records["flex"]["wins"]
     losses = mode_records["solo_duo"]["losses"] + mode_records["flex"]["losses"]

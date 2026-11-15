@@ -18,6 +18,8 @@ from src.report_logic import (
     get_mode_totals,
     is_remake_match,
     is_match_in_report_cycle,
+    mode_records_from_row,
+    performance_totals_from_row,
     pick_week_primary_role,
     rank_sort_key,
     wilson_lower_bound,
@@ -247,3 +249,22 @@ def test_pick_week_primary_role_ties_and_empty():
     assert pick_week_primary_role([("UTILITY", 2), ("BOTTOM", 2)]) == "BOTTOM"
     assert pick_week_primary_role([(None, 5)]) is None
     assert pick_week_primary_role([]) is None
+
+
+def test_performance_totals_from_row_reads_every_total_and_treats_missing_as_zero():
+    row = {key: index + 1 for index, key in enumerate(create_performance_totals())}
+    row.update({"minutes_total": 31.5, "healing": None, "riot_id": "A#EUW"})
+    del row["assists"]
+    totals = performance_totals_from_row(row)
+    assert list(totals) == list(create_performance_totals())
+    assert totals["cs_total"] == 1 and totals["kill_participation_den"] == 22
+    assert totals["minutes_total"] == 31.5 and isinstance(totals["minutes_total"], float)
+    assert totals["healing"] == 0 and totals["assists"] == 0
+    assert all(isinstance(value, int) for key, value in totals.items() if key != "minutes_total")
+    assert performance_totals_from_row(None) == create_performance_totals()
+
+
+def test_mode_records_from_row_reads_solo_and_flex_and_no_row_means_no_games():
+    row = {"solo_wins": 3, "solo_losses": 1, "flex_wins": None, "arcade_wins": 9}
+    assert mode_records_from_row(row) == {"solo_duo": {"wins": 3, "losses": 1}, "flex": {"wins": 0, "losses": 0}}
+    assert mode_records_from_row(None) == create_mode_records()

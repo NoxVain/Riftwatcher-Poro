@@ -41,6 +41,7 @@ from src.runtime.workers import (
     background_patch_notes_notifier as runtime_background_patch_notes_notifier,
     background_rank_notifier as runtime_background_rank_notifier,
     evaluate_rank_changes_and_notify as runtime_evaluate_rank_changes_and_notify,
+    new_worker_stats,
 )
 
 
@@ -126,10 +127,10 @@ REQUEST_ID_CONTEXT = contextvars.ContextVar("request_id", default=None)
 START_MONOTONIC = time.monotonic()
 RIOT_ALERT_STATE = RiotAlertState()
 WORKER_STATS = {
-    "refresh": {"cycles": 0, "errors": 0, "runs": 0, "elapsed_ms_last": 0, "elapsed_ms_avg": 0, "elapsed_ms_max": 0, "elapsed_ms_total": 0, "last_success_at": START_MONOTONIC},
-    "rank": {"cycles": 0, "errors": 0, "runs": 0, "elapsed_ms_last": 0, "elapsed_ms_avg": 0, "elapsed_ms_max": 0, "elapsed_ms_total": 0, "last_success_at": START_MONOTONIC},
-    "recap": {"cycles": 0, "errors": 0, "runs": 0, "elapsed_ms_last": 0, "elapsed_ms_avg": 0, "elapsed_ms_max": 0, "elapsed_ms_total": 0, "last_success_at": START_MONOTONIC},
-    "backfill": {"cycles": 0, "errors": 0, "runs": 0, "elapsed_ms_last": 0, "elapsed_ms_avg": 0, "elapsed_ms_max": 0, "elapsed_ms_total": 0, "last_success_at": START_MONOTONIC},
+    "refresh": new_worker_stats(START_MONOTONIC),
+    "rank": new_worker_stats(START_MONOTONIC),
+    "recap": new_worker_stats(START_MONOTONIC),
+    "backfill": new_worker_stats(START_MONOTONIC),
 }
 WORKER_STALL_STATE = {"alerted_by_worker": {}}
 WORKER_STALE_THRESHOLDS = {
@@ -141,14 +142,14 @@ WORKER_STALE_THRESHOLDS = {
 NEWS_CHANNEL_ID = cfg.NEWS_CHANNEL_ID
 ESPORTS_ENABLED = NEWS_CHANNEL_ID > 0
 if ESPORTS_ENABLED:
-    WORKER_STATS["esports"] = {"cycles": 0, "errors": 0, "runs": 0, "elapsed_ms_last": 0, "elapsed_ms_avg": 0, "elapsed_ms_max": 0, "elapsed_ms_total": 0, "last_success_at": START_MONOTONIC}
+    WORKER_STATS["esports"] = new_worker_stats(START_MONOTONIC)
     WORKER_STALE_THRESHOLDS["esports"] = max(300, max(30, cfg.ESPORTS_POLL_SECONDS) * 5)
 PATCH_NOTES_ENABLED = cfg.PATCH_NOTES_ENABLED
 PATCH_NOTES_POLL_SECONDS = cfg.PATCH_NOTES_POLL_SECONDS
 # Failed checks retry sooner than the normal interval, but never more than hourly.
 PATCH_NOTES_RETRY_SECONDS = min(PATCH_NOTES_POLL_SECONDS, 3600)
 if PATCH_NOTES_ENABLED:
-    WORKER_STATS["patch"] = {"cycles": 0, "errors": 0, "runs": 0, "elapsed_ms_last": 0, "elapsed_ms_avg": 0, "elapsed_ms_max": 0, "elapsed_ms_total": 0, "last_success_at": START_MONOTONIC}
+    WORKER_STATS["patch"] = new_worker_stats(START_MONOTONIC)
     WORKER_STALE_THRESHOLDS["patch"] = PATCH_NOTES_POLL_SECONDS * 4
 
 

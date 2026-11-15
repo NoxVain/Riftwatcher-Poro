@@ -2,6 +2,7 @@ import asyncio
 import time
 from datetime import datetime
 
+from src.constants import DISCORD_MESSAGE_LIMIT
 from src.report_logic import (
     GAMER_SCORE_PERF_WEIGHT,
     GAMER_SCORE_PERF_RAMP_GAMES,
@@ -252,7 +253,7 @@ def format_report_from_results(
         f"errors={len(error_results)} wilson_z={WILSON_Z:.2f} elapsed={total_elapsed_ms}ms"
     )
     report_text = "\n".join(report_lines)
-    if len(report_text) <= 2000:
+    if len(report_text) <= DISCORD_MESSAGE_LIMIT:
         return report_text
 
     compact_lines = [f"\u2728------ **RIFTWATCHER PORO ({header_title})** ------\u2728", ""]
@@ -274,7 +275,7 @@ def format_report_from_results(
     compact_lines.append("\u2728--------------------------------------------\u2728")
     compact_lines.append(f"_Last updated: {updated_at}_")
     compact_text = "\n".join(compact_lines)
-    if len(compact_text) > 2000:
+    if len(compact_text) > DISCORD_MESSAGE_LIMIT:
         compact_text = compact_text[:1950] + "\n..."
     return compact_text
 

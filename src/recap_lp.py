@@ -9,6 +9,7 @@ event arrives later (recap first).
 import asyncio
 import json
 
+from src.constants import DISCORD_MESSAGE_LIMIT
 from src.rank_logic import APEX_TIERS, DIVISION_ORDER, TIER_ORDER, format_rank, normalize_queue_type
 from src.recap_cards import add_lp_to_card
 
@@ -17,7 +18,6 @@ QUEUE_TYPE_BY_QUEUE_ID = {420: "RANKED_SOLO_5X5", 440: "RANKED_FLEX_SR"}
 LP_MATCH_WINDOW_SECONDS = 30 * 60
 # Riot match end times and our clock can disagree slightly.
 LP_CLOCK_SKEW_SECONDS = 60
-MAX_MESSAGE_LENGTH = 2000
 
 # Rank and recap workers share one event loop; this keeps their read-modify-write
 # of the pending/event lists from interleaving.
@@ -183,7 +183,7 @@ def add_lp_to_content(content, heading, summary):
     if content.count(marker) != 1:
         return None
     updated = content.replace(marker, f"{heading} · {summary}\n", 1)
-    if len(updated) > MAX_MESSAGE_LENGTH:
+    if len(updated) > DISCORD_MESSAGE_LIMIT:
         return None
     return updated
 

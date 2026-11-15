@@ -9,6 +9,7 @@ import discord
 import requests
 
 from src.arena_static import load_arena_display_names
+from src.constants import DISCORD_MESSAGE_LIMIT
 from src.champion_icons import (
     CHAMPION_DISPLAY_STATE_KEY,
     DEFAULT_CHAMPION_DISPLAY_MODE,
@@ -284,7 +285,7 @@ async def get_ranked_streak_info(riot_client, puuid, recent_ids, max_matches=20)
     return streak_count, streak_result
 
 
-def _split_large_section(section, max_len=2000):
+def _split_large_section(section, max_len=DISCORD_MESSAGE_LIMIT):
     chunks = []
     lines = section.split("\n\n")
     current_chunk = []
@@ -326,7 +327,7 @@ def _split_large_section(section, max_len=2000):
     return chunks
 
 
-def _pack_sections_into_messages(sections, separator, max_len=2000):
+def _pack_sections_into_messages(sections, separator, max_len=DISCORD_MESSAGE_LIMIT):
     messages = []
     current = []
     for section in sections:

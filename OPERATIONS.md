@@ -240,9 +240,10 @@ Pentakills come from the `penta_kills` column, added with `STATS_VERSION` 2. The
 
 ## Weekly Title Belts
 
-The belts card for a report week posts in `EVENTS_CHANNEL_ID` about 20-30 minutes after the week closes (Monday 06:00 Oslo in production), from that week's ranked rows in `player_match_stats`.
+The belts card for a report week posts in `EVENTS_CHANNEL_ID` about 20-30 minutes after the week closes (Monday 06:00 Oslo in production), from that week's ranked rows in `player_match_stats`. LP Climber and LP Donor come from `lp_history` instead.
 
-- Logs: `[belts] Posted weekly belts for <start>..<end> in channel <id>: belts=… defended=… games=… player_games=… players=….` `games` counts each game once; `player_games` counts it once per tracked player in it. A week where nobody played 3 ranked games logs `[belts] No belts for week …` and posts nothing.
+- Logs: `[belts] Posted weekly belts for <start>..<end> in channel <id>: belts=… defended=… games=… player_games=… players=… lp_players=….` `games` counts each game once; `player_games` counts it once per tracked player in it; `lp_players` is how many players had an LP total that could be used. A week where nobody played 3 ranked games logs `[belts] No belts for week …` and posts nothing.
+- LP belts: a player's LP is left out for a week with fewer than 3 observed games, a reset (a win/loss counter going down) or a change with no LP delta. LP is timed by when the rank worker saw it (within about 5 minutes of the game), so a game ending just before Monday 06:00 can land in the next week. `[belts] Could not read LP history; posting without the LP belts: …` means the card went out without them, and their defended streaks start over.
 - The very first run stores the last closed week's holders and logs `[belts] First run: …`; the first card posts the following Monday, so defended marks work from the first card.
 - `[belts] Channel … not available; retrying next check.` or `[belts] Weekly belts check failed; retrying next check: …` retry every 10 minutes. The week is stored before sending, so a send that fails after that is not retried.
 - To repost a week (e.g. after fixing a bug), set `weekly_belts_state` back to the previous week's value, or delete it to start over from a silent baseline (defended streaks reset).

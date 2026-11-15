@@ -29,7 +29,7 @@ END = START + timedelta(days=7)
 MATCH_IDS = itertools.count(1)
 
 
-def game(riot_id, *, match_id=None, queue=420, remake=False, minutes=30, damage=20000, vision=30, turrets=1,
+def game(riot_id, *, match_id=None, queue=420, remake=False, minutes=30, damage=20000, gold=12000, vision=30, turrets=1,
          dragons=1, barons=0, heralds=0, saves=0, outnumbered=0, dodged=30, pings=10, dead_minutes=3):
     return {
         "match_id": match_id or f"EUW1_{next(MATCH_IDS)}",
@@ -38,6 +38,7 @@ def game(riot_id, *, match_id=None, queue=420, remake=False, minutes=30, damage=
         "remake": remake,
         "duration_seconds": minutes * 60,
         "damage_to_champions": damage,
+        "gold_earned": gold,
         "vision_score": vision,
         "turret_takedowns": turrets,
         "dragon_takedowns": dragons,
@@ -105,6 +106,7 @@ def test_each_belt_text():
     assert belts["matrix"].text == "**2.0** skillshots dodged/min"
     assert belts["backseat_gamer"].text == "**40** pings a game"
     assert belts["grey_screen"].text == "dead for **20%** of every game"
+    assert belts["gold_magnet"].text == "**400** gold/min"
 
 
 def test_ties_share_and_zero_or_missing_values_win_nothing():
@@ -113,6 +115,58 @@ def test_ties_share_and_zero_or_missing_values_win_nothing():
     assert belts["damage_king"].holders == ["A#1", "B#1"]
     assert "bodyguard" not in belts
     assert "backseat_gamer" not in belts
+
+
+def lp(delta, games=5, reliable=True):
+    return {"lp_delta": delta, "games": games, "reliable": reliable}
+
+
+def test_lp_belts_go_to_the_biggest_net_gain_and_loss_and_share_ties():
+    rows = games("A#1") + games("B#1") + games("C#1") + games("D#1")
+    lp_totals = {"A#1": lp(125, 7), "B#1": lp(125), "C#1": lp(-80, 6), "D#1": lp(-20, 3)}
+    week = compute_week_belts(rows, START, END, lp_totals=lp_totals)
+    belts = awards_by_key(week)
+    assert belts["lp_gained"].holders == ["A#1", "B#1"]
+    assert belts["lp_gained"].text == "gained **125 LP**"
+    assert belts["lp_lost"].holders == ["C#1"]
+    assert belts["lp_lost"].text == "lost **80 LP**"
+    state = apply_defended(week, {
+        "week_start": (START - timedelta(days=7)).isoformat(),
+        "holders": {"lp_gained": {"A#1": 2}, "lp_lost": {"D#1": 1}},
+    })
+    assert state["lp_gained"] == {"A#1": 3, "B#1": 1}
+    assert state["lp_lost"] == {"C#1": 1}
+
+
+def test_lp_belts_need_three_observed_games_and_a_sum_that_can_be_trusted():
+    rows = (games("Rookie#1", 2) + games("Few#1") + games("Reset#1") + games("Unknown#1") + games("Zero#1")
+            + games("NoHistory#1"))
+    lp_totals = {
+        "Rookie#1": lp(999),                    # only 2 ranked games
+        "Few#1": lp(-999, games=2),             # only 2 games seen by the rank worker
+        "Reset#1": lp(500, reliable=False),     # a win/loss counter went down
+        "Unknown#1": lp(None, reliable=False),  # no LP change stored
+        "Zero#1": lp(0),
+        "Removed#1": lp(1000),                  # no games in the belt rows
+    }
+    belts = awards_by_key(compute_week_belts(rows, START, END, lp_totals=lp_totals))
+    assert "lp_gained" not in belts and "lp_lost" not in belts
+    assert "damage_king" in belts
+
+
+def test_a_week_with_only_gains_has_no_lp_donor_and_the_other_way_round():
+    for delta, expected, absent in ((20, "lp_gained", "lp_lost"), (-20, "lp_lost", "lp_gained")):
+        belts = awards_by_key(compute_week_belts(games("A#1"), START, END, lp_totals={"A#1": lp(delta)}))
+        assert expected in belts and absent not in belts
+
+
+def test_gold_magnet_uses_total_gold_divided_by_total_minutes():
+    # A's average of per-game rates is higher (567), but B earns more per minute played.
+    rows = [game("A#1", gold=9000, minutes=10), game("A#1", gold=12000, minutes=50),
+            game("A#1", gold=9000, minutes=30)] + games("B#1", gold=12000)
+    rows += games("Rookie#1", 2, gold=60000)
+    belt = awards_by_key(compute_week_belts(rows, START, END))["gold_magnet"]
+    assert belt.holders == ["B#1"] and belt.text == "**400** gold/min"
 
 
 # --- Defended ---------------------------------------------------------------
@@ -173,6 +227,20 @@ def test_card_sections_with_defended_and_shared_belts():
     assert "👑 **Damage King** · NoxVain and Tamarin (🔁 defended) · **333** damage/min" in text
     assert text.index("**Glory**") < text.index("**Shame**")
     assert sections[-1].startswith("-# Ranked Solo/Duo, Flex and 5v5")
+
+
+def test_lp_belts_sit_first_and_last_and_add_a_footer_line():
+    rows = games("NoxVain#EUW") + games("Tamarin#EUW")
+    week = compute_week_belts(rows, START, END, lp_totals={"NoxVain#EUW": lp(41), "Tamarin#EUW": lp(-103)})
+    apply_defended(week, None)
+    sections = format_belts_sections(week)
+    glory = next(s for s in sections if s.startswith("**Glory**"))
+    shame = next(s for s in sections if s.startswith("**Shame**"))
+    assert glory.splitlines()[1] == "🪜 **LP Climber** · NoxVain · gained **41 LP**"
+    assert shame.splitlines()[-1] == "📉 **LP Donor** · Tamarin · lost **103 LP**"
+    assert sections[-1].endswith("\n-# LP is the net change in Solo/Duo and Flex together")
+    # No LP belt on the card, no LP footer.
+    assert "LP" not in "\n".join(format_belts_sections(compute_week_belts(rows, START, END)))
 
 
 def test_vision_daddy_keeps_the_vision_dad_key_so_streaks_continue():
@@ -236,7 +304,8 @@ class FakeChannel:
         self.sent.append(view_text(view) if view is not None else content)
 
 
-def run_once(*, state, rows=None, now=END + BELTS_POST_DELAY, channel=None, logs=None, missing_channel=False):
+def run_once(*, state, rows=None, now=END + BELTS_POST_DELAY, channel=None, logs=None, missing_channel=False,
+             lp_totals=None, lp_error=None):
     channel = channel or FakeChannel()
     loads = []
 
@@ -244,12 +313,20 @@ def run_once(*, state, rows=None, now=END + BELTS_POST_DELAY, channel=None, logs
         loads.append((start, end))
         return rows if rows is not None else games("NoxVain#EUW", pings=50)
 
+    def load_lp_totals(start, end, queue_types):
+        assert (start, end) == (START, END)
+        assert queue_types == ("RANKED_SOLO_5X5", "RANKED_FLEX_SR")
+        if lp_error is not None:
+            raise lp_error
+        return lp_totals or {}
+
     async def resolve(channel_id):
         assert channel_id == 555
         return None if missing_channel else channel
 
     result = asyncio.run(post_weekly_belts_once(
         db_load_belt_rows=load_rows,
+        db_load_belt_lp_totals=load_lp_totals,
         db_get_state=state.get,
         db_set_state=state.__setitem__,
         resolve_channel=resolve,
@@ -323,6 +400,28 @@ def test_rejected_card_falls_back_to_text():
     assert any("sending it as plain text" in line for line in logs)
 
 
+def test_lp_belts_post_and_are_stored_and_logged():
+    state = {BELTS_STATE_KEY: previous_state()}
+    logs = []
+    lp_totals = {"NoxVain#EUW": lp(140, 8), "Tamarin#EUW": lp(-60, reliable=False)}
+    result, channel, _ = run_once(state=state, logs=logs, lp_totals=lp_totals)
+    assert result == "posted"
+    assert "🪜 **LP Climber** · NoxVain · gained **140 LP**" in channel.sent[0]
+    assert json.loads(state[BELTS_STATE_KEY])["holders"]["lp_gained"] == {"NoxVain#EUW": 1}
+    # One of the two players has an LP sum that can be used.
+    assert logs[-1].endswith("lp_players=1.")
+
+
+def test_failed_lp_read_still_posts_the_other_belts():
+    state = {BELTS_STATE_KEY: previous_state()}
+    logs = []
+    result, channel, _ = run_once(state=state, logs=logs, lp_error=RuntimeError("db down"))
+    assert result == "posted"
+    assert "Backseat Gamer" in channel.sent[0] and "LP Climber" not in channel.sent[0]
+    assert logs[0] == "[belts] Could not read LP history; posting without the LP belts: RuntimeError: db down"
+    assert logs[-1].endswith("lp_players=0.")
+
+
 def test_loop_never_raises():
     logs = []
 
@@ -334,6 +433,7 @@ def test_loop_never_raises():
 
     asyncio.run(run_weekly_belts_loop(
         db_load_belt_rows=lambda start, end: [],
+        db_load_belt_lp_totals=lambda start, end, queue_types: {},
         db_get_state=broken,
         db_set_state=lambda key, value: None,
         resolve_channel=resolve,

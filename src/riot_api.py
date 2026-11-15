@@ -10,16 +10,14 @@ from src import config as cfg
 import requests
 
 from src.report_logic import (
-    accumulate_participant_performance,
+    count_participant_game,
     create_mode_records,
     create_performance_totals,
-    get_match_duration_seconds,
     get_match_end_unix_seconds,
     get_mode_bucket,
     get_mode_totals,
     get_report_cycle_start_unix_seconds,
-    is_remake_match,
-    is_match_in_report_cycle,
+    scored_bucket_today,
 )
 
 
@@ -512,35 +510,15 @@ class RiotApiClient:
 
             match_info = await self.fetch_match_info(match_id)
             today_details_fetched += 1
-            if not is_match_in_report_cycle(
-                match_info,
-                self.report_timezone,
-                day_start_hour=self.report_day_start_hour,
-            ):
-                continue
-            if is_remake_match(match_info):
-                continue
-
-            queue_id = match_info["info"].get("queueId", -1)
-            bucket_name = get_mode_bucket(queue_id)
+            bucket_name = scored_bucket_today(
+                match_info, self.report_timezone, day_start_hour=self.report_day_start_hour
+            )
             if bucket_name is None:
                 continue
             participant = self.get_participant(match_info, puuid)
             if participant is None:
                 continue
-            result = participant.get("win")
-            if result is True:
-                mode_records[bucket_name]["wins"] += 1
-            elif result is False:
-                mode_records[bucket_name]["losses"] += 1
-
-            duration_seconds = get_match_duration_seconds(match_info)
-            accumulate_participant_performance(
-                performance_totals,
-                participant,
-                duration_seconds,
-                match_info=match_info,
-            )
+            count_participant_game(mode_records, performance_totals, bucket_name, participant, match_info)
 
         wins, losses = get_mode_totals(mode_records)
         elapsed_ms = int((time.perf_counter() - player_start) * 1000)

@@ -5,6 +5,7 @@ from src.report_logic import (
     accumulate_participant_performance,
     compute_gamer_score,
     compute_perf_percentile,
+    count_participant_game,
     create_performance_totals,
     create_mode_records,
     format_mode_line,
@@ -22,6 +23,7 @@ from src.report_logic import (
     performance_totals_from_row,
     pick_week_primary_role,
     rank_sort_key,
+    scored_bucket_today,
     wilson_lower_bound,
     WILSON_Z,
 )
@@ -268,3 +270,42 @@ def test_mode_records_from_row_reads_solo_and_flex_and_no_row_means_no_games():
     row = {"solo_wins": 3, "solo_losses": 1, "flex_wins": None, "arcade_wins": 9}
     assert mode_records_from_row(row) == {"solo_duo": {"wins": 3, "losses": 1}, "flex": {"wins": 0, "losses": 0}}
     assert mode_records_from_row(None) == create_mode_records()
+
+
+def _day_match(*, queue=420, hour=7, duration=1800, win=True):
+    end = datetime(2026, 2, 18, hour, 0, tzinfo=timezone.utc)
+    return {"info": {
+        "queueId": queue,
+        "gameDuration": duration,
+        "gameEndTimestamp": int(end.timestamp() * 1000),
+        "participants": [{"puuid": "p1", "win": win, "kills": 4, "totalMinionsKilled": 150}],
+    }}
+
+
+def test_scored_bucket_today_skips_old_games_remakes_and_unscored_queues():
+    now_utc = datetime(2026, 2, 18, 10, 0, tzinfo=timezone.utc)
+
+    def bucket(match):
+        return scored_bucket_today(match, timezone.utc, day_start_hour=6, now_utc=now_utc)
+
+    assert bucket(_day_match()) == "solo_duo"
+    assert bucket(_day_match(queue=440)) == "flex"
+    assert bucket(_day_match(hour=5)) is None       # ended before the report day started
+    assert bucket(_day_match(duration=240)) is None  # remake
+    assert bucket(_day_match(queue=450)) is None     # ARAM isn't scored
+
+
+def test_count_participant_game_adds_the_result_and_the_performance_totals():
+    mode_records = create_mode_records()
+    totals = create_performance_totals()
+    won, lost = _day_match(), _day_match(win=False)
+
+    assert count_participant_game(mode_records, totals, "solo_duo", won["info"]["participants"][0], won)
+    assert count_participant_game(mode_records, totals, "flex", lost["info"]["participants"][0], lost)
+    assert mode_records == {"solo_duo": {"wins": 1, "losses": 0}, "flex": {"wins": 0, "losses": 1}}
+    assert totals["kills"] == 8 and totals["minutes_total"] == 60.0
+
+    # No result on the participant: the stats still count, but no win or loss does.
+    assert not count_participant_game(mode_records, totals, "solo_duo", {"puuid": "p1", "kills": 1}, won)
+    assert mode_records["solo_duo"] == {"wins": 1, "losses": 0}
+    assert totals["kills"] == 9

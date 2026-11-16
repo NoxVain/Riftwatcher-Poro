@@ -85,6 +85,51 @@ async def evaluate_rank_changes_and_notify(
     )
 
 
+# A cycle returns this to go straight to the next one without being counted or logged.
+_SKIP_CYCLE = object()
+
+
+async def _sleep_startup_jitter(name, cap_seconds, log):
+    """Wait a random moment before the first cycle so the workers don't all start at once."""
+    initial_jitter = random.uniform(0.0, cap_seconds)
+    if initial_jitter > 0:
+        log(f"[{name}] Startup jitter sleep={initial_jitter:.1f}s")
+        await asyncio.sleep(initial_jitter)
+
+
+async def _run_worker_loop(
+    *, name, client, request_id_context, worker_stats, log, cycle, sleep_seconds,
+    request_prefix=None, error_label="Unexpected error",
+):
+    """Run `cycle` until the client closes: a request ID per cycle, the cycle counted in `worker_stats`, then a sleep.
+
+    A cycle that raises is logged and counted as an error, and the loop keeps going. A cycle can
+    also return True for a failure it has already logged, or `_SKIP_CYCLE`. `sleep_seconds` is a
+    number, or a function of whether the cycle failed.
+    """
+    while not client.is_closed():
+        cycle_start = time.monotonic()
+        token = request_id_context.set(create_request_id(request_prefix or name))
+        had_error = False
+        outcome = None
+        try:
+            outcome = await cycle()
+        except Exception as exc:
+            had_error = True
+            log(f"[{name}] {error_label}: {exc}")
+        finally:
+            request_id_context.reset(token)
+        if outcome is _SKIP_CYCLE:
+            continue
+        had_error = had_error or outcome is True
+        cycle_end = time.monotonic()
+        elapsed = int((cycle_end - cycle_start) * 1000)
+        _record_worker_cycle(worker_stats, name, had_error=had_error, elapsed_ms=elapsed, ended_at_mono=cycle_end)
+        next_sleep = sleep_seconds(had_error) if callable(sleep_seconds) else sleep_seconds
+        log(f"[{name}] Cycle complete elapsed={elapsed}ms next_sleep={next_sleep}s")
+        await asyncio.sleep(next_sleep)
+
+
 async def background_rank_notifier(
     *,
     daily_refresh_seconds,
@@ -95,26 +140,15 @@ async def background_rank_notifier(
     log,
 ):
     sleep_seconds = max(30, daily_refresh_seconds)
-    initial_jitter = random.uniform(0.0, min(30.0, sleep_seconds / 2))
-    if initial_jitter > 0:
-        log(f"[rank] Startup jitter sleep={initial_jitter:.1f}s")
-        await asyncio.sleep(initial_jitter)
-    while not client.is_closed():
-        cycle_start = time.monotonic()
-        token = request_id_context.set(create_request_id("rank"))
-        had_error = False
-        try:
-            await evaluate_rank_changes_and_notify_fn()
-        except Exception as exc:
-            had_error = True
-            log(f"[rank] Unexpected background error: {exc}")
-        finally:
-            request_id_context.reset(token)
-        cycle_end = time.monotonic()
-        elapsed = int((cycle_end - cycle_start) * 1000)
-        _record_worker_cycle(worker_stats, "rank", had_error=had_error, elapsed_ms=elapsed, ended_at_mono=cycle_end)
-        log(f"[rank] Cycle complete elapsed={elapsed}ms next_sleep={sleep_seconds}s")
-        await asyncio.sleep(sleep_seconds)
+    await _sleep_startup_jitter("rank", min(30.0, sleep_seconds / 2), log)
+
+    async def cycle():
+        await evaluate_rank_changes_and_notify_fn()
+
+    await _run_worker_loop(
+        name="rank", client=client, request_id_context=request_id_context, worker_stats=worker_stats, log=log,
+        cycle=cycle, sleep_seconds=sleep_seconds, error_label="Unexpected background error",
+    )
 
 
 async def background_match_recap_notifier(
@@ -140,46 +174,35 @@ async def background_match_recap_notifier(
     sleep_seconds = max(30, match_recap_poll_seconds)
     # Lives as long as the worker so portrait lookups stay cached between cycles.
     champion_icons = ChampionIcons(client, log)
-    initial_jitter = random.uniform(0.0, min(30.0, sleep_seconds / 2))
-    if initial_jitter > 0:
-        log(f"[recap] Startup jitter sleep={initial_jitter:.1f}s")
-        await asyncio.sleep(initial_jitter)
-    while not client.is_closed():
-        cycle_start = time.monotonic()
-        token = request_id_context.set(create_request_id("recap"))
-        had_error = False
-        try:
-            channel = await resolve_channel(match_recap_channel_id)
-            if channel is None:
-                await asyncio.sleep(max(30, match_recap_poll_seconds))
-                continue
+    await _sleep_startup_jitter("recap", min(30.0, sleep_seconds / 2), log)
 
-            await process_recap_cycle(
-                friends=friends,
-                riot_client=riot_client,
-                poro_service=poro_service,
-                match_recap_channel_id=match_recap_channel_id,
-                channel=channel,
-                champion_icons=champion_icons,
-                db_get_state=db_get_state,
-                db_set_state=db_set_state,
-                db_upsert_daily_stats=db_upsert_daily_stats,
-                edit_last_report_message=edit_last_report_message,
-                edit_last_weekly_report_message=edit_last_weekly_report_message,
-                db_iter_record_rows=db_iter_record_rows,
-                db_upsert_player_match_stats=db_upsert_player_match_stats,
-                log=log,
-            )
-        except Exception as exc:
-            had_error = True
-            log(f"[recap] Unexpected error: {exc}")
-        finally:
-            request_id_context.reset(token)
-        cycle_end = time.monotonic()
-        elapsed = int((cycle_end - cycle_start) * 1000)
-        _record_worker_cycle(worker_stats, "recap", had_error=had_error, elapsed_ms=elapsed, ended_at_mono=cycle_end)
-        log(f"[recap] Cycle complete elapsed={elapsed}ms next_sleep={sleep_seconds}s")
-        await asyncio.sleep(sleep_seconds)
+    async def cycle():
+        channel = await resolve_channel(match_recap_channel_id)
+        if channel is None:
+            await asyncio.sleep(max(30, match_recap_poll_seconds))
+            return _SKIP_CYCLE
+
+        await process_recap_cycle(
+            friends=friends,
+            riot_client=riot_client,
+            poro_service=poro_service,
+            match_recap_channel_id=match_recap_channel_id,
+            channel=channel,
+            champion_icons=champion_icons,
+            db_get_state=db_get_state,
+            db_set_state=db_set_state,
+            db_upsert_daily_stats=db_upsert_daily_stats,
+            edit_last_report_message=edit_last_report_message,
+            edit_last_weekly_report_message=edit_last_weekly_report_message,
+            db_iter_record_rows=db_iter_record_rows,
+            db_upsert_player_match_stats=db_upsert_player_match_stats,
+            log=log,
+        )
+
+    await _run_worker_loop(
+        name="recap", client=client, request_id_context=request_id_context, worker_stats=worker_stats, log=log,
+        cycle=cycle, sleep_seconds=sleep_seconds,
+    )
 
 
 async def background_esports_notifier(
@@ -200,41 +223,29 @@ async def background_esports_notifier(
     log,
 ):
     sleep_seconds = max(30, esports_poll_seconds)
-    initial_jitter = random.uniform(0.0, min(15.0, sleep_seconds / 2))
-    if initial_jitter > 0:
-        log(f"[esports] Startup jitter sleep={initial_jitter:.1f}s")
-        await asyncio.sleep(initial_jitter)
-    while not client.is_closed():
-        cycle_start = time.monotonic()
-        token = request_id_context.set(create_request_id("esports"))
-        had_error = False
-        try:
-            channel = await resolve_channel(news_channel_id)
-            if channel is None:
-                had_error = True
-                log(f"[esports] News channel {news_channel_id} unavailable; skipping cycle.")
-            else:
-                await process_esports_cycle(
-                    esports_client=esports_client,
-                    league_slugs=league_slugs,
-                    channel=channel,
-                    report_timezone=report_timezone,
-                    report_day_start_hour=report_day_start_hour,
-                    spoiler_tags=spoiler_tags,
-                    db_get_state=db_get_state,
-                    db_set_state=db_set_state,
-                    log=log,
-                )
-        except Exception as exc:
-            had_error = True
-            log(f"[esports] Unexpected error: {exc}")
-        finally:
-            request_id_context.reset(token)
-        cycle_end = time.monotonic()
-        elapsed = int((cycle_end - cycle_start) * 1000)
-        _record_worker_cycle(worker_stats, "esports", had_error=had_error, elapsed_ms=elapsed, ended_at_mono=cycle_end)
-        log(f"[esports] Cycle complete elapsed={elapsed}ms next_sleep={sleep_seconds}s")
-        await asyncio.sleep(sleep_seconds)
+    await _sleep_startup_jitter("esports", min(15.0, sleep_seconds / 2), log)
+
+    async def cycle():
+        channel = await resolve_channel(news_channel_id)
+        if channel is None:
+            log(f"[esports] News channel {news_channel_id} unavailable; skipping cycle.")
+            return True
+        await process_esports_cycle(
+            esports_client=esports_client,
+            league_slugs=league_slugs,
+            channel=channel,
+            report_timezone=report_timezone,
+            report_day_start_hour=report_day_start_hour,
+            spoiler_tags=spoiler_tags,
+            db_get_state=db_get_state,
+            db_set_state=db_set_state,
+            log=log,
+        )
+
+    await _run_worker_loop(
+        name="esports", client=client, request_id_context=request_id_context, worker_stats=worker_stats, log=log,
+        cycle=cycle, sleep_seconds=sleep_seconds,
+    )
 
 
 async def background_patch_notes_notifier(
@@ -251,10 +262,7 @@ async def background_patch_notes_notifier(
     worker_stats,
     log,
 ):
-    initial_jitter = random.uniform(0.0, 60.0)
-    if initial_jitter > 0:
-        log(f"[patch] Startup jitter sleep={initial_jitter:.1f}s")
-        await asyncio.sleep(initial_jitter)
+    await _sleep_startup_jitter("patch", 60.0, log)
 
     # Resume the schedule from the persisted last check so restarts/redeploys don't re-fetch.
     try:
@@ -267,35 +275,25 @@ async def background_patch_notes_notifier(
         log(f"[patch] Last check was recent; next check in {wait_seconds}s.")
         await asyncio.sleep(wait_seconds)
 
-    while not client.is_closed():
-        cycle_start = time.monotonic()
-        token = request_id_context.set(create_request_id("patch"))
-        had_error = False
-        try:
-            channel = await resolve_channel(events_channel_id)
-            if channel is None:
-                had_error = True
-                log(f"[patch] Events channel {events_channel_id} unavailable; skipping cycle.")
-            else:
-                await process_patch_notes_cycle(
-                    patch_client=patch_client,
-                    channel=channel,
-                    db_get_state=db_get_state,
-                    db_set_state=db_set_state,
-                    log=log,
-                )
-        except Exception as exc:
-            had_error = True
-            log(f"[patch] Unexpected error: {exc}")
-        finally:
-            request_id_context.reset(token)
-        cycle_end = time.monotonic()
-        elapsed = int((cycle_end - cycle_start) * 1000)
-        _record_worker_cycle(worker_stats, "patch", had_error=had_error, elapsed_ms=elapsed, ended_at_mono=cycle_end)
+    async def cycle():
+        channel = await resolve_channel(events_channel_id)
+        if channel is None:
+            log(f"[patch] Events channel {events_channel_id} unavailable; skipping cycle.")
+            return True
+        await process_patch_notes_cycle(
+            patch_client=patch_client,
+            channel=channel,
+            db_get_state=db_get_state,
+            db_set_state=db_set_state,
+            log=log,
+        )
+
+    await _run_worker_loop(
+        name="patch", client=client, request_id_context=request_id_context, worker_stats=worker_stats, log=log,
+        cycle=cycle,
         # Always sleep a full interval (shorter retry after errors) so a failure can never hot-loop.
-        sleep_seconds = retry_seconds if had_error else poll_seconds
-        log(f"[patch] Cycle complete elapsed={elapsed}ms next_sleep={sleep_seconds}s")
-        await asyncio.sleep(sleep_seconds)
+        sleep_seconds=lambda had_error: retry_seconds if had_error else poll_seconds,
+    )
 
 
 async def background_match_cache_backfiller(
@@ -315,44 +313,32 @@ async def background_match_cache_backfiller(
     backfill_recent_ids_count = 100
     backfill_per_player_limit = 3
     backfill_interval_seconds = max(120, daily_refresh_seconds * 2)
-    initial_jitter = random.uniform(0.0, min(60.0, backfill_interval_seconds / 2))
-    if initial_jitter > 0:
-        log(f"[backfill] Startup jitter sleep={initial_jitter:.1f}s")
-        await asyncio.sleep(initial_jitter)
+    await _sleep_startup_jitter("backfill", min(60.0, backfill_interval_seconds / 2), log)
 
-    while not client.is_closed():
-        cycle_start = time.monotonic()
-        token = request_id_context.set(create_request_id("backfill"))
-        had_error = False
-        try:
-            cycle_result = await process_backfill_cycle(
-                friends=friends,
-                riot_client=riot_client,
-                db_get_state=db_get_state,
-                db_set_state=db_set_state,
-                db_get_match_info=db_get_match_info,
-                recent_ids_count=backfill_recent_ids_count,
-                per_player_limit=backfill_per_player_limit,
-                log=log,
-            )
-            offsets = await asyncio.to_thread(db_load_backfill_offsets)
-            active_offsets = sum(1 for riot_id in friends if int(offsets.get(riot_id.casefold(), 0) or 0) > 0)
-            max_offset = max((int(offsets.get(riot_id.casefold(), 0) or 0) for riot_id in friends), default=0)
-            log(
-                f"[backfill] Cycle summary: cached={cycle_result.cached}, "
-                f"active_offsets={active_offsets}/{len(friends)}, max_offset={max_offset}, "
-                f"resting={cycle_result.resting}/{len(friends)}."
-            )
-        except Exception as exc:
-            had_error = True
-            log(f"[backfill] Unexpected background error: {exc}")
-        finally:
-            request_id_context.reset(token)
-        cycle_end = time.monotonic()
-        elapsed = int((cycle_end - cycle_start) * 1000)
-        _record_worker_cycle(worker_stats, "backfill", had_error=had_error, elapsed_ms=elapsed, ended_at_mono=cycle_end)
-        log(f"[backfill] Cycle complete elapsed={elapsed}ms next_sleep={backfill_interval_seconds}s")
-        await asyncio.sleep(backfill_interval_seconds)
+    async def cycle():
+        cycle_result = await process_backfill_cycle(
+            friends=friends,
+            riot_client=riot_client,
+            db_get_state=db_get_state,
+            db_set_state=db_set_state,
+            db_get_match_info=db_get_match_info,
+            recent_ids_count=backfill_recent_ids_count,
+            per_player_limit=backfill_per_player_limit,
+            log=log,
+        )
+        offsets = await asyncio.to_thread(db_load_backfill_offsets)
+        active_offsets = sum(1 for riot_id in friends if int(offsets.get(riot_id.casefold(), 0) or 0) > 0)
+        max_offset = max((int(offsets.get(riot_id.casefold(), 0) or 0) for riot_id in friends), default=0)
+        log(
+            f"[backfill] Cycle summary: cached={cycle_result.cached}, "
+            f"active_offsets={active_offsets}/{len(friends)}, max_offset={max_offset}, "
+            f"resting={cycle_result.resting}/{len(friends)}."
+        )
+
+    await _run_worker_loop(
+        name="backfill", client=client, request_id_context=request_id_context, worker_stats=worker_stats, log=log,
+        cycle=cycle, sleep_seconds=backfill_interval_seconds, error_label="Unexpected background error",
+    )
 
 
 async def background_daily_refresher(
@@ -374,81 +360,70 @@ async def background_daily_refresher(
     log,
 ):
     sleep_seconds = max(30, daily_refresh_seconds)
-    initial_jitter = random.uniform(0.0, min(30.0, sleep_seconds / 2))
-    if initial_jitter > 0:
-        log(f"[refresh] Startup jitter sleep={initial_jitter:.1f}s")
-        await asyncio.sleep(initial_jitter)
+    await _sleep_startup_jitter("refresh", min(30.0, sleep_seconds / 2), log)
     last_snapshot_push_at = 0.0
     last_snapshot_signature = None
     snapshot_push_interval = 120.0
     changed_push_min_interval = 30.0
-    while not client.is_closed():
-        cycle_start = time.monotonic()
-        token = request_id_context.set(create_request_id("bg"))
-        had_error = False
+
+    async def push_snapshot_update(force=False):
+        nonlocal last_snapshot_push_at, last_snapshot_signature
+        now_mono = time.monotonic()
+
         try:
-            async def push_snapshot_update(force=False):
-                nonlocal last_snapshot_push_at, last_snapshot_signature
-                now_mono = time.monotonic()
+            snapshot_text = await poro_service.build_today_win_rate_report(
+                prefer_snapshot=True,
+                bypass_cache=True,
+            )
+            interval_elapsed = (now_mono - last_snapshot_push_at) >= snapshot_push_interval
+            signature = report_signature(snapshot_text)
+            changed = signature != last_snapshot_signature
+            changed_interval_elapsed = (now_mono - last_snapshot_push_at) >= changed_push_min_interval
+            should_push = force or interval_elapsed or (changed and changed_interval_elapsed)
+            if not should_push:
+                return
 
-                try:
-                    snapshot_text = await poro_service.build_today_win_rate_report(
-                        prefer_snapshot=True,
-                        bypass_cache=True,
-                    )
-                    interval_elapsed = (now_mono - last_snapshot_push_at) >= snapshot_push_interval
-                    signature = report_signature(snapshot_text)
-                    changed = signature != last_snapshot_signature
-                    changed_interval_elapsed = (now_mono - last_snapshot_push_at) >= changed_push_min_interval
-                    should_push = force or interval_elapsed or (changed and changed_interval_elapsed)
-                    if not should_push:
-                        return
-
-                    channel = await resolve_channel(daily_report_channel_id)
-                    if channel is None:
-                        return
-                    message = await get_or_create_report_message(channel, snapshot_text)
-                    if message.content != snapshot_text:
-                        await message.edit(content=snapshot_text)
-                        log(
-                            f"[refresh] Updated last report message {message.id} in channel {channel.id} "
-                            f"(force={force})."
-                        )
-                    else:
-                        log(f"[refresh] Snapshot unchanged in Discord for message {message.id}.")
-
-                    last_snapshot_signature = signature
-                    last_snapshot_push_at = now_mono
-                except (discord.NotFound, discord.Forbidden) as exc:
-                    log(f"[refresh] Could not edit last report message: {exc}")
-                    report_state["channel_id"] = None
-                    report_state["message_id"] = None
-                    await asyncio.to_thread(db_set_last_report_message, 0, 0)
-                except discord.HTTPException as exc:
-                    log(f"[refresh] Discord API error while editing last report message: {exc}")
-
-            async def on_player_refreshed(_processed, _total, _riot_id):
-                await push_snapshot_update(force=False)
-
-            await poro_service.refresh_daily_stats_once(progress_callback=on_player_refreshed)
-            await push_snapshot_update(force=True)
-            await edit_last_weekly_report_message(bypass_cache=True)
-            now_mono = time.monotonic()
-            last_cleanup_at = runtime_state.get("last_cache_cleanup_at", 0.0)
-            if (now_mono - last_cleanup_at) >= max(3600, daily_refresh_seconds):
-                deleted = await asyncio.to_thread(db_cleanup_old_match_cache, match_cache_retention_days)
-                runtime_state["last_cache_cleanup_at"] = now_mono
+            channel = await resolve_channel(daily_report_channel_id)
+            if channel is None:
+                return
+            message = await get_or_create_report_message(channel, snapshot_text)
+            if message.content != snapshot_text:
+                await message.edit(content=snapshot_text)
                 log(
-                    f"[refresh] Match cache cleanup complete: deleted={deleted}, "
-                    f"retention_days={match_cache_retention_days}"
+                    f"[refresh] Updated last report message {message.id} in channel {channel.id} "
+                    f"(force={force})."
                 )
-        except Exception as exc:
-            had_error = True
-            log(f"[refresh] Unexpected error: {exc}")
-        finally:
-            request_id_context.reset(token)
-        cycle_end = time.monotonic()
-        elapsed = int((cycle_end - cycle_start) * 1000)
-        _record_worker_cycle(worker_stats, "refresh", had_error=had_error, elapsed_ms=elapsed, ended_at_mono=cycle_end)
-        log(f"[refresh] Cycle complete elapsed={elapsed}ms next_sleep={sleep_seconds}s")
-        await asyncio.sleep(sleep_seconds)
+            else:
+                log(f"[refresh] Snapshot unchanged in Discord for message {message.id}.")
+
+            last_snapshot_signature = signature
+            last_snapshot_push_at = now_mono
+        except (discord.NotFound, discord.Forbidden) as exc:
+            log(f"[refresh] Could not edit last report message: {exc}")
+            report_state["channel_id"] = None
+            report_state["message_id"] = None
+            await asyncio.to_thread(db_set_last_report_message, 0, 0)
+        except discord.HTTPException as exc:
+            log(f"[refresh] Discord API error while editing last report message: {exc}")
+
+    async def on_player_refreshed(_processed, _total, _riot_id):
+        await push_snapshot_update(force=False)
+
+    async def cycle():
+        await poro_service.refresh_daily_stats_once(progress_callback=on_player_refreshed)
+        await push_snapshot_update(force=True)
+        await edit_last_weekly_report_message(bypass_cache=True)
+        now_mono = time.monotonic()
+        last_cleanup_at = runtime_state.get("last_cache_cleanup_at", 0.0)
+        if (now_mono - last_cleanup_at) >= max(3600, daily_refresh_seconds):
+            deleted = await asyncio.to_thread(db_cleanup_old_match_cache, match_cache_retention_days)
+            runtime_state["last_cache_cleanup_at"] = now_mono
+            log(
+                f"[refresh] Match cache cleanup complete: deleted={deleted}, "
+                f"retention_days={match_cache_retention_days}"
+            )
+
+    await _run_worker_loop(
+        name="refresh", client=client, request_id_context=request_id_context, worker_stats=worker_stats, log=log,
+        cycle=cycle, sleep_seconds=sleep_seconds, request_prefix="bg",
+    )

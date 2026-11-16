@@ -718,10 +718,9 @@ async def process_recap_cycle(
                 primary_role,
             )
 
-        poro_service.invalidate_report_cache()
-        await edit_last_report_message(bypass_cache=True)
+        await edit_last_report_message()
         if edit_last_weekly_report_message is not None:
-            await edit_last_weekly_report_message(bypass_cache=True)
+            await edit_last_weekly_report_message()
         log(
             f"[recap] Synced daily report after posting new match recap(s). "
             f"affected_players={len(affected_riot_ids)}"

@@ -59,7 +59,6 @@ def _create_service(
         riot_client=riot_client,
         report_timezone=timezone.utc,
         report_day_start_hour=0,
-        report_cache_seconds=120,
         daily_refresh_seconds=300,
         db_load_latest_stats=db_load_latest_stats,
         db_upsert_daily_stats=db_upsert_daily_stats,
@@ -311,7 +310,6 @@ def test_get_week_window_respects_day_start_cutoff():
         riot_client=FakeRiotClient(),
         report_timezone=timezone.utc,
         report_day_start_hour=6,
-        report_cache_seconds=120,
         daily_refresh_seconds=300,
         db_load_latest_stats=lambda _day: [],
         db_load_weekly_stats=lambda _start, _end: [],
@@ -396,10 +394,6 @@ def test_refresh_recent_matches_snapshot_updates_baseline_stats():
         ),
         db_set_last_seen_match_id=lambda riot_id, match_id: last_seen_writes.append((riot_id, match_id)),
     )
-    service.report_cache["text"] = "cached"
-    service.report_cache["day"] = service.get_cycle_key()
-    service.report_cache["expires_at"] = 9999999999.0
-
     asyncio.run(service.refresh_recent_matches_snapshot(recent_count=20))
 
     assert len(upserts) == 1
@@ -410,7 +404,6 @@ def test_refresh_recent_matches_snapshot_updates_baseline_stats():
     assert performance_totals["cs_total"] == 270
     assert performance_totals["minutes_total"] == 70.0
     assert last_seen_writes == [("Alpha#NA1", "m3")]
-    assert service.report_cache["text"] is None
 
 
 def test_refresh_recent_matches_snapshot_ignores_remakes():
@@ -490,17 +483,12 @@ def test_refresh_recent_matches_snapshot_falls_back_when_baseline_missing():
         ),
         db_set_last_seen_match_id=lambda riot_id, match_id: last_seen_writes.append((riot_id, match_id)),
     )
-    service.report_cache["text"] = "cached"
-    service.report_cache["day"] = service.get_cycle_key()
-    service.report_cache["expires_at"] = 9999999999.0
-
     asyncio.run(service.refresh_recent_matches_snapshot(recent_count=20))
 
     assert len(upserts) == 1
     assert upserts[0][1] == "Alpha#NA1"
     assert last_seen_writes == [("Alpha#NA1", "m2")]
     assert riot.get_today_mode_records_calls == ["Alpha#NA1"]
-    assert service.report_cache["text"] is None
 
 
 def test_refresh_daily_stats_once_starts_with_oldest_collected_player():
@@ -541,7 +529,6 @@ def test_run_health_check_includes_backfill_offsets_for_tracked_players():
         riot_client=FakeRiotClient(),
         report_timezone=timezone.utc,
         report_day_start_hour=6,
-        report_cache_seconds=120,
         daily_refresh_seconds=300,
         db_load_latest_stats=lambda _day: [],
         db_load_weekly_stats=lambda _start, _end: [],
@@ -614,7 +601,6 @@ def test_backfill_daily_stats_from_cache_rebuilds_range_from_cached_payloads():
         riot_client=riot,
         report_timezone=timezone.utc,
         report_day_start_hour=6,
-        report_cache_seconds=120,
         daily_refresh_seconds=300,
         db_load_latest_stats=lambda _day: [],
         db_load_weekly_stats=lambda _start, _end: [],

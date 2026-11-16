@@ -103,7 +103,6 @@ def format_health_report(stats, *, title="Health OK"):
         f"- Tracked players: `{stats['tracked_players']}`\n"
         f"- DB: `{'ok' if stats['db_ok'] else 'down'}`\n"
         f"- Match cache entries: `{stats['match_cache_entries']}`\n"
-        f"- Report cache active: `{'yes' if stats['request_cache_active'] else 'no'}`\n"
         f"- Backfill cursors active: `{stats.get('players_with_backfill_offset', 0)}/{stats['tracked_players']}`\n"
         f"- Backfill max offset: `{stats.get('max_backfill_offset', 0)}`\n"
         f"- Backfill top offsets: `{top_backfill_offsets}`"

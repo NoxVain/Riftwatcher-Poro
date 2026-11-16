@@ -71,7 +71,6 @@ REPORT_TIMEZONE_NAME = cfg.REPORT_TIMEZONE_NAME
 REPORT_TIMEZONE = cfg.REPORT_TIMEZONE
 LOG_RIOT_REQUESTS = cfg.LOG_RIOT_REQUESTS
 LOG_JSON = cfg.LOG_JSON
-REPORT_CACHE_SECONDS = cfg.REPORT_CACHE_SECONDS
 REPORT_DAY_START_HOUR = cfg.REPORT_DAY_START_HOUR
 MAX_TODAY_MATCH_DETAILS = cfg.MAX_TODAY_MATCH_DETAILS
 MAX_MATCH_IDS_SCAN = cfg.MAX_MATCH_IDS_SCAN
@@ -262,7 +261,6 @@ poro_service = PoroService(
     riot_client=riot_client,
     report_timezone=REPORT_TIMEZONE,
     report_day_start_hour=REPORT_DAY_START_HOUR,
-    report_cache_seconds=REPORT_CACHE_SECONDS,
     daily_refresh_seconds=DAILY_REFRESH_SECONDS,
     db_load_latest_stats=db_load_latest_stats,
     db_load_weekly_stats=db_load_weekly_stats,
@@ -341,16 +339,13 @@ async def get_or_create_weekly_report_message(channel, initial_content):
     )
 
 
-async def edit_last_report_message(prefer_snapshot=False, bypass_cache=False):
+async def edit_last_report_message(prefer_snapshot=False):
     channel = await resolve_channel(DAILY_REPORT_CHANNEL_ID)
     if channel is None:
         return
 
     try:
-        report_text = await poro_service.build_today_win_rate_report(
-            prefer_snapshot=prefer_snapshot,
-            bypass_cache=bypass_cache,
-        )
+        report_text = await poro_service.build_today_win_rate_report(prefer_snapshot=prefer_snapshot)
         message = await get_or_create_report_message(channel, report_text)
         if message.content == report_text:
             log(f"[refresh] No report change; skipped editing message {message.id}.")
@@ -366,7 +361,7 @@ async def edit_last_report_message(prefer_snapshot=False, bypass_cache=False):
         log(f"[refresh] Discord API error while editing last report message: {exc}")
 
 
-async def edit_last_weekly_report_message(bypass_cache=False):
+async def edit_last_weekly_report_message():
     channel_id = LAST_WEEKLY_REPORT_MESSAGE["channel_id"]
     message_id = LAST_WEEKLY_REPORT_MESSAGE["message_id"]
     if not channel_id or not message_id:
@@ -377,7 +372,7 @@ async def edit_last_weekly_report_message(bypass_cache=False):
         return
 
     try:
-        report_text = await poro_service.build_weekly_win_rate_report(bypass_cache=bypass_cache)
+        report_text = await poro_service.build_weekly_win_rate_report()
         message = await channel.fetch_message(message_id)
         if message.content == report_text:
             log(f"[refresh] No weekly report change; skipped editing message {message_id}.")
@@ -657,7 +652,6 @@ async def on_ready():
     log(f"[startup] REPORT_DAY_START_HOUR={REPORT_DAY_START_HOUR}")
     log(f"[startup] MAX_MATCH_IDS_SCAN={MAX_MATCH_IDS_SCAN}")
     log(f"[startup] MAX_IN_MEMORY_MATCH_CACHE={MAX_IN_MEMORY_MATCH_CACHE}")
-    log(f"[startup] REPORT_CACHE_SECONDS={REPORT_CACHE_SECONDS}")
     log(f"[startup] MATCH_CACHE_RETENTION_DAYS={MATCH_CACHE_RETENTION_DAYS}")
     log(f"[startup] EVENTS_CHANNEL_ID={EVENTS_CHANNEL_ID}")
     log(f"[startup] Commands channel={cfg.COMMANDS_CHANNEL_ID} (MANUAL_COMMANDS_CHANNEL_ID; events when unset)")

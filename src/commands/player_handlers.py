@@ -253,7 +253,6 @@ async def handle_player_commands(ctx):
                 f"Total tracked players: {len(ctx.friends)}"
             )
         )
-        ctx.poro_service.invalidate_report_cache()
         ctx.log(f"[add] Added player {riot_id}.")
         return True
 
@@ -281,7 +280,6 @@ async def handle_player_commands(ctx):
             return True
 
         ctx.friends[:] = [existing for existing in ctx.friends if existing.casefold() != riot_id.casefold()]
-        ctx.poro_service.invalidate_report_cache()
         await status_message.edit(
             content=(
                 f"\u2705 Removed `{riot_id}` from tracked players. "

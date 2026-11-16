@@ -371,10 +371,7 @@ async def background_daily_refresher(
         now_mono = time.monotonic()
 
         try:
-            snapshot_text = await poro_service.build_today_win_rate_report(
-                prefer_snapshot=True,
-                bypass_cache=True,
-            )
+            snapshot_text = await poro_service.build_today_win_rate_report(prefer_snapshot=True)
             interval_elapsed = (now_mono - last_snapshot_push_at) >= snapshot_push_interval
             signature = report_signature(snapshot_text)
             changed = signature != last_snapshot_signature
@@ -412,7 +409,7 @@ async def background_daily_refresher(
     async def cycle():
         await poro_service.refresh_daily_stats_once(progress_callback=on_player_refreshed)
         await push_snapshot_update(force=True)
-        await edit_last_weekly_report_message(bypass_cache=True)
+        await edit_last_weekly_report_message()
         now_mono = time.monotonic()
         last_cleanup_at = runtime_state.get("last_cache_cleanup_at", 0.0)
         if (now_mono - last_cleanup_at) >= max(3600, daily_refresh_seconds):

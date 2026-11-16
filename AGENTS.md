@@ -29,7 +29,7 @@ This repository is a modular Python Discord bot.
 - `src/commands/`: Command context, channel routing policy (`routing.py`), author permission policy for mutating commands (`permissions.py`), and handlers split by domain (`ops_handlers.py`, `player_handlers.py`, `report_handlers.py`, `slash_handlers.py`).
 - `src/discord_text.py`: Pure Discord text/render helpers (recap lines, streak callouts, health report).
 - `src/recap_cards.py`: Pure Components V2 recap card builder (accent by result, 40-component/4000-char limits, LP edits on cards); the recap worker falls back to plain text if Discord rejects a card.
-- `src/poro_service.py`: Report service facade (report generation, cache policy, health checks).
+- `src/poro_service.py`: Report service facade (report generation, health checks).
 - `src/services/`: Report service internals (`report_builder.py`, `refresh.py`, `baselines.py`).
 - `src/riot_api.py`: Riot API client, retries/backoff, and match caching behavior.
 - `src/discord_recap_worker.py`, `src/discord_rank_worker.py`, `src/discord_backfill_worker.py`, `src/discord_esports_worker.py`, `src/discord_patch_worker.py`: Per-cycle worker logic (recaps/streaks, rank changes, historical cache fill, esports news, patch notes).
@@ -124,7 +124,6 @@ Required runtime variables:
 Common optional variables:
 - `REPORT_TIMEZONE`
 - `REPORT_DAY_START_HOUR`
-- `REPORT_CACHE_SECONDS`
 - `DAILY_REFRESH_SECONDS`
 - `MATCH_RECAP_POLL_SECONDS`
 - `MAX_TODAY_MATCH_DETAILS`

@@ -67,21 +67,16 @@ class FakePoroService:
         self._build_outputs = list(build_outputs)
         self.refresh_recent_calls = []
         self.backfill_calls = []
-        self.invalidated = False
         self._role_baselines = None
 
     async def build_today_win_rate_report(self):
         return self._build_outputs.pop(0)
 
-    async def build_weekly_win_rate_report(self, bypass_cache=False):
-        _ = bypass_cache
+    async def build_weekly_win_rate_report(self):
         return "weekly report"
 
     async def refresh_recent_matches_snapshot(self, recent_count=20):
         self.refresh_recent_calls.append(recent_count)
-
-    def invalidate_report_cache(self):
-        self.invalidated = True
 
     async def run_health_check(self, _start_monotonic, worker_stats=None):
         return {
@@ -89,7 +84,6 @@ class FakePoroService:
             "tracked_players": 1,
             "db_ok": True,
             "match_cache_entries": 0,
-            "request_cache_active": False,
             "players_with_backfill_offset": 1,
             "max_backfill_offset": 400,
             "top_backfill_offsets": ["Alpha#NA1=400"],
@@ -197,7 +191,7 @@ def test_handle_mood_command_updates_scoreboard_from_snapshot_then_refresh():
     assert status_message.content == "fresh report"
 
 
-def test_handle_add_command_happy_path_persists_and_invalidates_cache():
+def test_handle_add_command_happy_path_persists():
     channel = FakeChannel(channel_id=999)
     incoming = FakeIncomingMessage("!Add Alpha#NA1", channel)
     poro_service = FakePoroService(build_outputs=["unused"])
@@ -231,12 +225,11 @@ def test_handle_add_command_happy_path_persists_and_invalidates_cache():
     assert riot_client.fetch_puuid_calls == ["Alpha#NA1"]
     assert friends == ["Alpha#NA1"]
     assert upserts == [("Alpha#NA1", None)]
-    assert poro_service.invalidated is True
     assert len(channel.sent_messages) == 1
     assert "Added `Alpha#NA1` and saved to postgres." in channel.sent_messages[0].content
 
 
-def test_handle_remove_command_happy_path_removes_persists_and_invalidates_cache():
+def test_handle_remove_command_happy_path_removes_and_persists():
     channel = FakeChannel(channel_id=999)
     incoming = FakeIncomingMessage("!remove Alpha#NA1", channel)
     poro_service = FakePoroService(build_outputs=["unused"])
@@ -270,7 +263,6 @@ def test_handle_remove_command_happy_path_removes_persists_and_invalidates_cache
 
     assert friends == ["Bravo#NA1"]
     assert removals == ["Alpha#NA1"]
-    assert poro_service.invalidated is True
     assert len(channel.sent_messages) == 1
     assert "Removed `Alpha#NA1` from tracked players." in channel.sent_messages[0].content
 

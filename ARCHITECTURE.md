@@ -52,7 +52,7 @@ These are the priorities behind most decisions in this repo. New changes should 
 - `src/discord_text.py`
   - pure text helpers (request ids, safe user-facing errors, health report, recap/streak/queue formatting, report signatures)
 - `src/poro_service.py`
-  - service facade for report generation/cache policy
+  - service facade for report generation
   - delegates refresh/report internals to `src/services/`
 - `src/services/`
   - `report_builder.py` (scoreboard text, badges), `refresh.py` (daily stats refresh, cache backfill), `baselines.py` (role baselines for Gamer Score)

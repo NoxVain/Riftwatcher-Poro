@@ -93,6 +93,15 @@ Optional but commonly used:
 - `PATCH_NOTES_ENABLED` (default `true`), `PATCH_NOTES_POLL_SECONDS` (default `21600` = 6h), `PATCH_NOTES_LOCALE` (default `en-us`) - League patch-notes posts in `EVENTS_CHANNEL_ID`. No key needed; about 4 small page requests per day.
 - Low-resource hosts (NAS/IoT): see the commented block in `.env.example` (`STARTUP_PREFER_SNAPSHOT`, `BASELINE_MATCH_LIMIT`, `RIOT_REQUEST_YIELD_SECONDS`, `WORKER_STAGGER_SECONDS`, `ASYNCIO_THREAD_POOL_SIZE`).
 
+Rarely needed (the defaults work for most servers):
+
+- `REPORT_DAY_START_HOUR` (default `6`) - the hour the scoreboard day and week start, in `REPORT_TIMEZONE`.
+- `ESPORTS_POLL_SECONDS` (default `60`) and `ESPORTS_SPOILER_TAGS` (default `true`) - how often esports news is checked, and whether scores are hidden behind spoiler tags.
+- `MAX_TODAY_MATCH_DETAILS` (default `100`), `MAX_MATCH_IDS_SCAN` (default `2000`), `MAX_IN_MEMORY_MATCH_CACHE` (default `200`) and `DB_POOL_SIZE` (default `5`) - limits on how much the bot reads and keeps at once.
+- `MATCH_CACHE_RETENTION_DAYS` (default `730`, `0` = keep everything) - when cached matches are cleaned up. Riot stops serving old matches, so cleaned-up games may be gone for good.
+- `BACKFILL_STALE_THRESHOLD_SECONDS` (default `0` = automatic) - how long the backfill worker may go without a finished cycle before the stall alert.
+- `LOG_RIOT_REQUESTS` and `LOG_JSON` (both default `false`) - log every Riot request, and log as JSON.
+
 See `README.md` for every variable and its default.
 
 ## 5. Deploy On Railway

@@ -1,6 +1,6 @@
 # Improvement Backlog
 
-This backlog tracks work not yet implemented as of 2026-10-27.
+This backlog tracks work not yet implemented as of 2026-11-16.
 
 ## Source docs reviewed
 
@@ -8,7 +8,7 @@ This backlog tracks work not yet implemented as of 2026-10-27.
 - `ARCHITECTURE.md`
 - `OPERATIONS.md`
 - `SELF_HOSTING.md`
-- git history through PR #25 (2026-10-27)
+- git history through PR #82 (2026-11-16)
 
 ## Feature Backlog
 
@@ -61,7 +61,7 @@ Checked 2026-10-27 against the 12,426 cached matches. These fields are in the ca
 
 ## Recently Completed (Removed From Backlog)
 
-### 2026-10-25 to 2026-10-26
+### 2026-10-25 to 2026-11-16
 
 - Match recaps:
   - LP gain/loss on Solo/Duo and Flex lines from the rank worker's existing polls (no extra Riot requests); edited into posted recaps; before-and-after LP and both ranks on promotions/demotions.
@@ -87,6 +87,7 @@ Checked 2026-10-27 against the 12,426 cached matches. These fields are in the ca
   - Wrapped Arena: most damage taken in a game (2026-11-02), next to most damage in a game.
   - Wrapped ARAM and Arena (2026-11-02): ARAM adds most damage and most deaths in a game and win rate together vs alone; Arena adds the Arena God chase (different champions with a 1st place), deepest champion pool, highest damage/min and the duo of the year / best duo (teammates by shared placement). Personal cards add ARAM KDA and damage/min and Arena teammates. No new columns or Riot requests.
   - Arena queue 1740 (2026-11-02): six teams of three like 1750, missing from Riot's queue list, so its games had no placement, said "Queue 1740" in recaps and were left out of Wrapped's Arena section. Now Arena 3x6 everywhere (`STATS_VERSION` 9 refills placements). Queue 2450 (`KIWI_JADE`, Howling Abyss) is labelled `ARAM event` and counts as ARAM in Wrapped. ARAM Mayhem (2400) can't be tracked: Riot keeps it private.
+  - Docs (2026-11-16): `SELF_HOSTING.md` now names every setting, as `CONTRIBUTING.md` asks (11 were missing), and a test fails when a setting the code reads is missing from `README.md`, `SELF_HOSTING.md`, `.env.example` or `AGENTS.md`. This file's header was still dated 2026-10-27 and PR #25.
   - Removed the in-memory report text cache (2026-11-16) with `REPORT_CACHE_SECONDS`, the `bypass_cache` flag and the "Report cache active" line in `!health`. Every worker bypassed it and it was never hit in 13 days of logs; only a second `!Daily` within two minutes could use it, which now rebuilds from Postgres in about 250 ms.
   - Cleanup (2026-11-16): the six worker loops in `runtime/workers.py` share one loop (`_run_worker_loop`) and one startup-jitter helper; each worker now only supplies its cycle, its interval and its error wording. No behaviour change: the pinned tests pass unchanged.
   - Tests (2026-11-15): the six worker loops in `runtime/workers.py` are pinned by tests (startup jitter, request ID, counting a cycle, a failed cycle, intervals, shutdown, and each worker's missing-channel case), ahead of sharing one loop between them. Test coverage of that file went from 50% to 97%.

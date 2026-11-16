@@ -9,7 +9,6 @@ HEALTH_STATS = {
     "tracked_players": 4,
     "db_ok": True,
     "match_cache_entries": 1200,
-    "request_cache_active": False,
     "players_with_backfill_offset": 2,
     "max_backfill_offset": 300,
     "top_backfill_offsets": ["A#1=300", "B#2=100"],

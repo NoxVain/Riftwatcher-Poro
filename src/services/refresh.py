@@ -61,14 +61,12 @@ async def refresh_daily_stats_once(service, progress_callback=None):
             processed_players += 1
             if progress_callback is not None:
                 await progress_callback(processed_players, total_players, riot_id)
-    service.invalidate_report_cache()
     service.log("[refresh] Daily stats refresh complete.")
 
 
 async def refresh_recent_matches_snapshot(service, recent_count=20):
     service.log(f"[refresh] Running on-demand recent refresh (count={recent_count})")
     cycle_key = service.get_cycle_key()
-    changed_any = False
     candidates = []
 
     for riot_id in service.friends:
@@ -109,7 +107,6 @@ async def refresh_recent_matches_snapshot(service, recent_count=20):
                     primary_role,
                 )
                 await asyncio.to_thread(service.db_set_last_seen_match_id, riot_id, latest_match_id)
-                changed_any = True
                 continue
 
             mode_records = mode_records_from_row(row)
@@ -136,10 +133,7 @@ async def refresh_recent_matches_snapshot(service, recent_count=20):
                     mode_records,
                     performance_totals,
                 )
-                changed_any = True
 
             await asyncio.to_thread(service.db_set_last_seen_match_id, riot_id, latest_match_id)
         except requests.RequestException as exc:
             service.log(f"[refresh] On-demand refresh failed for {riot_id}: {exc}")
-    if changed_any:
-        service.invalidate_report_cache()

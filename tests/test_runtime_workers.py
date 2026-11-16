@@ -93,8 +93,8 @@ def test_background_daily_refresher_updates_runtime_cleanup_state(monkeypatch):
         id = 123
 
     class FakePoroService:
-        async def build_today_win_rate_report(self, prefer_snapshot=False, bypass_cache=False):
-            _ = (prefer_snapshot, bypass_cache)
+        async def build_today_win_rate_report(self, prefer_snapshot=False):
+            _ = prefer_snapshot
             return "snapshot"
 
         async def refresh_daily_stats_once(self, progress_callback=None):
@@ -119,8 +119,8 @@ def test_background_daily_refresher_updates_runtime_cleanup_state(monkeypatch):
     async def fake_get_or_create_report_message(_channel, _initial_content):
         return message
 
-    async def fake_edit_weekly(*, bypass_cache=False):
-        weekly_calls.append(bypass_cache)
+    async def fake_edit_weekly():
+        weekly_calls.append(True)
 
     def fake_cleanup(retention_days):
         cleanup_calls.append(retention_days)
@@ -353,7 +353,7 @@ def _backfill_loop(monkeypatch, harness, cycle, *, seconds=300, resolve_channel=
 
 def _refresh_loop(monkeypatch, harness, cycle, *, seconds=300, resolve_channel=_channel):
     class Service:
-        async def build_today_win_rate_report(self, prefer_snapshot=False, bypass_cache=False):
+        async def build_today_win_rate_report(self, prefer_snapshot=False):
             return "snapshot"
 
         async def refresh_daily_stats_once(self, progress_callback=None):

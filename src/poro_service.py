@@ -46,7 +46,6 @@ class PoroService:
         riot_client,
         report_timezone,
         report_day_start_hour,
-        report_cache_seconds,
         daily_refresh_seconds,
         db_load_latest_stats,
         db_load_weekly_stats=None,
@@ -63,7 +62,6 @@ class PoroService:
         self.riot_client = riot_client
         self.report_timezone = report_timezone
         self.report_day_start_hour = max(0, min(23, int(report_day_start_hour)))
-        self.report_cache_seconds = report_cache_seconds
         self.daily_refresh_seconds = daily_refresh_seconds
         self.db_load_latest_stats = db_load_latest_stats
         self.db_load_weekly_stats = db_load_weekly_stats or (lambda _start, _end: [])
@@ -79,16 +77,6 @@ class PoroService:
         # Background rebuild shared by all callers (see services/baselines.py).
         self._baselines_task = None
         self._baselines_retry_at = 0.0
-        self.report_cache = {"text": None, "expires_at": 0.0, "day": None}
-        self.weekly_report_cache = {"text": None, "expires_at": 0.0, "window": None}
-
-    def invalidate_report_cache(self):
-        self.report_cache["text"] = None
-        self.report_cache["day"] = None
-        self.report_cache["expires_at"] = 0.0
-        self.weekly_report_cache["text"] = None
-        self.weekly_report_cache["window"] = None
-        self.weekly_report_cache["expires_at"] = 0.0
 
     async def _ensure_role_baselines(self):
         await ensure_role_baselines(self)
@@ -134,19 +122,8 @@ class PoroService:
         week_end_exclusive_date = week_start_date + timedelta(days=7)
         return week_start_date, week_end_exclusive_date
 
-    async def build_today_win_rate_report(self, prefer_snapshot=False, bypass_cache=False):
+    async def build_today_win_rate_report(self, prefer_snapshot=False):
         cycle_key = self.get_cycle_key()
-        now_monotonic = time.monotonic()
-        if (
-            not bypass_cache
-            and
-            self.report_cache["text"] is not None
-            and self.report_cache["day"] == cycle_key
-            and now_monotonic < self.report_cache["expires_at"]
-        ):
-            self.log("[poro] Returning cached report.")
-            return self.report_cache["text"]
-
         await self._ensure_role_baselines()
         report_start = time.perf_counter()
         ranked_results = []
@@ -178,19 +155,9 @@ class PoroService:
             ranked_results = rows_to_ranked_results(stored_rows, self.friends, baselines=self._role_baselines)
             if ranked_results or prefer_snapshot:
                 self.log("[poro] Returning report from postgres daily stats.")
-                report_text = format_report_from_results(self, ranked_results, error_results, report_start)
-                if not bypass_cache:
-                    self.report_cache["text"] = report_text
-                    self.report_cache["day"] = cycle_key
-                    self.report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
-                return report_text
+                return format_report_from_results(self, ranked_results, error_results, report_start)
         elif prefer_snapshot:
-            report_text = format_report_from_results(self, ranked_results, error_results, report_start)
-            if not bypass_cache:
-                self.report_cache["text"] = report_text
-                self.report_cache["day"] = cycle_key
-                self.report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
-            return report_text
+            return format_report_from_results(self, ranked_results, error_results, report_start)
 
         self.riot_client.clear_match_cache()
         ordered_players = await get_players_ordered_by_oldest_stats(self, cycle_key)
@@ -223,26 +190,10 @@ class PoroService:
             ranked_results.append((lol_name, mode_records, wins, losses, win_rate, performance_totals, gamer_score))
 
         ranked_results.sort(key=rank_sort_key)
-        report_text = format_report_from_results(self, ranked_results, error_results, report_start)
-        self.report_cache["text"] = report_text
-        self.report_cache["day"] = cycle_key
-        self.report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
-        return report_text
+        return format_report_from_results(self, ranked_results, error_results, report_start)
 
-    async def build_weekly_win_rate_report(self, bypass_cache=False):
-
+    async def build_weekly_win_rate_report(self):
         week_start, week_end_exclusive = self.get_week_window()
-        window_key = f"{week_start.isoformat()}::{week_end_exclusive.isoformat()}"
-        now_monotonic = time.monotonic()
-        if (
-            not bypass_cache
-            and self.weekly_report_cache["text"] is not None
-            and self.weekly_report_cache["window"] == window_key
-            and now_monotonic < self.weekly_report_cache["expires_at"]
-        ):
-            self.log("[poro] Returning cached weekly report.")
-            return self.weekly_report_cache["text"]
-
         await self._ensure_role_baselines()
         report_start = time.perf_counter()
         stored_rows = await asyncio.to_thread(
@@ -273,9 +224,6 @@ class PoroService:
             badge_min_games=BADGE_MIN_GAMES_WEEKLY,
             badge_prior_games=BADGE_PRIOR_GAMES_WEEKLY,
         )
-        self.weekly_report_cache["text"] = report_text
-        self.weekly_report_cache["window"] = window_key
-        self.weekly_report_cache["expires_at"] = time.monotonic() + max(0, self.report_cache_seconds)
         return report_text
 
     async def refresh_daily_stats_once(self, progress_callback=None):
@@ -389,9 +337,6 @@ class PoroService:
                 )
                 upserts += 1
 
-        if upserts > 0:
-            self.invalidate_report_cache()
-
         return {
             "scanned_payloads": scanned_payloads,
             "matched_matches": matched_matches,
@@ -440,7 +385,6 @@ class PoroService:
             "tracked_players": len(self.friends),
             "db_ok": db_ok,
             "match_cache_entries": cache_entries,
-            "request_cache_active": self.report_cache["text"] is not None,
             "players_with_backfill_offset": players_with_backfill_offset,
             "max_backfill_offset": max_backfill_offset,
             "top_backfill_offsets": top_backfill,

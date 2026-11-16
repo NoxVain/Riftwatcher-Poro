@@ -86,9 +86,6 @@ class FakeRiotClient:
 
 
 class FakePoroService:
-    def __init__(self):
-        self.invalidated = False
-
     @staticmethod
     def get_new_match_ids(recent_ids, last_seen_match_id):
         if not recent_ids:
@@ -106,8 +103,6 @@ class FakePoroService:
     def get_cycle_key():
         return "2026-02-19"
 
-    def invalidate_report_cache(self):
-        self.invalidated = True
 
 
 def test_process_recap_cycle_posts_recap_and_syncs_affected_players():
@@ -181,8 +176,7 @@ def test_process_recap_cycle_posts_recap_and_syncs_affected_players():
     assert state[_state_key("Alpha#NA1")] == "EUW1_2"
     assert state[_state_key("Bravo#NA1")] == "EUW1_2"
     assert [row[1] for row in upserts] == ["Alpha#NA1", "Bravo#NA1"]
-    assert mood.invalidated is True
-    assert edit_calls == [{"bypass_cache": True}]
+    assert edit_calls == [{}]
 
 
 def test_process_recap_cycle_posts_streak_callout_when_threshold_crossed():
@@ -370,7 +364,6 @@ def test_process_recap_cycle_no_new_matches_skips_post_and_sync():
 
     assert channel.messages == []
     assert upserts == []
-    assert mood.invalidated is False
     assert edit_calls == []
     assert any("No new matches to post" in row for row in logs)
     assert any("checked_players=1" in row for row in logs)
@@ -497,7 +490,7 @@ def test_process_recap_cycle_batches_multiple_matches_into_single_post():
     assert channel.messages[0]["content"].count("-# ") == 2
     assert "\n\n---\n\n" in channel.messages[0]["content"]
     assert channel.messages[0]["tts"] is False
-    assert edit_calls == [{"bypass_cache": True}]
+    assert edit_calls == [{}]
 
 
 def test_process_recap_cycle_formats_arena_3x6_by_placement():

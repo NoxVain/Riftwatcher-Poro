@@ -90,7 +90,7 @@ async def handle_report_commands(ctx):
                 status_message = await ctx.get_or_create_weekly_report_message(target_channel, loading_text)
                 if status_message.content != loading_text:
                     await status_message.edit(content=loading_text)
-                report_text = await ctx.poro_service.build_weekly_win_rate_report(bypass_cache=True)
+                report_text = await ctx.poro_service.build_weekly_win_rate_report()
                 await status_message.edit(content=report_text)
                 if ctx.remember_weekly_report_message is not None:
                     ctx.remember_weekly_report_message(status_message)

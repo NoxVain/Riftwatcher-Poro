@@ -300,7 +300,28 @@ def test_weekly_report_scores_with_role_baselines_like_daily():
     expected = compute_gamer_score(5, 1, row, "MIDDLE", baselines)
     assert expected > wilson_lower_bound(5, 1) * 100
     assert f"Gamer Score: **{expected:.1f}**" in report
-    assert "[poro] Weekly report built: players=1 with_role=1 baselines=yes" in logs
+    week = service.get_week_window()[0].isoformat()
+    assert f"[poro] Weekly report built: players=1 with_role=1 baselines=yes week={week}" in logs
+
+
+def test_previous_week_report_covers_the_week_before_with_its_dates_in_the_header():
+    calls = []
+    service = _create_service(friends=["Alpha#NA1"], riot_client=FakeRiotClient())
+    service.db_load_weekly_stats = lambda start, end: calls.append((start, end)) or []
+    week_start, _week_end = service.get_week_window()
+    previous_start = week_start - timedelta(days=7)
+
+    report = asyncio.run(service.build_weekly_win_rate_report(previous_week=True))
+
+    # Monday to Monday, one week back.
+    assert calls == [(previous_start.isoformat(), week_start.isoformat())]
+    assert service.get_previous_week_key() == previous_start.isoformat()
+    label = f"{previous_start:%d.%m} to {(week_start - timedelta(days=1)):%d.%m}"
+    assert report.splitlines()[0] == f"✨------ **RIFTWATCHER PORO (PREVIOUS WEEK - {label})** ------✨"
+    assert f"No ranked games in week {label}." in report
+
+    this_week = asyncio.run(service.build_weekly_win_rate_report())
+    assert "RIFTWATCHER PORO (WEEKLY)" in this_week and "No ranked games yet for week" in this_week
 
 
 def test_get_week_window_respects_day_start_cutoff():

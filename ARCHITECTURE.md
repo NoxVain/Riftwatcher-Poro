@@ -7,7 +7,9 @@ Riftwatcher Poro is a Discord worker service that tracks ranked League results f
 - two daily scoreboard messages in the daily channel:
   - previous day snapshot message (top)
   - current day live scoreboard message (second)
-- one live weekly scoreboard message (Monday `REPORT_DAY_START_HOUR` -> next Monday aggregate)
+- two weekly scoreboard messages (Monday `REPORT_DAY_START_HOUR` -> next Monday aggregate):
+  - previous week's final board (top), built from `player_daily_stats` when the week rolls over
+  - live current-week message (bottom)
 - match recap messages and ranked streak callouts
 - rank change event messages
 - optional esports news (schedules, live/game/series results)
@@ -199,7 +201,7 @@ All workers run continuously while connected, each with startup jitter and cycle
    - on day rollover, copy prior day final content into previous-day message (dated header), then continue updating current-day message
 3. Command flow (`!Weekly`)
    - aggregate stored `player_daily_stats` rows from Monday day-start cutoff through next Monday cutoff
-   - update persisted weekly scoreboard message
+   - update persisted weekly scoreboard message; when the tracked previous-week message is missing or shows an older week, rebuild last week's board from the DB into it (`get_or_create_weekly_report_message`). The first time, the existing weekly message becomes the previous-week one and a new message below it takes the current week, because Discord orders messages by when they were posted. If last week's board can't be built, the current week still updates
 4. Refresh flow
    - pull ranked match info for current report day
    - upsert per-player daily stats
@@ -249,7 +251,7 @@ Badges (`report_builder.py`) are separate from the score: per-minute rates shrun
   - cached Riot match payloads, cleaned up `MATCH_CACHE_RETENTION_DAYS` after they were cached (`0` = never; production keeps everything because the cache holds history Riot no longer serves, see OPERATIONS.md)
 - `bot_state`
   - key/value operational state:
-    - scoreboard message ids (`last_report_*`, `last_weekly_report_*`, previous-day message + cycle keys)
+    - scoreboard message ids (`last_report_*`, `last_weekly_report_*`, previous-day message + cycle keys, `previous_weekly_report_*` with the week it shows)
     - per-player cursors: `last_seen_match_id::`, `last_announced_match_id::`, `last_announced_streak::`, `backfill_offset::`, `backfill_done_at::` (when the last backfill pass finished)
     - `recap_retry_queue` (recaps Discord refused with a 429/5xx: match ID and first refusal time, retried for 3 hours)
     - per-player LP joins (JSON lists, 30-minute expiry): `recap_lp_pending::` (posted recap lines awaiting LP), `recap_lp_events::` (LP changes awaiting a recap)

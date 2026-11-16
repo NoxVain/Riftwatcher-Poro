@@ -192,8 +192,16 @@ class PoroService:
         ranked_results.sort(key=rank_sort_key)
         return format_report_from_results(self, ranked_results, error_results, report_start)
 
-    async def build_weekly_win_rate_report(self):
+    def get_previous_week_key(self):
+        """Start date (ISO) of the report week before the current one."""
+        week_start, _week_end_exclusive = self.get_week_window()
+        return (week_start - timedelta(days=7)).isoformat()
+
+    async def build_weekly_win_rate_report(self, previous_week=False):
         week_start, week_end_exclusive = self.get_week_window()
+        if previous_week:
+            week_start, week_end_exclusive = week_start - timedelta(days=7), week_start
+        week_label = f"{week_start:%d.%m} to {(week_end_exclusive - timedelta(days=1)):%d.%m}"
         await self._ensure_role_baselines()
         report_start = time.perf_counter()
         stored_rows = await asyncio.to_thread(
@@ -205,17 +213,17 @@ class PoroService:
         self.log(
             f"[poro] Weekly report built: players={len(ranked_results)} "
             f"with_role={sum(1 for row in stored_rows if row.get('primary_role'))} "
-            f"baselines={'yes' if self._role_baselines else 'no'}"
+            f"baselines={'yes' if self._role_baselines else 'no'} week={week_start.isoformat()}"
         )
         report_text = format_report_from_results(
             self,
             ranked_results,
             [],
             report_start,
-            header_title="WEEKLY",
+            header_title=f"PREVIOUS WEEK - {week_label}" if previous_week else "WEEKLY",
             empty_line_1=(
-                f"No ranked games yet for week {week_start:%d.%m} "
-                f"to {(week_end_exclusive - timedelta(days=1)):%d.%m}."
+                f"No ranked games in week {week_label}." if previous_week
+                else f"No ranked games yet for week {week_label}."
             ),
             empty_line_2=(
                 f"Weekly report covers Monday {self.report_day_start_hour:02d}:00 "

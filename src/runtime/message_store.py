@@ -8,6 +8,9 @@ DAILY_CYCLE_STATE_KEY = "daily_report_cycle_key"
 PREVIOUS_REPORT_CHANNEL_STATE_KEY = "previous_report_channel_id"
 PREVIOUS_REPORT_MESSAGE_STATE_KEY = "previous_report_message_id"
 PREVIOUS_REPORT_CYCLE_STATE_KEY = "previous_report_cycle_key"
+PREVIOUS_WEEKLY_REPORT_CHANNEL_STATE_KEY = "previous_weekly_report_channel_id"
+PREVIOUS_WEEKLY_REPORT_MESSAGE_STATE_KEY = "previous_weekly_report_message_id"
+PREVIOUS_WEEKLY_REPORT_WEEK_STATE_KEY = "previous_weekly_report_week_key"
 
 # The event loop only keeps weak references to tasks: a fire-and-forget task with no
 # other reference can be garbage-collected before it finishes, silently dropping the
@@ -39,6 +42,7 @@ def create_message_state():
         "last_report_message": {"channel_id": None, "message_id": None, "cycle_key": None},
         "last_previous_report_message": {"channel_id": None, "message_id": None, "cycle_key": None},
         "last_weekly_report_message": {"channel_id": None, "message_id": None},
+        "last_previous_weekly_report_message": {"channel_id": None, "message_id": None, "week_key": None},
     }
 
 
@@ -80,6 +84,25 @@ def remember_weekly_report_message(*, state, message, db_set_last_weekly_report_
         _run_in_background(loop, db_set_last_weekly_report_message, message.channel.id, message.id)
     except RuntimeError:
         db_set_last_weekly_report_message(message.channel.id, message.id)
+
+
+def remember_previous_weekly_report_message(*, state, message, db_set_state, week_key):
+    target = state["last_previous_weekly_report_message"]
+    target["channel_id"] = message.channel.id
+    target["message_id"] = message.id
+    target["week_key"] = week_key
+    values = (
+        (PREVIOUS_WEEKLY_REPORT_CHANNEL_STATE_KEY, str(message.channel.id)),
+        (PREVIOUS_WEEKLY_REPORT_MESSAGE_STATE_KEY, str(message.id)),
+        (PREVIOUS_WEEKLY_REPORT_WEEK_STATE_KEY, str(week_key)),
+    )
+    try:
+        loop = asyncio.get_running_loop()
+        for key, value in values:
+            _run_in_background(loop, db_set_state, key, value)
+    except RuntimeError:
+        for key, value in values:
+            db_set_state(key, value)
 
 
 def build_previous_day_placeholder_text():
@@ -230,14 +253,117 @@ async def get_or_create_report_message(
     return today_message
 
 
+async def _ensure_previous_week_message(
+    *,
+    state,
+    channel,
+    current_message,
+    previous_week_key,
+    build_previous_week_text,
+    db_get_state,
+    db_set_state,
+    db_set_last_weekly_report_message,
+    remember_previous_weekly_report_message_fn,
+    log,
+):
+    """Keep last week's board in the message above this week's; returns this week's message.
+
+    The text is only built when the tracked message is missing or still shows an older week.
+    """
+    last_previous = state["last_previous_weekly_report_message"]
+    if not last_previous["channel_id"] or not last_previous["message_id"]:
+        raw_channel_id = await asyncio.to_thread(db_get_state, PREVIOUS_WEEKLY_REPORT_CHANNEL_STATE_KEY)
+        raw_message_id = await asyncio.to_thread(db_get_state, PREVIOUS_WEEKLY_REPORT_MESSAGE_STATE_KEY)
+        try:
+            last_previous["channel_id"] = int(raw_channel_id) if raw_channel_id else None
+            last_previous["message_id"] = int(raw_message_id) if raw_message_id else None
+        except ValueError:
+            last_previous["channel_id"] = None
+            last_previous["message_id"] = None
+        last_previous["week_key"] = await asyncio.to_thread(db_get_state, PREVIOUS_WEEKLY_REPORT_WEEK_STATE_KEY)
+
+    previous_message = None
+    if last_previous["channel_id"] == channel.id and last_previous["message_id"]:
+        try:
+            previous_message = await channel.fetch_message(last_previous["message_id"])
+        except (discord.NotFound, discord.Forbidden):
+            last_previous.update({"channel_id": None, "message_id": None, "week_key": None})
+            await asyncio.to_thread(db_set_state, PREVIOUS_WEEKLY_REPORT_CHANNEL_STATE_KEY, "0")
+            await asyncio.to_thread(db_set_state, PREVIOUS_WEEKLY_REPORT_MESSAGE_STATE_KEY, "0")
+            await asyncio.to_thread(db_set_state, PREVIOUS_WEEKLY_REPORT_WEEK_STATE_KEY, "")
+        except discord.HTTPException:
+            previous_message = TrackedMessageReference(channel=channel, message_id=last_previous["message_id"])
+
+    if previous_message is not None and last_previous["week_key"] == previous_week_key:
+        return current_message
+
+    text = await build_previous_week_text()
+    if previous_message is None and current_message is not None:
+        # Messages show in the order they were posted, so the existing board becomes last
+        # week's and this week's gets a new message below it.
+        await current_message.edit(content=text)
+        previous_message, current_message = current_message, None
+        state["last_weekly_report_message"].update({"channel_id": None, "message_id": None})
+        await asyncio.to_thread(db_set_last_weekly_report_message, 0, 0)
+    elif previous_message is None:
+        previous_message = await channel.send(text)
+    elif previous_message.content != text:
+        await previous_message.edit(content=text)
+    remember_previous_weekly_report_message_fn(previous_message, week_key=previous_week_key)
+    log(f"[weekly] Previous-week board shows week {previous_week_key} (message {previous_message.id}).")
+    return current_message
+
+
 async def get_or_create_weekly_report_message(
     *,
     state,
     channel,
     initial_content,
+    previous_week_key,
+    build_previous_week_text,
+    db_get_state,
+    db_set_state,
     db_get_last_weekly_report_message,
     db_set_last_weekly_report_message,
     remember_weekly_report_message_fn,
+    remember_previous_weekly_report_message_fn,
+    log,
+):
+    """This week's scoreboard message, with last week's board kept in the message above it."""
+    # The refresh worker, the recap worker and startup can all get here at the same moment;
+    # one at a time, or each would post its own copy of a missing message.
+    lock = state.setdefault("_weekly_message_lock", asyncio.Lock())
+    async with lock:
+        return await _get_or_create_weekly_report_message(
+            state=state,
+            channel=channel,
+            initial_content=initial_content,
+            previous_week_key=previous_week_key,
+            build_previous_week_text=build_previous_week_text,
+            db_get_state=db_get_state,
+            db_set_state=db_set_state,
+            db_get_last_weekly_report_message=db_get_last_weekly_report_message,
+            db_set_last_weekly_report_message=db_set_last_weekly_report_message,
+            remember_weekly_report_message_fn=remember_weekly_report_message_fn,
+            remember_previous_weekly_report_message_fn=remember_previous_weekly_report_message_fn,
+            log=log,
+        )
+
+
+async def _get_or_create_weekly_report_message(
+    *,
+    state,
+    channel,
+    initial_content,
+    previous_week_key,
+    build_previous_week_text,
+    db_get_state,
+    db_set_state,
+    db_get_last_weekly_report_message,
+    db_set_last_weekly_report_message,
+    remember_weekly_report_message_fn,
+    remember_previous_weekly_report_message_fn,
+    log,
 ):
     last_weekly = state["last_weekly_report_message"]
     channel_id = last_weekly["channel_id"]
@@ -251,16 +377,35 @@ async def get_or_create_weekly_report_message(
             channel_id = persisted_channel_id
             message_id = persisted_message_id
 
+    current_message = None
     if channel_id == channel.id and message_id:
         try:
-            return await channel.fetch_message(message_id)
+            current_message = await channel.fetch_message(message_id)
         except (discord.NotFound, discord.Forbidden):
             last_weekly["channel_id"] = None
             last_weekly["message_id"] = None
             await asyncio.to_thread(db_set_last_weekly_report_message, 0, 0)
         except discord.HTTPException:
-            return TrackedMessageReference(channel=channel, message_id=message_id)
+            current_message = TrackedMessageReference(channel=channel, message_id=message_id)
 
-    message = await channel.send(initial_content)
-    remember_weekly_report_message_fn(message)
-    return message
+    try:
+        current_message = await _ensure_previous_week_message(
+            state=state,
+            channel=channel,
+            current_message=current_message,
+            previous_week_key=previous_week_key,
+            build_previous_week_text=build_previous_week_text,
+            db_get_state=db_get_state,
+            db_set_state=db_set_state,
+            db_set_last_weekly_report_message=db_set_last_weekly_report_message,
+            remember_previous_weekly_report_message_fn=remember_previous_weekly_report_message_fn,
+            log=log,
+        )
+    except Exception as exc:
+        # Last week's board is an extra: this week's still updates.
+        log(f"[weekly] Could not update the previous-week board; retrying on the next update: {type(exc).__name__}: {exc}")
+
+    if current_message is None:
+        current_message = await channel.send(initial_content)
+        remember_weekly_report_message_fn(current_message)
+    return current_message

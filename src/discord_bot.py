@@ -31,6 +31,7 @@ from src.runtime.message_store import (
     get_or_create_weekly_report_message as runtime_get_or_create_weekly_report_message,
     remember_previous_report_message as runtime_remember_previous_report_message,
     remember_report_message as runtime_remember_report_message,
+    remember_previous_weekly_report_message as runtime_remember_previous_weekly_report_message,
     remember_weekly_report_message as runtime_remember_weekly_report_message,
 )
 from src.runtime.workers import (
@@ -299,6 +300,15 @@ def remember_weekly_report_message(message):
     )
 
 
+def remember_previous_weekly_report_message(message, week_key):
+    runtime_remember_previous_weekly_report_message(
+        state=MESSAGE_STATE,
+        message=message,
+        db_set_state=db_set_state,
+        week_key=week_key,
+    )
+
+
 async def resolve_channel(channel_id):
     channel = client.get_channel(channel_id)
     if channel is not None:
@@ -333,9 +343,15 @@ async def get_or_create_weekly_report_message(channel, initial_content):
         state=MESSAGE_STATE,
         channel=channel,
         initial_content=initial_content,
+        previous_week_key=poro_service.get_previous_week_key(),
+        build_previous_week_text=lambda: poro_service.build_weekly_win_rate_report(previous_week=True),
+        db_get_state=db_get_state,
+        db_set_state=db_set_state,
         db_get_last_weekly_report_message=db_get_last_weekly_report_message,
         db_set_last_weekly_report_message=db_set_last_weekly_report_message,
         remember_weekly_report_message_fn=remember_weekly_report_message,
+        remember_previous_weekly_report_message_fn=remember_previous_weekly_report_message,
+        log=log,
     )
 
 
@@ -362,25 +378,21 @@ async def edit_last_report_message(prefer_snapshot=False):
 
 
 async def edit_last_weekly_report_message():
-    channel_id = LAST_WEEKLY_REPORT_MESSAGE["channel_id"]
-    message_id = LAST_WEEKLY_REPORT_MESSAGE["message_id"]
-    if not channel_id or not message_id:
-        return
-
-    channel = await resolve_channel(channel_id)
+    channel = await resolve_channel(WEEKLY_REPORT_CHANNEL_ID)
     if channel is None:
         return
 
     try:
         report_text = await poro_service.build_weekly_win_rate_report()
-        message = await channel.fetch_message(message_id)
+        # Also keeps last week's board in the message above, and moves it on when the week rolls over.
+        message = await get_or_create_weekly_report_message(channel, report_text)
         if message.content == report_text:
-            log(f"[refresh] No weekly report change; skipped editing message {message_id}.")
+            log(f"[refresh] No weekly report change; skipped editing message {message.id}.")
             return
         await message.edit(content=report_text)
-        log(f"[refresh] Updated weekly report message {message_id} in channel {channel_id}.")
+        log(f"[refresh] Updated weekly report message {message.id} in channel {channel.id}.")
     except (discord.NotFound, discord.Forbidden) as exc:
-        log(f"[refresh] Could not edit weekly report message {message_id}: {exc}")
+        log(f"[refresh] Could not edit weekly report message: {exc}")
         LAST_WEEKLY_REPORT_MESSAGE["channel_id"] = None
         LAST_WEEKLY_REPORT_MESSAGE["message_id"] = None
         await asyncio.to_thread(db_set_last_weekly_report_message, 0, 0)

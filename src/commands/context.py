@@ -37,6 +37,8 @@ class CommandHandlerContext:
     db_load_tracked_puuids: Any = None
     db_load_player_analysis_rows: Any = None
     db_load_role_group_totals: Any = None
+    db_load_matchup_rows: Any = None
+    db_load_champion_names: Any = None
     db_iter_record_rows: Any = None
     db_iter_wrapped_rows: Any = None
     db_load_all_ranked_states: Any = None

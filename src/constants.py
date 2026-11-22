@@ -19,6 +19,7 @@ ANALYZE_ALIAS = "!analyse"
 RECORDS_COMMAND = "!records"
 RECORDS_ALIAS = "!record"
 WRAPPED_COMMAND = "!wrapped"
+MATCHUP_COMMAND = "!matchup"
 
 # Discord's limit for one plain-text message.
 DISCORD_MESSAGE_LIMIT = 2000

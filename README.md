@@ -63,6 +63,7 @@ Start with:
 - `src/puuid_remap.py` - one-off background rewrite of old (pre key-change) PUUIDs in cached matches
 - `src/match_stats.py` - per-player match stats extracted from cached matches into `player_match_stats` (background sync)
 - `src/player_analysis.py` - `!analyze` rules: guarded strengths and tips from recent ranked games (3 months by default, up to 12), and the compact card
+- `src/matchup.py` - `!matchup` stats: one player's games on one champion and their best and worst lane matchups, and the card
 - `src/wrapped.py` - Poro Wrapped: the group's year in review, posted in the events channel on 31 December at 18:00, and `!wrapped Name` per player until the end of January
 - `src/belts.py` - weekly title belts (Damage King, LP Climber, Backseat Gamer, ...) posted in the events channel when a report week closes, with defended streaks
 - `src/records.py` - Hall of Fame: group records and personal records from ranked games (`!records`), and "New group record" and "Personal best" lines in recaps
@@ -196,6 +197,7 @@ All workers start with jitter to avoid bursty startup traffic and log cycle hear
 - `!remove Name#Tag` (stops tracking and recaps, and hides the player from scoreboards, records, belts, Wrapped and `!analyze`; their history is kept and comes back if they're added again)
 - `!profile Name#Tag`
 - `!analyze Name#Tag [months] [solo|flex] [role]` (alias `!analyse`; the last 3 months of Solo/Duo in every role by default, `!analyze Name 12 flex` for a year of Flex, `!analyze Name mid` for mid games only (`top`, `jungle`/`jg`, `mid`, `adc`/`bot`, `support`/`supp`); the name alone works when it's unique)
+- `!matchup Name Champion [months] [role] [solo|flex]` (commands channel; anyone can run it): the player's record, KDA, CS/min, damage share, kill participation and gold against the lane opponent on that champion, plus the 3 best and 3 worst lane matchups with 5 or more games each. The last 3 months of Solo/Duo and Flex together in every role by default; `!matchup NoxVain Yorick top flex` narrows it, `!matchup NoxVain Yorick 12` looks back a year. Champion names work in any case, with or without spaces and apostrophes (`kaisa`, `lee sin`, `wukong`), and a near miss gets a "Did you mean". Fewer than 5 games on the champion gets a one-line reply instead of a card.
   - The header adds a "Last 20 games" line, and a "How you play" section sums up the main role: champion pool, farming, fights, vision, survival, plus jungle invades or support saves. Strengths and Work on also use recent-vs-earlier trends on the same champion and role; no filler advice. Missing measurements stay N/A. All inputs come from stored stats, with zero new Riot requests.
 - `!records [Name#Tag]` (alias `!record`; group Hall of Fame, or one player's personal records in the same layout with their place in the group; ranked games only)
 - `!wrapped Name#Tag` (a player's Poro Wrapped for the year; a surprise: it only works after the group post on 31 December 18:00 until the end of January, gets no reply at all otherwise, and isn't in `!help`)

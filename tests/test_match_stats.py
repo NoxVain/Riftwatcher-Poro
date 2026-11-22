@@ -454,3 +454,26 @@ def test_db_load_all_ranked_states_groups_by_player(monkeypatch):
     states = db_ranked_state.db_load_all_ranked_states()
     assert [entry["queue_type"] for entry in states["Nox#EUW"]] == ["RANKED_FLEX_SR", "RANKED_SOLO_5X5"]
     assert states["Nox#EUW"][1]["tier"] == "BRONZE"
+
+
+def test_matchup_loaders_read_one_players_ranked_games_and_the_champion_names(monkeypatch):
+    from datetime import datetime, timezone
+
+    import src.db.match_stats as db_match_stats
+
+    calls = []
+
+    def fake_execute(query, params=None, fetch=False, fetchone=False):
+        calls.append((query, params))
+        if "DISTINCT champion_id" in query:
+            return [(62, "MonkeyKing"), (83, "Yorick")]
+        return [tuple(range(len(db_match_stats.MATCHUP_ROW_COLUMNS)))]
+
+    monkeypatch.setattr(db_match_stats, "db_execute", fake_execute)
+    since, until = datetime(2026, 8, 22, tzinfo=timezone.utc), datetime(2026, 11, 22, tzinfo=timezone.utc)
+
+    rows = db_match_stats.db_load_matchup_rows("nox", since, until=until)
+    assert rows == [dict(zip(db_match_stats.MATCHUP_ROW_COLUMNS, range(len(db_match_stats.MATCHUP_ROW_COLUMNS))))]
+    assert calls[0][1] == ("nox", [420, 440], since, until)
+    assert "NOT remake" in calls[0][0]
+    assert db_match_stats.db_load_champion_names() == {62: "MonkeyKing", 83: "Yorick"}

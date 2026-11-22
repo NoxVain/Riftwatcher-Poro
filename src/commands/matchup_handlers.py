@@ -12,7 +12,7 @@ import discord
 from src.constants import MATCHUP_COMMAND
 from src.discord_text import format_user_error, split_message_text
 from src.matchup import (
-    MIN_MATCHUP_GAMES,
+    MIN_CARD_GAMES,
     USAGE,
     build_matchup_report,
     build_matchup_view,
@@ -70,7 +70,7 @@ async def handle_matchup_commands(ctx):
         return True
 
     scope = f"queue={queue or 'both'} months={months} role={ROLE_ARG_NAMES.get(role, 'all')}"
-    if report.games < MIN_MATCHUP_GAMES:
+    if report.games < MIN_CARD_GAMES:
         await channel.send(too_few_games_text(report))
         ctx.log(f"[matchup] Too few games for {riot_id} on {report.champion}: games={report.games} {scope}.")
         return True

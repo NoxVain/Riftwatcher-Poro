@@ -13,18 +13,21 @@ from dataclasses import dataclass, field
 import discord
 
 from src.discord_text import player_name
-from src.player_analysis import DEFAULT_MONTHS, MAX_ANALYSIS_MONTHS, QUEUES, ROLE_ARGS
+from src.player_analysis import MAX_ANALYSIS_MONTHS, QUEUES, ROLE_ARGS
 from src.analysis_metrics import ROLE_NAMES
 
 MATCHUP_ACCENT = 0x378ADD
-# A matchup needs this many games before it can be called best or worst; the card needs as many on the champion.
-MIN_MATCHUP_GAMES = 5
+# A year by default: over 3 months even a main champion rarely meets one opponent 3 times.
+DEFAULT_MATCHUP_MONTHS = 12
+# Games on the champion before there is a card, and against one opponent before it is a matchup.
+MIN_CARD_GAMES = 5
+MIN_MATCHUP_GAMES = 3
 MATCHUPS_SHOWN = 3
 QUEUE_LABEL_BOTH = "Solo/Duo and Flex"
 MONTHS_ERROR = "Choose a whole number of months from 1 to 12, like `!matchup Name Yorick 6`."
 USAGE = (
     "Usage: `!matchup Name Champion [months] [role] [solo|flex]`, like `!matchup NoxVain Yorick top flex` "
-    f"(last {DEFAULT_MONTHS} months of Solo/Duo and Flex in every role unless you say otherwise; 1-12 months; "
+    f"(last {DEFAULT_MATCHUP_MONTHS} months of Solo/Duo and Flex in every role unless you say otherwise; 1-12 months; "
     "role is top, jungle, mid, adc or support)."
 )
 
@@ -88,7 +91,7 @@ def resolve_champion(query, champion_names):
 
 def _parse_options(words):
     """Pop trailing month count, role and queue words, in any order. Queue None means both."""
-    queue, months, role, seen = None, DEFAULT_MONTHS, None, set()
+    queue, months, role, seen = None, DEFAULT_MATCHUP_MONTHS, None, set()
     while words:
         token = words[-1].casefold()
         if token in QUEUES:
@@ -221,12 +224,12 @@ def build_matchup_report(*, riot_id, champion_id, rows, champion_names, queue, m
         if len(opponent_rows) >= MIN_MATCHUP_GAMES
     ]
     report.qualified_opponents = len(matchups)
-    # Ties go to the matchup with more games, then the name, so the order is stable.
-    report.best = sorted(matchups, key=lambda m: (-m.win_rate, -m.games, m.opponent))[:MATCHUPS_SHOWN]
-    shown = {m.opponent for m in report.best}
-    report.worst = [
-        m for m in sorted(matchups, key=lambda m: (m.win_rate, -m.games, m.opponent)) if m.opponent not in shown
-    ][:MATCHUPS_SHOWN]
+    # Best only wins at least half its games and worst only loses more than half, so a losing matchup is never
+    # called best just because there are few. Ties go to more games, then the name, so the order is stable.
+    winning = [m for m in matchups if m.win_rate >= 0.5]
+    losing = [m for m in matchups if m.win_rate < 0.5]
+    report.best = sorted(winning, key=lambda m: (-m.win_rate, -m.games, m.opponent))[:MATCHUPS_SHOWN]
+    report.worst = sorted(losing, key=lambda m: (m.win_rate, -m.games, m.opponent))[:MATCHUPS_SHOWN]
     return report
 
 
@@ -269,8 +272,8 @@ def too_few_games_text(report):
         return f"{name} has no {queue} games as {report.champion}{where} in {window}."
     return (
         f"{name} has {report.games} {queue} game{'s' if report.games != 1 else ''} as {report.champion}{where} "
-        f"in {window} ({report.wins}W-{report.games - report.wins}L); the card needs {MIN_MATCHUP_GAMES}. "
-        "Try more months, like `!matchup Name Champion 12`."
+        f"in {window} ({report.wins}W-{report.games - report.wins}L); the card needs {MIN_CARD_GAMES}."
+        + (" Try more months, like `!matchup Name Champion 12`." if report.months < MAX_ANALYSIS_MONTHS else "")
     )
 
 
@@ -297,10 +300,12 @@ def format_matchup_sections(report):
     if extras:
         lines.append(" · ".join(extras))
     sections = [header, "\n".join(lines)]
-    if report.best:
-        matchups = ["**Best matchups**", *(_matchup_line("🟢", m) for m in report.best)]
+    if report.best or report.worst:
+        matchups = []
+        if report.best:
+            matchups += ["**Best matchups**", *(_matchup_line("🟢", m) for m in report.best)]
         if report.worst:
-            matchups += ["", "**Worst matchups**", *(_matchup_line("🔴", m) for m in report.worst)]
+            matchups += [*([""] if matchups else []), "**Worst matchups**", *(_matchup_line("🔴", m) for m in report.worst)]
         sections.append("\n".join(matchups))
     else:
         sections.append(f"Not enough games against one opponent yet ({MIN_MATCHUP_GAMES} needed).")

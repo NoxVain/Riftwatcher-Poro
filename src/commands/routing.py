@@ -43,7 +43,7 @@ def format_help_text(
         f"- `{SCORE_COMMAND}`: Show how each player's Gamer Score is calculated today (run in {commands_channel_ref}).\n"
         f"- `{PROFILE_COMMAND} Name#Tag`: Show player profile summary (run in {commands_channel_ref}).\n"
         f"- `{ANALYZE_COMMAND} Name#Tag [months] [solo|flex] [role]`: Strengths and tips from the last 3 months of ranked games (1-12 months); Solo/Duo unless `flex`; every role unless you add `top`, `jungle`, `mid`, `adc` or `support` (run in {commands_channel_ref}).\n"
-        f"- `{MATCHUP_COMMAND} Name Champion [months] [role] [solo|flex]`: Your stats on one champion and your best and worst lane matchups, from the last 3 months of Solo/Duo and Flex (1-12 months; narrow with `top`, `jungle`, `mid`, `adc`, `support`, `solo` or `flex`) (run in {commands_channel_ref}).\n"
+        f"- `{MATCHUP_COMMAND} Name Champion [months] [role] [solo|flex]`: Your stats on one champion and your best and worst lane matchups, from the last 12 months of Solo/Duo and Flex (1-12 months; narrow with `top`, `jungle`, `mid`, `adc`, `support`, `solo` or `flex`) (run in {commands_channel_ref}).\n"
         f"- `{RECORDS_COMMAND} [Name#Tag]`: Group records from ranked games, or one player's personal records (run in {commands_channel_ref}).\n"
         f"- `{RIOT_TEST_COMMAND}`: Verify Riot API connectivity (run in {commands_channel_ref}).\n"
         f"- `{TEST_COMMAND}`: Verify Discord send permissions (run in {commands_channel_ref}).\n"

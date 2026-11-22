@@ -208,3 +208,45 @@ def db_load_belt_rows(start, end):
         fetch=True,
     ) or []
     return [dict(zip((*BELT_ROW_COLUMNS, "riot_id"), row)) for row in rows]
+
+
+MATCHUP_ROW_COLUMNS = (
+    "queue_id",
+    "champion_id",
+    "team_position",
+    "win",
+    "kills",
+    "deaths",
+    "assists",
+    "cs",
+    "duration_seconds",
+    "damage_share",
+    "kill_participation",
+    "opponent_champion_id",
+    "opponent_gold_diff",
+)
+
+
+def db_load_matchup_rows(puuid, since, *, until):
+    """One player's ranked games (Solo/Duo and Flex, no remakes) that ended in (since, until], for `!matchup`."""
+    rows = db_execute(
+        f"SELECT {', '.join(MATCHUP_ROW_COLUMNS)} FROM player_match_stats "
+        "WHERE puuid = %s AND queue_id = ANY(%s) AND NOT remake AND game_end_at > %s AND game_end_at <= %s;",
+        (puuid, RANKED_QUEUE_IDS, since, until),
+        fetch=True,
+    ) or []
+    return [dict(zip(MATCHUP_ROW_COLUMNS, row)) for row in rows]
+
+
+def db_load_champion_names():
+    """{champion_id: Riot's internal champion name} for every champion seen in stored games.
+
+    Opponents are stored by ID only; every ranked opponent so far has also been played by a
+    tracked player in some stored game, so this names them without a Data Dragon request.
+    """
+    rows = db_execute(
+        "SELECT DISTINCT champion_id, champion_name FROM player_match_stats "
+        "WHERE champion_id IS NOT NULL AND champion_name IS NOT NULL;",
+        fetch=True,
+    ) or []
+    return {int(champion_id): name for champion_id, name in rows}

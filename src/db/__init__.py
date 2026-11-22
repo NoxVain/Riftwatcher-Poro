@@ -11,6 +11,8 @@ from src.db.match_stats import (
     db_iter_record_rows,
     db_iter_wrapped_rows,
     db_load_belt_rows,
+    db_load_champion_names,
+    db_load_matchup_rows,
     db_load_player_analysis_rows,
     db_load_role_group_totals,
     db_upsert_player_match_stats,

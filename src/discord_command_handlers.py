@@ -1,4 +1,5 @@
 from src.commands.analysis_handlers import handle_analysis_commands
+from src.commands.matchup_handlers import handle_matchup_commands
 from src.commands.records_handlers import handle_records_commands
 from src.commands.wrapped_handlers import handle_wrapped_commands, ignore_closed_wrapped
 from src.commands.context import CommandHandlerContext
@@ -41,6 +42,8 @@ async def handle_incoming_message(
     db_load_tracked_puuids=None,
     db_load_player_analysis_rows=None,
     db_load_role_group_totals=None,
+    db_load_matchup_rows=None,
+    db_load_champion_names=None,
     db_iter_record_rows=None,
     db_iter_wrapped_rows=None,
     db_load_all_ranked_states=None,
@@ -86,6 +89,8 @@ async def handle_incoming_message(
         db_load_tracked_puuids=db_load_tracked_puuids,
         db_load_player_analysis_rows=db_load_player_analysis_rows,
         db_load_role_group_totals=db_load_role_group_totals,
+        db_load_matchup_rows=db_load_matchup_rows,
+        db_load_champion_names=db_load_champion_names,
         db_iter_record_rows=db_iter_record_rows,
         db_iter_wrapped_rows=db_iter_wrapped_rows,
         db_load_all_ranked_states=db_load_all_ranked_states,
@@ -107,6 +112,8 @@ async def handle_incoming_message(
         if await handle_ops_commands(ctx):
             return
         if await handle_analysis_commands(ctx):
+            return
+        if await handle_matchup_commands(ctx):
             return
         if await handle_records_commands(ctx):
             return

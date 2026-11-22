@@ -92,10 +92,13 @@ def test_resolve_champion_suggests_a_close_name_and_ignores_mode_variants():
 # --- The report ------------------------------------------------------------------------
 
 
+GAME_IDS = iter(range(1, 10_000))
+
+
 def game(*, champion=YORICK, opponent=DARIUS, win=True, queue=440, role="TOP", kills=5, deaths=4, assists=6,
-         cs=180, minutes=30, damage_share=0.25, kp=0.5, gold=500):
+         cs=180, minutes=30, damage_share=0.25, kp=0.5, gold=500, ended=None):
     return {
-        "queue_id": queue, "champion_id": champion, "team_position": role, "win": win, "kills": kills,
+        "match_id": f"EUW1_{next(GAME_IDS)}", "game_end_at": ended, "queue_id": queue, "champion_id": champion, "team_position": role, "win": win, "kills": kills,
         "deaths": deaths, "assists": assists, "cs": cs, "duration_seconds": minutes * 60,
         "damage_share": damage_share, "kill_participation": kp, "opponent_champion_id": opponent,
         "opponent_gold_diff": gold,
@@ -214,7 +217,7 @@ class FakeMessage:
         self.author = FakeAuthor()
 
 
-def run_command(content, *, rows=None, fail=False, channel=None, with_loader=True):
+def run_command(content, *, rows=None, fail=False, channel=None, with_loader=True, lp=None, lp_fail=False):
     import src.commands.matchup_handlers as matchup_handlers
 
     channel = channel or FakeChannel()
@@ -249,6 +252,7 @@ def run_command(content, *, rows=None, fail=False, channel=None, with_loader=Tru
             db_load_tracked_puuids=lambda: TRACKED,
             db_load_matchup_rows=load_rows if with_loader else None,
             db_load_champion_names=lambda: NAMES,
+            db_load_player_lp_changes=lambda riot_id, since, until: _load_lp(lp, lp_fail),
         ))
     finally:
         matchup_handlers._now = real_now
@@ -260,7 +264,9 @@ def test_command_sends_the_card_for_the_last_twelve_months():
     assert len(channel.sent) == 1 and channel.sent[0].startswith("🎯 **NoxVain · Yorick** · Top")
     (puuid, since, until), = calls
     assert puuid == "nox" and until == NOW and since == datetime(2025, 11, 22, 12, 0, tzinfo=timezone.utc)
-    assert logs[-1] == "[matchup] Sent Yorick for NoxVain#EUW: games=34 queue=both months=12 role=top matchups=5/6."
+    assert logs[-1] == (
+        "[matchup] Sent Yorick for NoxVain#EUW: games=34 queue=both months=12 role=top matchups=5/6 lp_games=0 lp=+0."
+    )
 
 
 def test_command_months_option_chooses_a_shorter_window():
@@ -306,3 +312,69 @@ def test_command_hides_database_errors_and_falls_back_to_text_for_a_rejected_car
 def test_command_without_the_loader_says_the_database_is_needed():
     channel, _calls, _logs = run_command("!matchup NoxVain Yorick", with_loader=False)
     assert channel.sent == ["Matchups need the database, which isn't configured."]
+
+
+# --- LP --------------------------------------------------------------------------------
+
+
+def _load_lp(lp, fail):
+    if fail:
+        raise RuntimeError("lp read failed")
+    return lp if lp is not None else ([], None)
+
+
+def lp_games_and_changes():
+    """Four Yorick games and one Garen game, each with an LP change 3 minutes after it ended."""
+    from datetime import timedelta
+
+    rows, changes = [], []
+    for index, (champion, win, delta) in enumerate([(YORICK, True, 21), (YORICK, True, 19), (YORICK, False, -17),
+                                                    (FIZZ, True, 25), (YORICK, True, 20)]):
+        ended = NOW - timedelta(days=10, hours=index)
+        rows.append(game(champion=champion, win=win, queue=420, ended=ended))
+        changes.append({"queue_type": "RANKED_SOLO_5X5", "won": win, "observed_at": ended + timedelta(minutes=3),
+                        "lp_delta": delta})
+    # A Yorick game from before LP history began: no LP change for it.
+    rows.append(game(win=True, queue=420, ended=NOW - timedelta(days=60)))
+    return rows, changes
+
+
+def test_report_sums_the_lp_of_the_champions_games_only():
+    from datetime import timedelta
+
+    rows, changes = lp_games_and_changes()
+    report = build_matchup_report(riot_id="NoxVain#EUW", champion_id=YORICK, rows=rows, champion_names=NAMES,
+                                  queue=None, months=12, role=None, lp_changes=changes, lp_since=NOW - timedelta(days=27))
+    # 21 + 19 - 17 + 20; Fizz's +25 belongs to Fizz.
+    assert (report.lp_net, report.lp_games, report.games) == (43, 4, 5)
+
+
+def test_card_shows_the_lp_line_and_says_when_lp_history_begins():
+    from datetime import timedelta
+
+    rows, changes = lp_games_and_changes()
+    report = build_matchup_report(riot_id="NoxVain#EUW", champion_id=YORICK, rows=rows, champion_names=NAMES,
+                                  queue=None, months=12, role=None, lp_changes=changes, lp_since=NOW - timedelta(days=27))
+    assert format_matchup_sections(report)[1].splitlines()[-1] == "**+43 LP** over 4 of 5 games · LP recorded since 26 Oct 2026"
+    # Every game has LP: no "of" and no date.
+    recent = [row for row in rows if row["game_end_at"] > NOW - timedelta(days=30)]
+    report = build_matchup_report(riot_id="NoxVain#EUW", champion_id=YORICK, rows=recent, champion_names=NAMES,
+                                  queue=None, months=12, role=None, lp_changes=changes, lp_since=NOW - timedelta(days=27))
+    assert format_matchup_sections(report)[1].splitlines()[-1] == "**+43 LP** over 4 games"
+    # No LP at all: no LP line.
+    report = report_for(sample_rows())
+    assert not any("LP" in line for line in format_matchup_sections(report)[1].splitlines())
+
+
+def test_command_adds_lp_and_a_failed_lp_read_still_sends_the_card():
+    from datetime import timedelta
+
+    rows, changes = lp_games_and_changes()
+    rows += games(5, 3)
+    channel, _calls, logs = run_command("!matchup NoxVain Yorick", rows=rows, lp=(changes, NOW - timedelta(days=27)))
+    assert "**+43 LP** over 4 of 10 games" in channel.sent[0]
+    assert logs[-1].endswith("lp_games=4 lp=+43.")
+
+    channel, _calls, logs = run_command("!matchup NoxVain Yorick", rows=rows, lp_fail=True)
+    assert channel.sent[0].startswith("🎯 **NoxVain · Yorick**") and " LP**" not in channel.sent[0]
+    assert "[matchup] Could not read LP history; sending without LP: RuntimeError: lp read failed" in logs

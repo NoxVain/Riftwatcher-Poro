@@ -211,6 +211,8 @@ def db_load_belt_rows(start, end):
 
 
 MATCHUP_ROW_COLUMNS = (
+    "match_id",
+    "game_end_at",
     "queue_id",
     "champion_id",
     "team_position",

@@ -27,3 +27,26 @@ def test_belt_lp_totals_are_keyed_by_player_with_a_reliable_flag(monkeypatch):
 def test_belt_lp_totals_are_empty_without_history(monkeypatch):
     monkeypatch.setattr(ranked_state, "db_execute", lambda *args, **kwargs: None)
     assert ranked_state.db_load_belt_lp_totals(START, END, QUEUES) == {}
+
+
+def test_player_lp_changes_are_one_game_ranked_rows_with_the_first_recorded_date(monkeypatch):
+    calls = []
+
+    def fake_execute(query, params=None, fetch=False, fetchone=False):
+        calls.append((query, params))
+        if fetchone:
+            return (START,)
+        return [("RANKED_SOLO_5X5", True, END, 21)]
+
+    monkeypatch.setattr(ranked_state, "db_execute", fake_execute)
+    changes, first = ranked_state.db_load_player_lp_changes("NoxVain#EUW", START, END)
+
+    assert changes == [{"queue_type": "RANKED_SOLO_5X5", "won": True, "observed_at": END, "lp_delta": 21}]
+    assert first == START
+    assert calls[0][1] == ("NoxVain#EUW", ["RANKED_SOLO_5X5", "RANKED_FLEX_SR"], START, END)
+    assert "wins_delta + losses_delta = 1" in calls[0][0] and "lp_delta IS NOT NULL" in calls[0][0]
+
+
+def test_player_lp_changes_without_history(monkeypatch):
+    monkeypatch.setattr(ranked_state, "db_execute", lambda *args, **kwargs: None)
+    assert ranked_state.db_load_player_lp_changes("NoxVain#EUW", START, END) == ([], None)

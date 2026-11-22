@@ -35,10 +35,11 @@ Riftwatcher Poro currently uses `!commands`, so Message Content Intent is requir
 
 Create or choose channels for:
 
-- Daily scoreboard
-- Weekly scoreboard
+- Daily scoreboard (two messages: the previous day on top, today below)
+- Weekly scoreboard (two messages: the previous week on top, this week below)
 - Match recaps
-- Events/admin commands (also receives rank alerts and League patch notes)
+- Events (rank alerts, weekly title belts, Poro Wrapped and League patch notes; also runs commands unless you set a commands channel)
+- Commands (optional: `!help`, `!analyze`, `!matchup`, `!records`, admin commands and `/health`, so the events channel keeps only automatic posts)
 - Esports news (optional)
 
 Enable Developer Mode in Discord, right-click each channel, and copy the channel IDs into:
@@ -47,6 +48,7 @@ Enable Developer Mode in Discord, right-click each channel, and copy the channel
 - `WEEKLY_REPORT_CHANNEL_ID`
 - `MATCH_RECAP_CHANNEL_ID`
 - `EVENTS_CHANNEL_ID`
+- `MANUAL_COMMANDS_CHANNEL_ID` (optional; leave empty to run commands in the events channel)
 - `NEWS_CHANNEL_ID` (optional; leave empty to disable esports news)
 
 The same channel can be reused for multiple roles, but separate channels are easier to operate.
@@ -134,7 +136,7 @@ On Windows, if `python` resolves to a WindowsApps alias, use the explicit Python
 
 ## 7. First-Run Checks
 
-In the events channel:
+In the commands channel (the events channel if you didn't set `MANUAL_COMMANDS_CHANNEL_ID`):
 
 ```text
 !test
@@ -166,5 +168,6 @@ Then smoke test:
 - Recap worker runs every `MATCH_RECAP_POLL_SECONDS` seconds (minimum 30), default `90`.
 - Daily refresh runs every `DAILY_REFRESH_SECONDS` seconds (minimum 30), default `300`.
 - If Riot rejects the key (`401`/`403`), update `RIOT_API_KEY` and redeploy (see `OPERATIONS.md`). The bot posts a recovery message in the events channel once the new key works.
+- If the bot can't log in and the logs show `429 Too Many Requests` with a Cloudflare "banned you temporarily" page (error 1015), Discord has blocked the container's address. Redeploy once to get a new one; if that is blocked too, wait (it usually clears within an hour). See `OPERATIONS.md`.
 - If the bot posts duplicate scoreboards or esports updates, check channel permissions, make sure only one instance uses the database, and see `OPERATIONS.md`.
 - Do not commit `.env`, bot tokens, Riot API keys, esports API keys, or database URLs.

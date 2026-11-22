@@ -1,6 +1,6 @@
 # Improvement Backlog
 
-This backlog tracks work not yet implemented as of 2026-11-16.
+This backlog tracks work not yet implemented as of 2026-11-22.
 
 ## Source docs reviewed
 
@@ -8,7 +8,7 @@ This backlog tracks work not yet implemented as of 2026-11-16.
 - `ARCHITECTURE.md`
 - `OPERATIONS.md`
 - `SELF_HOSTING.md`
-- git history through PR #82 (2026-11-16)
+- git history through PR #86 (2026-11-22)
 
 ## Feature Backlog
 
@@ -25,11 +25,12 @@ No new Riot requests:
 - Daily awards on the daily scoreboard: Clutch of the day (best KDA in a win) and Grey screen of the day (most time dead in one game). Mocked up 2026-10-27; left out for now. The daily MVP is already the scoreboard's ⭐.
 - Head-to-head command (`!vs Name1 Name2`) for day/week.
 - Party synergy stats for duo/trio combinations (self-join on `match_id`; `!analyze` already finds the best duo partner).
-- Nemesis: the enemy champion each player loses to most (`opponent_champion_id` is already stored).
+- Nemesis: the enemy champion each player loses to most across all their champions (`!matchup` already shows the worst lane matchups for one champion).
 - Recap highlight lines from challenges (Baron/Dragon steal, outnumbered kill, ally saved, flawless ace, perfect game).
 - Group ban stats ("the group's most hated champion").
 - Win rate by keystone and summoner spells, possibly as an `!analyze` finding.
 - Riot server maintenance and incident notices for the platform, from the status endpoint the API-key check already calls.
+- Login backoff: when Discord refuses the login (429 / Cloudflare 1015), wait before retrying instead of letting the process exit and Railway restart it every ~13 s (2026-11-22 incident, `OPERATIONS.md`). Put off by the maintainer on 2026-11-22 ("not now"), not declined.
 
 Few Riot requests (check the shared 100 per 120 s budget first):
 - Champion mastery milestone callouts and `!mastery` (champion-mastery-v4, about one request per player per day).

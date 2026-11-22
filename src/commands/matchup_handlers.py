@@ -59,10 +59,18 @@ async def handle_matchup_commands(ctx):
             return True
         riot_id, puuid = match
         now = _now()
-        rows = await asyncio.to_thread(ctx.db_load_matchup_rows, puuid, analysis_start(now, months), until=now)
+        since = analysis_start(now, months)
+        rows = await asyncio.to_thread(ctx.db_load_matchup_rows, puuid, since, until=now)
+        lp_changes, lp_since = [], None
+        if ctx.db_load_player_lp_changes is not None:
+            try:
+                lp_changes, lp_since = await asyncio.to_thread(ctx.db_load_player_lp_changes, riot_id, since, now)
+            except Exception as exc:
+                # LP is an extra: the card still goes out without the LP line.
+                ctx.log(f"[matchup] Could not read LP history; sending without LP: {type(exc).__name__}: {exc}")
         report = build_matchup_report(
             riot_id=riot_id, champion_id=champion_id, rows=rows, champion_names=champion_names,
-            queue=queue, months=months, role=role,
+            queue=queue, months=months, role=role, lp_changes=lp_changes, lp_since=lp_since,
         )
     except Exception as exc:
         await channel.send(format_user_error("Matchup lookup failed", exc, ctx.request_id_context.get()))
@@ -82,6 +90,6 @@ async def handle_matchup_commands(ctx):
             await channel.send(chunk)
     ctx.log(
         f"[matchup] Sent {report.champion} for {riot_id}: games={report.games} {scope} "
-        f"matchups={report.qualified_opponents}/{report.opponents}."
+        f"matchups={report.qualified_opponents}/{report.opponents} lp_games={report.lp_games} lp={report.lp_net:+d}."
     )
     return True

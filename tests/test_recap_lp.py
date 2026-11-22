@@ -10,6 +10,7 @@ from src.recap_lp import (
     format_lp_summary,
     handle_lp_event,
     load_state_list,
+    pair_lp_with_games,
     lp_events_state_key,
     lp_pending_state_key,
     rank_points,
@@ -304,3 +305,40 @@ def test_lp_history_skips_unchanged_or_unknown():
     assert build_lp_history_row("Nox#EUW", "RANKED_SOLO_5X5", prev, _cur("GOLD", "II", 50, 10, 10)) is None
     assert build_lp_history_row("Nox#EUW", "RANKED_SOLO_5X5", None, _cur("GOLD", "II", 70, 11, 10)) is None
     assert build_lp_history_row("Nox#EUW", "RANKED_SOLO_5X5", prev, {"tier": "GOLD", "rank": "II", "leaguePoints": 70}) is None
+
+
+def _game(match_id, minute, *, queue=420, win=True):
+    from datetime import datetime, timedelta, timezone
+
+    end = datetime(2026, 11, 20, 18, 0, tzinfo=timezone.utc) + timedelta(minutes=minute)
+    return {"match_id": match_id, "queue_id": queue, "win": win, "game_end_at": end}
+
+
+def _change(minute, delta, *, queue_type="RANKED_SOLO_5X5", won=True):
+    from datetime import datetime, timedelta, timezone
+
+    observed = datetime(2026, 11, 20, 18, 0, tzinfo=timezone.utc) + timedelta(minutes=minute)
+    return {"queue_type": queue_type, "won": won, "observed_at": observed, "lp_delta": delta}
+
+
+def test_pair_lp_with_games_gives_each_change_to_the_game_it_followed():
+    games = [_game("A", 0), _game("B", 35, win=False), _game("C", 70, queue=440)]
+    changes = [_change(3, 21), _change(38, -18, won=False), _change(74, 15, queue_type="RANKED_FLEX_SR")]
+    assert pair_lp_with_games(changes, games) == {"A": 21, "B": -18, "C": 15}
+
+
+def test_pair_lp_with_games_needs_the_same_queue_and_result_and_a_change_soon_after():
+    games = [_game("A", 0)]
+    assert pair_lp_with_games([_change(3, -18, won=False)], games) == {}
+    assert pair_lp_with_games([_change(3, 15, queue_type="RANKED_FLEX_SR")], games) == {}
+    # Recorded more than 30 minutes after the game, or well before it ended.
+    assert pair_lp_with_games([_change(31, 21)], games) == {}
+    assert pair_lp_with_games([_change(-2, 21)], games) == {}
+
+
+def test_pair_lp_with_games_uses_each_game_once_and_prefers_the_latest_game():
+    # Two wins 20 minutes apart; each change belongs to the game that ended just before it.
+    games = [_game("A", 0), _game("B", 20)]
+    assert pair_lp_with_games([_change(22, 19), _change(4, 21)], games) == {"A": 21, "B": 19}
+    # A second change can't take a game that already has one.
+    assert pair_lp_with_games([_change(2, 21), _change(6, 20)], [_game("A", 0)]) == {"A": 21}

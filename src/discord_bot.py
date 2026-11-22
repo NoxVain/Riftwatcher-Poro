@@ -104,6 +104,7 @@ db_load_player_analysis_rows = dbm.db_load_player_analysis_rows
 db_load_role_group_totals = dbm.db_load_role_group_totals
 db_load_matchup_rows = dbm.db_load_matchup_rows
 db_load_champion_names = dbm.db_load_champion_names
+db_load_player_lp_changes = dbm.db_load_player_lp_changes
 db_iter_record_rows = dbm.db_iter_record_rows
 db_iter_wrapped_rows = dbm.db_iter_wrapped_rows
 db_load_all_ranked_states = dbm.db_load_all_ranked_states
@@ -779,6 +780,7 @@ async def on_message(message):
         db_load_role_group_totals=db_load_role_group_totals,
         db_load_matchup_rows=db_load_matchup_rows,
         db_load_champion_names=db_load_champion_names,
+        db_load_player_lp_changes=db_load_player_lp_changes,
         db_iter_record_rows=db_iter_record_rows,
         db_iter_wrapped_rows=db_iter_wrapped_rows,
         db_load_all_ranked_states=db_load_all_ranked_states,

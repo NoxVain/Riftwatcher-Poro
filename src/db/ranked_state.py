@@ -130,3 +130,25 @@ def db_load_belt_lp_totals(start, end, queue_types):
         riot_id: {"lp_delta": None if delta is None else int(delta), "games": int(games), "reliable": bool(reliable)}
         for riot_id, delta, games, reliable in rows
     }
+
+
+def db_load_player_lp_changes(riot_id, since, until):
+    """One player's one-game LP changes (Solo/Duo and Flex) observed in (since, until], and when their LP history begins.
+
+    Returns (rows, first_observed_at); first_observed_at is None when nothing is recorded for the player.
+    A row for several games at once (two quick games between polls) can't be given to one game, so it's left out.
+    """
+    rows = db_execute(
+        "SELECT queue_type, won, observed_at, lp_delta FROM lp_history "
+        "WHERE lower(riot_id) = lower(%s) AND queue_type = ANY(%s) AND observed_at > %s AND observed_at <= %s "
+        "AND wins_delta + losses_delta = 1 AND lp_delta IS NOT NULL ORDER BY observed_at;",
+        (riot_id, ["RANKED_SOLO_5X5", "RANKED_FLEX_SR"], since, until),
+        fetch=True,
+    ) or []
+    first = db_execute(
+        "SELECT min(observed_at) FROM lp_history WHERE lower(riot_id) = lower(%s);",
+        (riot_id,),
+        fetchone=True,
+    )
+    changes = [dict(zip(("queue_type", "won", "observed_at", "lp_delta"), row)) for row in rows]
+    return changes, (first[0] if first else None)

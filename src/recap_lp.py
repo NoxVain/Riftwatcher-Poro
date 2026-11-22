@@ -199,6 +199,33 @@ def event_matches_game(event, *, queue_type, won, end_ts):
     return end_ts - LP_CLOCK_SKEW_SECONDS <= observed_at <= end_ts + LP_MATCH_WINDOW_SECONDS
 
 
+def pair_lp_with_games(lp_changes, games):
+    """{match_id: LP change} for the games a recorded LP change belongs to.
+
+    `lp_changes` are one-game `lp_history` rows (`queue_type`, `won`, `observed_at`, `lp_delta`);
+    `games` are one player's ranked games (`match_id`, `queue_id`, `win`, `game_end_at`). A change
+    goes to the latest game it can belong to under the recaps' own rule (`event_matches_game`), and
+    each game takes at most one change. Pass all of the player's games, not one champion's, so a
+    change is never given to the wrong game.
+    """
+    paired = {}
+    for change in sorted(lp_changes, key=lambda item: item["observed_at"]):
+        event = {
+            "queue_type": change["queue_type"], "won": change["won"], "observed_at": change["observed_at"].timestamp(),
+        }
+        candidates = [
+            game for game in games
+            if game["match_id"] not in paired and game.get("game_end_at") is not None
+            and event_matches_game(
+                event, queue_type=QUEUE_TYPE_BY_QUEUE_ID.get(game["queue_id"]), won=game["win"],
+                end_ts=game["game_end_at"].timestamp(),
+            )
+        ]
+        if candidates:
+            paired[max(candidates, key=lambda game: game["game_end_at"])["match_id"]] = change["lp_delta"]
+    return paired
+
+
 def load_state_list(raw):
     try:
         data = json.loads(raw) if raw else []

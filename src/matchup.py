@@ -15,6 +15,7 @@ import discord
 from src.discord_text import player_name
 from src.player_analysis import MAX_ANALYSIS_MONTHS, QUEUES, ROLE_ARGS
 from src.analysis_metrics import ROLE_NAMES
+from src.recap_lp import pair_lp_with_games
 
 MATCHUP_ACCENT = 0x378ADD
 # A year by default: over 3 months even a main champion rarely meets one opponent 3 times.
@@ -172,6 +173,10 @@ class MatchupReport:
     qualified_opponents: int = 0
     opponents: int = 0
     roles: dict = field(default_factory=dict)
+    # Net LP over the games a recorded LP change could be paired with, and when the player's LP history begins.
+    lp_net: int = 0
+    lp_games: int = 0
+    lp_since: object = None
 
 
 def _mean(values):
@@ -179,8 +184,11 @@ def _mean(values):
     return sum(values) / len(values) if values else None
 
 
-def build_matchup_report(*, riot_id, champion_id, rows, champion_names, queue, months, role):
-    """Stats for one player's games on one champion; `rows` are their ranked games in the window."""
+def build_matchup_report(*, riot_id, champion_id, rows, champion_names, queue, months, role, lp_changes=(), lp_since=None):
+    """Stats for one player's games on one champion; `rows` are all their ranked games in the window.
+
+    `lp_changes` are the player's recorded one-game LP changes in the window (see `pair_lp_with_games`).
+    """
     queue_ids = {QUEUES[queue]["queue_id"]} if queue else {spec["queue_id"] for spec in QUEUES.values()}
     games = [
         row for row in rows
@@ -195,6 +203,9 @@ def build_matchup_report(*, riot_id, champion_id, rows, champion_names, queue, m
     report.wins = sum(1 for row in games if row.get("win"))
     if not games:
         return report
+    lp_by_match = pair_lp_with_games(lp_changes, rows) if lp_changes else {}
+    paired = [lp_by_match[row["match_id"]] for row in games if row.get("match_id") in lp_by_match]
+    report.lp_net, report.lp_games, report.lp_since = sum(paired), len(paired), lp_since
     report.kills = sum(row.get("kills") or 0 for row in games) / len(games)
     report.deaths = sum(row.get("deaths") or 0 for row in games) / len(games)
     report.assists = sum(row.get("assists") or 0 for row in games) / len(games)
@@ -299,6 +310,13 @@ def format_matchup_sections(report):
         extras.append(f"**{gold.replace(' gold', '')}** gold vs lane opponent")
     if extras:
         lines.append(" · ".join(extras))
+    if report.lp_games:
+        of_games = f"{report.lp_games} of {report.games} games" if report.lp_games < report.games else f"{report.games} games"
+        since = (
+            f" · LP recorded since {report.lp_since.day} {report.lp_since:%b %Y}"
+            if report.lp_since and report.lp_games < report.games else ""
+        )
+        lines.append(f"**{report.lp_net:+d} LP** over {of_games}{since}")
     sections = [header, "\n".join(lines)]
     if report.best or report.worst:
         matchups = []

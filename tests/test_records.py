@@ -1,4 +1,4 @@
-"""!records: group records, personal bests, recap record lines, and the command handler."""
+"""!records: group records, personal records, recap record lines, and the command handler."""
 
 import asyncio
 import contextvars
@@ -191,15 +191,36 @@ def test_personal_bests_need_a_history_and_a_strictly_better_value():
     assert [(b.category.key, b.value, b.previous.value, b.personal) for b in found] == [("kills", 9, 8, True)]
 
 
-def test_personal_bests_skip_worst_categories_and_group_records_come_first():
-    book = build_record_book(history(kills=10, vision=30, deaths=3) + history(riot_id="Nox#EUW", kills=5, vision=20, deaths=2))
-    game = row("Nox#EUW", days=400, kills=11, vision=25, deaths=9, minutes=40)
+def test_personal_records_cover_every_category_and_group_records_come_first():
+    book = build_record_book(
+        history(kills=10, vision=30, deaths=20, minutes=60, taken=90000, gold=30000)
+        + history(riot_id="Nox#EUW", kills=5, vision=20, deaths=2, minutes=30, taken=20000, gold=12000)
+    )
+    game = row("Nox#EUW", days=400, kills=11, vision=25, deaths=9, minutes=40, taken=25000, gold=13000)
     found = detect_record_breaks(book, [(game["match_id"], [game])])[(game["match_id"], "Nox#EUW")]
-    # kills: group record (no personal line too); vision: personal best; deaths and
-    # longest game are "worst" categories, so no personal line (deaths 9 is a group record).
+    # kills: group record, so no personal line too. The rest are personal records only,
+    # the bad ones (deaths, damage taken, longest game) as well as the good ones.
     assert [(b.category.key, b.personal) for b in found] == [
-        ("kills", False), ("deaths", False), ("longest_game", False), ("vision", True)
+        ("kills", False), ("gold", True), ("vision", True), ("deaths", True), ("damage_taken", True),
+        ("longest_game", True),
     ]
+
+
+def test_bad_personal_records_have_their_own_wording():
+    book = build_record_book([row("Tamarin#EUW", minutes=55, deaths=21, taken=90000, champion="Ezreal", days=40)])
+
+    def line(key, value):
+        previous = book.bests[key]["Tamarin#EUW"]
+        return format_record_break(RecordBreak(CATEGORIES_BY_KEY[key], "Tamarin#EUW", value, previous, personal=True))
+
+    assert line("longest_game", 3430) == "-# ⏳ Longest game yet: 57:10 (was 55:00 on Ezreal, Feb 2025)"
+    assert line("deaths", 22) == "-# 💀 Most deaths yet: 22 (was 21 on Ezreal, Feb 2025)"
+    assert line("damage_taken", 95000) == "-# 🛡️ Most damage taken yet: 95,000 (was 90,000 on Ezreal, Feb 2025)"
+    # A good stat that used to be group-only reads like the other personal bests.
+    gold = format_record_break(
+        RecordBreak(CATEGORIES_BY_KEY["gold"], "Tamarin#EUW", 20000, book.bests["gold"]["Tamarin#EUW"], personal=True)
+    )
+    assert gold == "-# 📈 Personal best: 20,000 gold (was 12,000 on Ezreal, Feb 2025)"
 
 
 def test_personal_best_line():

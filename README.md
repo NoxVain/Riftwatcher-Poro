@@ -66,7 +66,7 @@ Start with:
 - `src/matchup.py` - `!matchup` stats: one player's games on one champion and their best and worst lane matchups, and the card
 - `src/wrapped.py` - Poro Wrapped: the group's year in review, posted in the events channel on 31 December at 18:00, and `!wrapped Name` per player until the end of January
 - `src/belts.py` - weekly title belts (Damage King, LP Climber, Backseat Gamer, ...) posted in the events channel when a report week closes, with defended streaks
-- `src/records.py` - Hall of Fame: group records and personal records from ranked games (`!records`), and "New group record" and "Personal best" lines in recaps
+- `src/records.py` - Hall of Fame: group records and personal records from ranked games (`!records`), and "New group record" and personal-record lines in recaps (best and worst, such as "Longest game yet")
 - `tests/` - unit tests
 
 ## Features

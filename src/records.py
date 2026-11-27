@@ -45,10 +45,13 @@ class RecordCategory:
     # Row -> value, or None when the game doesn't qualify for this category.
     value: object
     text: object = _int_text
-    # "best": recap "Personal best" lines and Wrapped highs use it; "worst" or None: they don't.
+    # "best": Wrapped highs use it; "worst" or None: they don't.
     personal: str | None = None
     # Label for a value of exactly 1 ("1 kill"); None when the label reads the same.
     singular: str | None = None
+    # Recap heading for a new personal record that isn't something to brag about ("Longest game yet");
+    # None reads "Personal best".
+    personal_heading: str | None = None
 
     def label_for(self, value):
         return self.singular if self.singular and value == 1 else self.label
@@ -119,11 +122,17 @@ CATEGORIES = (
     RecordCategory(
         "pink_wards", "pink wards", SECTION_VISION, _column("control_wards_placed"), personal="best", singular="pink ward"
     ),
-    RecordCategory("deaths", "deaths", SECTION_PAIN, _column("deaths"), personal="worst", singular="death"),
-    RecordCategory("damage_taken", "damage taken", SECTION_PAIN, _column("damage_taken")),
+    RecordCategory(
+        "deaths", "deaths", SECTION_PAIN, _column("deaths"), personal="worst", singular="death",
+        personal_heading="💀 Most deaths yet",
+    ),
+    RecordCategory(
+        "damage_taken", "damage taken", SECTION_PAIN, _column("damage_taken"),
+        personal_heading="🛡️ Most damage taken yet",
+    ),
     RecordCategory(
         "longest_game", "longest game", SECTION_PAIN, _column("duration_seconds"), text=_duration_text,
-        personal="worst",
+        personal="worst", personal_heading="⏳ Longest game yet",
     ),
 )
 CATEGORIES_BY_KEY = {category.key: category for category in CATEGORIES}
@@ -257,8 +266,8 @@ def detect_record_breaks(book, matches):
 
     `matches` is [(match_id, [row, ...])] oldest first; each row is a stats row with
     `riot_id`. Only a value strictly above the record counts; when several tracked
-    players in one game pass it, the best of them takes the record. Personal bests
-    cover the categories marked personal="best", need MIN_GAMES_FOR_PERSONAL_BESTS
+    players in one game pass it, the best of them takes the record. Personal records
+    cover every category, the bad ones too (most deaths, longest game), need MIN_GAMES_FOR_PERSONAL_BESTS
     earlier ranked games, and are skipped where the same game set the group record.
     Each match is added to the book afterwards, so a later game must beat an earlier one.
     Returns {(match_id, riot_id): [RecordBreak, ...]}, group records first.
@@ -289,7 +298,7 @@ def detect_record_breaks(book, matches):
                 continue
             group_keys = {found.category.key for found in breaks.get((match_id, riot_id), [])}
             for category in CATEGORIES:
-                if category.personal != "best" or category.key in group_keys:
+                if category.key in group_keys:
                     continue
                 value = category.value(row)
                 previous = book.bests.get(category.key, {}).get(riot_id)
@@ -307,15 +316,15 @@ def _month(at):
 
 
 def format_record_break(record_break):
-    """One recap line per broken record; personal bests are small text."""
+    """One recap line per broken record; personal records are small text."""
     category = record_break.category
     previous = record_break.previous
     champion = f" on {previous.champion}" if previous.champion else ""
     if record_break.personal:
-        return (
-            f"-# 📈 Personal best: {category.phrase(record_break.value)} "
-            f"(was {category.text(previous.value)}{champion}, {_month(previous.at)})"
-        )
+        was = f"(was {category.text(previous.value)}{champion}, {_month(previous.at)})"
+        if category.personal_heading:
+            return f"-# {category.personal_heading}: {category.text(record_break.value)} {was}"
+        return f"-# 📈 Personal best: {category.phrase(record_break.value)} {was}"
     return (
         f"🏆 **New group record:** {category.phrase(record_break.value)} "
         f"(was {category.text(previous.value)}, {player_name(previous.riot_id)}{champion}, {_month(previous.at)})"
